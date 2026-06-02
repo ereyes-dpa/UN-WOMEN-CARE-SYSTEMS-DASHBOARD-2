@@ -1,9 +1,9 @@
 streamlit
 pandas
-pyarrow
-plotly
-pydeck
 geopandas
-scikit-learn
-h3
+plotly
 folium
+streamlit-folium
+pyogrio
+shapely
+fiona
