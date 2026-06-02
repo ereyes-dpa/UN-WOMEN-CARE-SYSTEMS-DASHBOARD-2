@@ -1,0 +1,8 @@
+streamlit
+pandas
+pyarrow
+plotly
+pydeck
+geopandas
+scikit-learn
+h3
