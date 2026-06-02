@@ -5,5 +5,3 @@ plotly
 folium
 streamlit-folium
 pyogrio
-shapely
-fiona
