@@ -1,11 +1,9 @@
 import streamlit as st
 import pandas as pd
-import geopandas as gpd
 import plotly.express as px
 import folium
-import pydeck as pdk
 from streamlit_folium import st_folium
-
+import numpy as np
 from functions import *
 
 # --------------------------------------------------
@@ -42,42 +40,77 @@ h1, h2, h3, h4 {
 </style>
 """, unsafe_allow_html=True)
 
-un_logo = get_base64("assets/unwomen_logo.png")
-qc_logo = get_base64("assets/qc_logo.png")
+# --------------------------------------------------
+# LOGOS ROW
+# --------------------------------------------------
 
-col1, col2, col3 = st.columns([1, 4, 1])
+fcdo_logo = get_base64("assets/fcdo_logo.webp")
+un_logo   = get_base64("assets/unwomen_logo.png")
+qc_logo   = get_base64("assets/qc_logo.png")
 
-with col1:
+left_col, spacer_col, right_col = st.columns([3, 6, 1])
+
+with left_col:
+
     st.markdown(
         f"""
-        <a href="https://www.unwomen.org/en" target="_blank">
-            <img src="data:image/png;base64,{un_logo}" width="180">
+        <div style="
+            display:flex;
+            align-items:center;
+            gap:20px;
+            height:70px;
+        ">
+        <a href="https://www.gov.uk/government/organisations/foreign-commonwealth-development-office"
+               target="_blank">
+                <img src="data:image/webp;base64,{fcdo_logo}" height="75">
         </a>
-        """,
-        unsafe_allow_html=True
-    )
+        <a href="https://www.unwomen.org/en"
+               target="_blank">
+                <img src="data:image/png;base64,{un_logo}" height="60">
+        </a>
 
-with col2:
-    st.markdown(
-        """
-        <div style="text-align:center;">
-            <h1 style="color:#003B5C;">
-                Quezon Caring City Dashboard
-            </h1>
         </div>
         """,
         unsafe_allow_html=True
     )
 
-with col3:
+with right_col:
+
     st.markdown(
         f"""
-        <a href="https://quezoncity.gov.ph/" target="_blank">
-            <img src="data:image/png;base64,{qc_logo}" width="100">
-        </a>
+        <div style="
+            display:flex;
+            justify-content:flex-end;
+            align-items:center;
+            height:70px;
+        ">
+            <a href="https://quezoncity.gov.ph/" target="_blank">
+                <img src="data:image/png;base64,{qc_logo}" height="50">
+            </a>
+        </div>
         """,
         unsafe_allow_html=True
     )
+
+# --------------------------------------------------
+# TITLE
+# --------------------------------------------------
+
+st.markdown(
+    """
+    <h1 style="
+        text-align:center;
+        color:#7F47ED;
+        font-size:3.0rem;
+        margin-top:5px;
+        margin-bottom:15px;
+        line-height:1.1;
+    ">
+        Quezon Caring City Dashboard
+    </h1>
+    """,
+    unsafe_allow_html=True
+)
 
 st.divider()
 
@@ -86,24 +119,11 @@ st.divider()
 # --------------------------------------------------
 
 (
-    city_kpis,
-    health,
-    district_summary,
-    senior_summary,
-    senior_by_district,
-    pwd_summary,
-    pwd_types,
-    businesses,
-    childcare_summary,
+    geo, 
     childcare_centers,
-    facilities,
-    barangays,
-    geo,
-    population_sex,
-    population_age,
+    schools,
     health_centers,
     older_person_care, 
-    schools,
     long_term_care,
     satellite_offices
 ) = load_data()
@@ -112,138 +132,22 @@ st.divider()
 # CLEANING
 # --------------------------------------------------
 
-barangays["barangay"] = barangays["barangay"].str.strip()
-geo["barangay_name"] = geo["barangay_name"].str.strip()
-
-district_summary["district"] = (
-    district_summary["district"]
-    .str.replace("  ", " ")
-    .str.strip()
-)
-
-barangays["district"] = (
-    barangays["district"]
-    .str.replace("DISTRICT ", "District ")
-)
-
-# Population cleanning
-population_sex["Barangay"] = (
-    population_sex["Barangay"]
-    .str.strip()
-)
-
-population_age["Barangay"] = (
-    population_age["Barangay"]
-    .str.strip()
-)
-
-sex_numeric_cols = [
-    "Male",
-    "Female",
-    "Total"
-]
-
-for col in sex_numeric_cols:
-    population_sex[col] = (
-        population_sex[col]
-        .astype(str)
-        .str.replace(",", "", regex=False)
-        .astype(float)
-    )
-
-age_cols = [
-    "0-5 \n(Early Childhood)",
-    "6-17 \n(School Age Children)",
-    "18-59 \n(Working Age Adult)",
-    "60+ \n(Elderly)",
-    "Total"
-]
-
-for col in age_cols:
-    population_age[col] = (
-        population_age[col]
-        .astype(str)
-        .str.replace(",", "", regex=False)
-        .astype(float)
-    )
-
-# --------------------------------------------------
-# CLEANING
-# --------------------------------------------------
-health_centers = clean_health_centers(health_centers)
+health_centers    = clean_health_centers(health_centers)
 childcare_centers = clean_dataframe(childcare_centers)
-schools = clean_dataframe(schools)
-long_term_care = clean_dataframe(long_term_care)
+schools           = clean_dataframe(schools)
+older_person_care    = clean_dataframe(older_person_care)
+long_term_care    = clean_dataframe(long_term_care)
 satellite_offices = clean_dataframe(satellite_offices)
-# --------------------------------------------------
-# KPI VALUES
-# --------------------------------------------------
-
-population = int(
-    city_kpis.loc[
-        city_kpis["indicator"] == "population_2024",
-        "value"
-    ].iloc[0]
-)
-
-child_centers = int(
-    childcare_summary.loc[
-        childcare_summary["metric"] == "child_development_centers",
-        "value"
-    ].iloc[0]
-)
-
+satellite_offices["Name"] = "District " + satellite_offices["District"].astype(int).astype(str)
 
 # --------------------------------------------------
-# GIS DATASET
+# QC CENTER
 # --------------------------------------------------
 
-childcare_by_barangay = (
-    childcare_centers
-    .groupby("barangay")
-    .size()
-    .reset_index(name="childcare_centers")
-)
+minx, miny, maxx, maxy = geo.total_bounds
 
-map_df = geo.merge(
-    barangays,
-    left_on="barangay_name",
-    right_on="barangay",
-    how="left"
-)
-
-map_df = map_df.merge(
-    childcare_by_barangay,
-    left_on="barangay_name",
-    right_on="barangay",
-    how="left"
-) 
-
-map_df = map_df.merge(
-    district_summary,
-    on="district",
-    how="left"
-)
-
-map_df["childcare_centers"] = (
-    map_df["childcare_centers"]
-    .fillna(0)
-)
-
-demo_map = geo.merge(
-    population_sex,
-    left_on="barangay_name",
-    right_on="Barangay",
-    how="left"
-)
-
-demo_map = demo_map.merge(
-    population_age,
-    left_on="barangay_name",
-    right_on="Barangay",
-    how="left",
-    suffixes=("", "_age")
-)
+center_lon = (minx + maxx) / 2
+center_lat = (miny + maxy) / 2
 
 # --------------------------------------------------
 # SIDEBAR
@@ -262,7 +166,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 page = st.sidebar.selectbox(
-    "Section",
+    "Available Care Maps",
     [
         "Childcare Centers",
         "Schools", 
@@ -275,78 +179,6 @@ page = st.sidebar.selectbox(
 )
 
 selected_category = "All"
-
-def category_hex(cat):
-
-    rgb = category_color(cat)
-
-    return "#{:02X}{:02X}{:02X}".format(
-        rgb[0],
-        rgb[1],
-        rgb[2]
-    )
-
-
-if page == "Health Centers Map":
-
-    selected_category = st.sidebar.radio(
-        "Facility Type",
-        [
-            "All",
-            "QC LGU",
-            "National",
-            "Super Health",
-            "Health Center",
-            "Pharmacy",
-            "Milk Bank"
-        ]
-    )
-
-    category_descriptions = {
-        "QC LGU":
-            "LGU-run hospitals and lying-in clinics.",
-
-        "National":
-            "National government-owned hospitals.",
-
-        "Super Health":
-            "Enhanced primary healthcare facilities.",
-
-        "Health Center":
-            "Community-based primary healthcare centers.",
-
-        "Pharmacy":
-            "Health center pharmacy facilities.",
-
-        "Milk Bank":
-            "Human milk bank services."
-    }
-
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Facility Categories")
-
-    ordered_categories = [
-        "QC LGU",
-        "National",
-        "Super Health",
-        "Health Center",
-        "Pharmacy",
-        "Milk Bank"
-    ]
-
-    for cat in ordered_categories:
-
-        st.sidebar.markdown(
-            f"""
-            <span style="
-                color:{category_hex(cat)};
-                font-size:22px;
-            ">●</span>
-            <b>{cat}</b><br>
-            <small>{category_descriptions[cat]}</small>
-            """,
-            unsafe_allow_html=True
-        )
 
 if page == "Childcare Centers":
 
@@ -395,7 +227,8 @@ if page == "Childcare Centers":
         """
         <span style="color:#5B21B6;font-size:22px;">●</span>
         <b>Child Development Center</b><br>
-        <small>Public childcare and early childhood development services.</small>
+        <small>For children aged 3 to 4 years. The program focuses on providing children with early childhood education to support their growth and readiness for more formal education. 
+        </small>
         """,
         unsafe_allow_html=True
     )
@@ -414,38 +247,6 @@ if page == "Childcare Centers":
         <span style="color:#A78BFA;font-size:22px;">●</span>
         <b>Day Care Center</b><br>
         <small>Private day care and supervision services.</small>
-        """,
-        unsafe_allow_html=True
-    )
-
-if page == "Older Persons Center Map":
-
-    selected_opc_category = st.sidebar.radio(
-        "Facility Type",
-        [
-            "All",
-            "Nursing Care Center",
-            "Bahay Aruga"
-        ]
-    )
-
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Facility Categories")
-
-    st.sidebar.markdown(
-        """
-        <span style="color:#4C1D95;font-size:22px;">●</span>
-        <b>Nursing Care Center</b><br>
-        <small>Residential facilities providing long-term nursing and care services.</small>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.sidebar.markdown(
-        """
-        <span style="color:#A78BFA;font-size:22px;">●</span>
-        <b>Bahay Aruga</b><br>
-        <small>Temporary accommodation and support services for vulnerable older persons.</small>
         """,
         unsafe_allow_html=True
     )
@@ -509,6 +310,99 @@ if page == "Schools":
         unsafe_allow_html=True
     )
 
+if page == "Health Centers Map":
+
+    selected_category = st.sidebar.radio(
+        "Facility Type",
+        [
+            "All",
+            "QC LGU",
+            "National",
+            "Super Health",
+            "Health Center",
+            "Pharmacy",
+            "Milk Bank"
+        ]
+    )
+
+    category_descriptions = {
+        "QC LGU":
+            "Lying–in Clinics are maternity clinics for healthy pregnant women as an option for an affordable, if not free, cost of pregnancy and childbirth. If a pregnant woman is at high risk, however, she will be referred to deliver the child at a hospital.",
+
+        "National":
+            "National government-owned hospitals located in Quezon City.",
+
+        "Super Health":
+            "These facilities serve both as a Health Center and a 24-hour operating Lying–in clinic and also provide basic health services.  Super Health Centers possess the necessary equipment for medical needs such as laboratory, dental services, breastfeeding services, lying-in clinic, and an ambulance.",
+
+        "Health Center":
+            "Health Centers are community patient-directed establishments that deliver comprehensive culturally competent, high-quality, primary healthcare services to the nation’s most vulnerable individuals and families, including people experiencing homelessness, agricultural workers, and residents of public housing and veterans.",
+
+        "Pharmacy":
+            "Health center pharmacy facilities.",
+
+        "Milk Bank":
+            "provides safe, pasteurized human milk to infants in need, especially premature babies and those whose mothers struggle with lactation or medical issues. Under the program, QCitizens may donate and receive milk at designated milk depots in the city."
+    }
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Facility Categories")
+
+    ordered_categories = [
+        "QC LGU",
+        "National",
+        "Super Health",
+        "Health Center",
+        "Pharmacy",
+        "Milk Bank"
+    ]
+
+    for cat in ordered_categories:
+
+        st.sidebar.markdown(
+            f"""
+            <span style="
+                color:{category_hex(cat)};
+                font-size:22px;
+            ">●</span>
+            <b>{cat}</b><br>
+            <small>{category_descriptions[cat]}</small>
+            """,
+            unsafe_allow_html=True
+        )
+
+if page == "Older Persons Center Map":
+
+    selected_opc_category = st.sidebar.radio(
+        "Facility Type",
+        [
+            "All",
+            "Nursing Care Center",
+            "Bahay Aruga for Abandoned Elderly"
+        ]
+    )
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Facility Categories")
+
+    st.sidebar.markdown(
+        """
+        <span style="color:#4C1D95;font-size:22px;">●</span>
+        <b>Nursing Care Center</b><br>
+        <small>Residential facilities providing long-term nursing and care services.</small>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.sidebar.markdown(
+        """
+        <span style="color:#A78BFA;font-size:22px;">●</span>
+        <b>Bahay Aruga</b><br>
+        <small>Temporary residential facility for abandoned, neglected, abused, and indigent QC senior citizens aged 60 years and above. </small>
+        """,
+        unsafe_allow_html=True
+    )
+
 if page == "Long-Term Care & Rehabilitation":
 
     ltc_categories = sorted(
@@ -551,62 +445,94 @@ if page == "Satellite Offices":
 if page == "Care Services Explorer":
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("## Health Centers Legends")
+    st.sidebar.markdown("## Child Care")
 
     st.sidebar.markdown(
         """
-        <span style="color:#E41A1C;font-size:22px;">●</span>
-        <b>QC LGU</b><br>
-        <small>Local government-managed facilities</small>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.sidebar.markdown(
-        """
-        <span style="color:#377EB8;font-size:22px;">●</span>
-        <b>National</b><br>
-        <small>National government facilities</small>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.sidebar.markdown(
-        """
-        <span style="color:#4DAF4A;font-size:22px;">●</span>
-        <b>Health Center</b><br>
-        <small>Primary healthcare facilities</small>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.sidebar.markdown(
-        """
-        <span style="color:#FFCC00;font-size:22px;">●</span>
-        <b>Super Health</b><br>
-        <small>Expanded health facilities</small>
+        <span style="color:#5B21B6;font-size:22px;">●</span>
+        <b>Child Development Center</b><br>
+        <span style="color:#7F47ED;font-size:22px;">●</span>
+        <b>Child Learning Center</b><br>
+        <span style="color:#A78BFA;font-size:22px;">●</span>
+        <b>Day Care Center</b>
         """,
         unsafe_allow_html=True
     )
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("## Seniors Centers Legends")
-
+    st.sidebar.markdown("## Schools")
 
     st.sidebar.markdown(
         """
-        <span style="color:#984EA3;font-size:22px;">●</span>
-        <b>Nursing Care Center</b><br>
-        <small>Residential and nursing care services</small>
+        <span style="color:#5B21B6;font-size:22px;">■</span>
+        <b>Public School</b><br>
+        <span style="color:#A78BFA;font-size:22px;">■</span>
+        <b>Private School</b>
         """,
         unsafe_allow_html=True
     )
 
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("## Health Services")
+
+    ordered_categories = [
+        "QC LGU",
+        "National",
+        "Super Health",
+        "Health Center",
+        "Pharmacy",
+        "Milk Bank"
+    ]
+
+    for cat in ordered_categories:
+
+        st.sidebar.markdown(
+            f"""
+            <span style="
+                color:{category_hex(cat)};
+                font-size:22px;
+            ">★</span>
+            <b>{cat}</b>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("## Older Persons")
+
     st.sidebar.markdown(
         """
-        <span style="color:#FF7F00;font-size:22px;">●</span>
-        <b>Bahay Aruga</b><br>
-        <small>Temporary accommodation and support services</small>
+        <span style="color:#4C1D95;font-size:22px;">◆</span>
+        <b>Nursing Care Center</b><br>
+        <span style="color:#A78BFA;font-size:22px;">◆</span>
+        <b>Bahay Aruga</b>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("## Long-Term Care")
+
+    for cat in sorted(long_term_care["Category"].dropna().unique()):
+
+        st.sidebar.markdown(
+            f"""
+            <span style="
+                color:{ltc_color(cat)};
+                font-size:22px;
+            ">▲</span>
+            <b>{cat}</b>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("## Satellite Offices")
+
+    st.sidebar.markdown(
+        """
+        <span style="color:#7F47ED;font-size:22px;">⬢</span>
+        <b>District Offices</b>
         """,
         unsafe_allow_html=True
     )
@@ -615,13 +541,15 @@ if page == "Care Services Explorer":
 # PAGES
 # --------------------------------------------------
 
-elif page == "Childcare Centers":
+if page == "Childcare Centers":
 
     st.title("Child Care Facilities")
 
     st.markdown("""
     Explore the spatial distribution of childcare facilities in Quezon City,
     including public Child Development Centers and private childcare providers.
+                
+                
     """)
 
     # --------------------------------------------------
@@ -676,34 +604,6 @@ elif page == "Childcare Centers":
         ]
 
     # --------------------------------------------------
-    # COLORS
-    # --------------------------------------------------
-
-    def childcare_color(category):
-
-        category = str(category).upper()
-
-        if "CHILD DEVELOPMENT" in category:
-            return "#5B21B6"
-
-        elif "CHILD LEARNING" in category:
-            return "#7F47ED"
-
-        elif "DAY CARE" in category:
-            return "#A78BFA"
-
-        return "#DDD6FE"
-
-    # --------------------------------------------------
-    # MAP CENTER
-    # --------------------------------------------------
-
-    minx, miny, maxx, maxy = geo.total_bounds
-
-    center_lon = (minx + maxx) / 2
-    center_lat = (miny + maxy) / 2
-
-    # --------------------------------------------------
     # SESSION STATE
     # --------------------------------------------------
 
@@ -715,7 +615,7 @@ elif page == "Childcare Centers":
     # LAYOUT
     # --------------------------------------------------
 
-    map_col, info_col = st.columns([4, 1])
+    map_col, info_col = st.columns([2, 1])
 
     # --------------------------------------------------
     # MAP
@@ -762,7 +662,7 @@ elif page == "Childcare Centers":
             fill_color=childcare_color(row["Category"]),
             fill_opacity=0.9,
             weight=2,
-            popup=popup_html,
+            popup=folium.Popup(popup_html, max_width=350),
             tooltip=row["Name"]
         ).add_to(m)
 
@@ -832,7 +732,7 @@ elif page == "Childcare Centers":
             st.write(
                 f"**District:** {int(facility['District'])}"
             )
-
+            
             st.write(
                 f"**Address:** {facility['Address']}"
             )
@@ -873,92 +773,6 @@ elif page == "Childcare Centers":
             )
 
     # --------------------------------------------------
-    # KPIs
-    # --------------------------------------------------
-
-    st.divider()
-
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric(
-        "Facilities",
-        len(cc)
-    )
-
-    c2.metric(
-        "Public",
-        len(
-            cc[
-                cc["Sector"]
-                .str.contains(
-                    "Public",
-                    case=False,
-                    na=False
-                )
-            ]
-        )
-    )
-
-    c3.metric(
-        "Private",
-        len(
-            cc[
-                cc["Sector"]
-                .str.contains(
-                    "Private",
-                    case=False,
-                    na=False
-                )
-            ]
-        )
-    )
-
-    # --------------------------------------------------
-    # CATEGORY SUMMARY
-    # --------------------------------------------------
-
-    st.subheader("Facilities by Category")
-
-    category_summary = (
-        cc.groupby("Category")
-        .size()
-        .reset_index(name="count")
-        .sort_values(
-            "count",
-            ascending=False
-        )
-    )
-
-    TEAL_SCALE = [
-        "#DDD6FE",
-        "#C4B5FD",
-        "#A78BFA",
-        "#7F47ED",
-        "#5B21B6"
-    ]
-
-    fig = px.bar(
-        category_summary,
-        x="count",
-        y="Category",
-        orientation="h",
-        text="count",
-        color="count",
-        color_continuous_scale=TEAL_SCALE
-    )
-
-    fig.update_layout(
-        height=400,
-        yaxis_title="",
-        xaxis_title="Facilities"
-    )
-
-    st.plotly_chart(
-        fig,
-        use_container_width=True
-    )
-
-    # --------------------------------------------------
     # TABLE
     # --------------------------------------------------
 
@@ -974,14 +788,10 @@ elif page == "Childcare Centers":
                 "Address"
             ]
         ],
-        use_container_width=True
+        width = 'stretch'
     )
 
-# --------------------------------------------------
-# SCHOOLS
-# --------------------------------------------------
-
-if page == "Schools":
+elif page == "Schools":
 
     st.title("Schools")
 
@@ -997,7 +807,7 @@ if page == "Schools":
     districts = sorted(
         schools["District"]
         .dropna()
-        .astype(str)
+        .astype(int)
         .unique()
     )
 
@@ -1061,31 +871,6 @@ if page == "Schools":
     )
 
     # --------------------------------------------------
-    # COLORS
-    # --------------------------------------------------
-
-    def school_color(category):
-
-        category = str(category).upper()
-
-        if "PUBLIC SCHOOL" in category:
-            return "#5B21B6"
-
-        elif "PRIVATE SCHOOL" in category:
-            return "#A78BFA"
-
-        return "#DDD6FE"
-
-    # --------------------------------------------------
-    # MAP CENTER
-    # --------------------------------------------------
-
-    minx, miny, maxx, maxy = geo.total_bounds
-
-    center_lon = (minx + maxx) / 2
-    center_lat = (miny + maxy) / 2
-
-    # --------------------------------------------------
     # SESSION STATE
     # --------------------------------------------------
 
@@ -1097,7 +882,7 @@ if page == "Schools":
     # LAYOUT
     # --------------------------------------------------
 
-    map_col, info_col = st.columns([4, 1])
+    map_col, info_col = st.columns([2, 1])
 
     # --------------------------------------------------
     # MAP
@@ -1150,7 +935,7 @@ if page == "Schools":
             fill_color=school_color(row["Category"]),
             fill_opacity=0.9,
             weight=2,
-            popup=popup_html,
+            popup=folium.Popup(popup_html, max_width=350),
             tooltip=row["Name"]
         ).add_to(m)
 
@@ -1240,98 +1025,6 @@ if page == "Schools":
             )
 
     # --------------------------------------------------
-    # KPIs
-    # --------------------------------------------------
-
-    st.divider()
-
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric(
-        "Schools",
-        len(sch)
-    )
-
-    c2.metric(
-        "Public",
-        len(
-            sch[
-                sch["Sector"]
-                .str.contains(
-                    "Public",
-                    case=False,
-                    na=False
-                )
-            ]
-        )
-    )
-
-    c3.metric(
-        "Private",
-        len(
-            sch[
-                sch["Sector"]
-                .str.contains(
-                    "Private",
-                    case=False,
-                    na=False
-                )
-            ]
-        )
-    )
-
-    # --------------------------------------------------
-    # CATEGORY SUMMARY
-    # --------------------------------------------------
-
-    PURPLE_SCALE = [
-        "#DDD6FE",
-        "#C4B5FD",
-        "#A78BFA",
-        "#7F47ED",
-        "#5B21B6"
-    ]
-
-    st.subheader("Schools by Category")
-
-    category_summary = (
-        sch.groupby("Category")
-        .size()
-        .reset_index(name="count")
-        .sort_values(
-            "count",
-            ascending=False
-        )
-    )
-
-    color_map = {
-    cat: ltc_color(cat)
-    for cat in category_summary["Category"]
-    }
-
-    fig = px.bar(
-            category_summary,
-            x="count",
-            y="Category",
-            orientation="h",
-            text="count",
-            color="Category",
-            color_discrete_map=color_map
-    )
-
-
-    fig.update_layout(
-        height=400,
-        yaxis_title="",
-        xaxis_title="Schools"
-    )
-
-    st.plotly_chart(
-        fig,
-        use_container_width=True
-    )
-
-    # --------------------------------------------------
     # TABLE
     # --------------------------------------------------
 
@@ -1347,7 +1040,7 @@ if page == "Schools":
                 "Address"
             ]
         ],
-        use_container_width=True
+        width = 'stretch'
     )
 
 elif page == "Health Centers Map":
@@ -1411,15 +1104,6 @@ elif page == "Health Centers Map":
     hc["color"] = hc["Category"].apply(category_color)
 
     # --------------------------------------------------
-    # QC CENTER
-    # --------------------------------------------------
-
-    minx, miny, maxx, maxy = geo.total_bounds
-
-    center_lon = (minx + maxx) / 2
-    center_lat = (miny + maxy) / 2
-
-    # --------------------------------------------------
     # SESSION STATE
     # --------------------------------------------------
 
@@ -1430,7 +1114,7 @@ elif page == "Health Centers Map":
     # LAYOUT
     # --------------------------------------------------
 
-    map_col, info_col = st.columns([4, 1])
+    map_col, info_col = st.columns([2, 1])
 
     # --------------------------------------------------
     # FOLIUM MAP
@@ -1457,35 +1141,6 @@ elif page == "Health Centers Map":
     ).add_to(m)
 
     # --------------------------------------------------
-    # CATEGORY COLORS
-    # --------------------------------------------------
-
-    def marker_color(category):
-
-        category = str(category).upper()
-
-        if "QC LGU" in category:
-            return "#4C1D95"
-
-        elif "NATIONAL" in category:
-            return "#5B21B6"
-
-        elif "SUPER HEALTH" in category:
-            return "#7F47ED"
-
-        elif "HEALTH CENTER" in category:
-            return "#A78BFA"
-
-        elif "PHARMACY" in category:
-            return "#C4B5FD"
-
-        elif "MILK BANK" in category:
-            return "#DDD6FE"
-
-        return "#EDE9FE"
-
-
-    # --------------------------------------------------
     # MARKERS
     # --------------------------------------------------
 
@@ -1494,7 +1149,7 @@ elif page == "Health Centers Map":
         popup_html = f"""
         <b>{row['Name of Facility']}</b><br>
         Category: {row['Category']}<br>
-        District: {row['District'].split(" ")[1]}<br>
+        District: {int(row['District'])}<br>
         Address: {row['Address']}
         """
 
@@ -1509,7 +1164,7 @@ elif page == "Health Centers Map":
             fill_color=marker_color(row["Category"]),
             fill_opacity=0.9,
             weight=2,
-            popup=popup_html,
+            popup=folium.Popup(popup_html, max_width=350),
             tooltip=row["Name of Facility"]
         ).add_to(m)
 
@@ -1591,67 +1246,6 @@ elif page == "Health Centers Map":
                 "Click a facility marker on the map."
             )
     # --------------------------------------------------
-    # KPIs
-    # --------------------------------------------------
-
-    c1, c2 = st.columns(2)
-
-    c1.metric(
-        "Facilities",
-        len(hc)
-    )
-
-    c2.metric(
-        "Categories",
-        hc["Category"].nunique()
-    )
-
-    # --------------------------------------------------
-    # CATEGORY SUMMARY
-    # --------------------------------------------------
-
-    PURPLE_SCALE = [
-    "#DDD6FE",
-    "#C4B5FD",
-    "#A78BFA",
-    "#7F47ED",
-    "#5B21B6"
-    ]
-
-    st.subheader("Facilities by Category")
-
-    category_summary = (
-        hc.groupby("Category")
-        .size()
-        .reset_index(name="count")
-        .sort_values(
-            "count",
-            ascending=False
-        )
-    )
-
-    fig = px.bar(
-    category_summary,
-    x="count",
-    y="Category",
-    orientation="h",
-    text="count",
-    color="count",
-    color_continuous_scale=PURPLE_SCALE
-    )
-
-    fig.update_layout(
-        height=400,
-        yaxis_title="",
-        xaxis_title="Facilities"
-    )
-
-    st.plotly_chart(
-        fig,
-        use_container_width=True
-    )
-
-    # --------------------------------------------------
     # TABLE
     # --------------------------------------------------
 
@@ -1666,7 +1260,7 @@ elif page == "Health Centers Map":
                 "Address"
             ]
         ],
-        use_container_width=True
+        width = 'stretch'
     )
 
 elif page == "Older Persons Center Map":
@@ -1685,11 +1279,17 @@ elif page == "Older Persons Center Map":
     # --------------------------------------------------
 
     district_options = sorted(
-        older_person_care["district"]
-        .dropna()
-        .astype(str)
-        .unique()
+        pd.concat(
+            [
+                older_person_care["District"]
+                .dropna()
+                .astype(int),
+
+                pd.Series([3, 6])
+            ]
+        ).unique()
     )
+ 
 
     selected_district = st.selectbox(
         "District",
@@ -1702,36 +1302,20 @@ elif page == "Older Persons Center Map":
     if selected_district != "All":
 
         opc = opc[
-            opc["district"].astype(str)
+            opc["District"].astype(int)
             == selected_district
         ]
 
     if selected_opc_category != "All":
 
         opc = opc[
-            opc["category"]
+            opc["Category"]
             .str.contains(
                 selected_opc_category,
                 case=False,
                 na=False
             )
         ]
-
-    # --------------------------------------------------
-    # CATEGORY COLORS
-    # --------------------------------------------------
-
-    def opc_color(category):
-
-        category = str(category).upper()
-
-        if "NURSING" in category:
-            return "#5B21B6"
-
-        elif "BAHAY ARUGA" in category:
-            return "#A78BFA"
-
-        return "#DDD6FE"
 
     # --------------------------------------------------
     # SESSION STATE
@@ -1741,14 +1325,7 @@ elif page == "Older Persons Center Map":
 
         st.session_state.selected_senior_facility = None
 
-    # --------------------------------------------------
-    # MAP CENTER
-    # --------------------------------------------------
-
-    center_lat = opc["latitude"].mean()
-    center_lon = opc["longitude"].mean()
-
-    map_col, info_col = st.columns([4, 1])
+    map_col, info_col = st.columns([2, 1])
 
     # --------------------------------------------------
     # MAP
@@ -1777,11 +1354,11 @@ elif page == "Older Persons Center Map":
     for _, row in opc.iterrows():
 
         popup_html = f"""
-        <b>{row['name_original']}</b><br>
-        Category: {row['category']}<br>
-        District: {int(row['district'])}<br>
+        <b>{row['Name']}</b><br>
+        Category: {row['Category']}<br>
+        District: {int(row['District'])}<br>
         Barangay: {row['barangay']}<br>
-        Address: {row['address']}
+        Address: {row['Address']}
         """
 
         folium.CircleMarker(
@@ -1790,13 +1367,13 @@ elif page == "Older Persons Center Map":
                 row["longitude"]
             ],
             radius=5,
-            color=opc_color(row["category"]),
+            color=opc_color(row["Category"]),
             fill=True,
-            fill_color=opc_color(row["category"]),
+            fill_color=opc_color(row["Category"]),
             fill_opacity=0.9,
-            weight=2,
-            popup=popup_html,
-            tooltip=row["name_original"]
+            weight=5,
+            popup=folium.Popup(popup_html, max_width=350),
+            tooltip=row["Name"]
         ).add_to(m)
 
     # --------------------------------------------------
@@ -1850,15 +1427,15 @@ elif page == "Older Persons Center Map":
             facility = st.session_state.selected_senior_facility
 
             st.markdown(
-                f"### {facility['name_original']}"
+                f"### {facility['Name']}"
             )
 
             st.write(
-                f"**Category:** {facility['category']}"
+                f"**Category:** {facility['Category']}"
             )
 
             st.write(
-                f"**District:** {int(facility['district'])}"
+                f"**District:** {int(facility['District'])}"
             )
 
             st.write(
@@ -1866,7 +1443,7 @@ elif page == "Older Persons Center Map":
             )
 
             st.write(
-                f"**Address:** {facility['address']}"
+                f"**Address:** {facility['Address']}"
             )
 
         else:
@@ -1888,14 +1465,13 @@ elif page == "Older Persons Center Map":
     st.dataframe(
         opc[
             [
-                "name_original",
-                "district",
-                "barangay",
-                "category",
-                "address"
+                "Name",
+                "District",
+                "Category",
+                "Address"
             ]
         ],
-        use_container_width=True
+        width = 'stretch'
     )
 
 elif page == "Long-Term Care & Rehabilitation":
@@ -1970,15 +1546,6 @@ elif page == "Long-Term Care & Rehabilitation":
     )
 
     # ----------------------------------
-    # MAP CENTER
-    # ----------------------------------
-
-    minx, miny, maxx, maxy = geo.total_bounds
-
-    center_lon = (minx + maxx) / 2
-    center_lat = (miny + maxy) / 2
-
-    # ----------------------------------
     # SESSION STATE
     # ----------------------------------
 
@@ -1986,7 +1553,7 @@ elif page == "Long-Term Care & Rehabilitation":
 
         st.session_state.selected_ltc = None
 
-    map_col, info_col = st.columns([4, 1])
+    map_col, info_col = st.columns([2, 1])
 
     # ----------------------------------
     # MAP
@@ -2032,7 +1599,7 @@ elif page == "Long-Term Care & Rehabilitation":
             fill_color=ltc_color(row["Category"]),
             fill_opacity=0.9,
             weight=2,
-            popup=popup_html,
+            popup=folium.Popup(popup_html, max_width=350),
             tooltip=row["Name"]
         ).add_to(m)
 
@@ -2104,65 +1671,6 @@ elif page == "Long-Term Care & Rehabilitation":
             )
 
     # ----------------------------------
-    # KPIs
-    # ----------------------------------
-
-    st.divider()
-
-    c1, c2 = st.columns(2)
-
-    c1.metric(
-        "Facilities",
-        len(ltc)
-    )
-
-    c2.metric(
-        "Facility Types",
-        ltc["Category"].nunique()
-    )
-
-    # ----------------------------------
-    # CATEGORY SUMMARY
-    # ----------------------------------
-
-    PURPLE_SCALE = [
-        "#DDD6FE",
-        "#C4B5FD",
-        "#A78BFA",
-        "#7F47ED",
-        "#5B21B6"
-    ]
-
-    st.subheader(
-        "Facilities by Category"
-    )
-
-    category_summary = (
-        ltc.groupby("Category")
-        .size()
-        .reset_index(name="count")
-        .sort_values(
-            "count",
-            ascending=False
-        )
-    )
-
-    fig = px.bar(
-        category_summary,
-        x="count",
-        y="Category",
-        orientation="h",
-        text="count",
-        color="count",
-        color_continuous_scale=PURPLE_SCALE
-    )
-
-    st.plotly_chart(
-        fig,
-        use_container_width=True
-    )
-
-    # ----------------------------------
     # TABLE
     # ----------------------------------
 
@@ -2177,7 +1685,7 @@ elif page == "Long-Term Care & Rehabilitation":
                 "Address"
             ]
         ],
-        use_container_width=True
+        width = 'stretch'
     )
 
 elif page == "Satellite Offices":
@@ -2200,6 +1708,7 @@ elif page == "Satellite Offices":
 
     districts = sorted(
         satellite_offices["District"]
+        .astype(int)
         .dropna()
         .unique()
     )
@@ -2242,15 +1751,6 @@ elif page == "Satellite Offices":
     )
 
     # ----------------------------------
-    # MAP CENTER
-    # ----------------------------------
-
-    minx, miny, maxx, maxy = geo.total_bounds
-
-    center_lon = (minx + maxx) / 2
-    center_lat = (miny + maxy) / 2
-
-    # ----------------------------------
     # SESSION STATE
     # ----------------------------------
 
@@ -2258,7 +1758,7 @@ elif page == "Satellite Offices":
 
         st.session_state.selected_satellite_office = None
 
-    map_col, info_col = st.columns([4, 1])
+    map_col, info_col = st.columns([2, 1])
 
     # ----------------------------------
     # MAP
@@ -2302,7 +1802,7 @@ elif page == "Satellite Offices":
             fill_color=district_color(row["District"]),
             fill_opacity=0.9,
             weight=2,
-            popup=popup_html,
+            popup=folium.Popup(popup_html, max_width=350),
             tooltip=row["Category"]
         ).add_to(m)
 
@@ -2371,24 +1871,6 @@ elif page == "Satellite Offices":
             )
 
     # ----------------------------------
-    # KPIs
-    # ----------------------------------
-
-    st.divider()
-
-    c1, c2 = st.columns(2)
-
-    c1.metric(
-        "Satellite Offices",
-        len(sat)
-    )
-
-    c2.metric(
-        "Districts Covered",
-        sat["District"].nunique()
-    )
-
-    # ----------------------------------
     # TABLE
     # ----------------------------------
 
@@ -2397,17 +1879,16 @@ elif page == "Satellite Offices":
     st.dataframe(
         sat[
             [
-                "Name",
                 "District",
                 "Address"
             ]
         ],
-        use_container_width=True
+        width = 'stretch'
     )
 
 elif page == "Care Services Explorer":
 
-    st.title("🗺️ Care Services Explorer")
+    st.title("Care Services Explorer")
 
     st.caption(
         """
@@ -2417,13 +1898,6 @@ elif page == "Care Services Explorer":
         """
     )
 
-    st.write("Childcare:", len(childcare_centers))
-    st.write("Schools:", len(schools))
-    st.write("Long Term Care:", len(long_term_care))
-    st.write("Satellite:", len(satellite_offices))
-    st.write("Health:", len(health_centers))
-    st.write("Older Persons:", len(older_person_care))
-
     # --------------------------------------------------
     # SERVICE CONFIGURATION
     # --------------------------------------------------
@@ -2432,7 +1906,8 @@ elif page == "Care Services Explorer":
 
         "Childcare Centers": {
             "df": childcare_centers,
-            "color": "#E41A1C",
+            "color": "#4C1D95",
+            "symbol": "●",
             "source": "Childcare Center",
             "name_col": "Name",
             "district_col": "District",
@@ -2443,7 +1918,8 @@ elif page == "Care Services Explorer":
 
         "Schools": {
             "df": schools,
-            "color": "#377EB8",
+            "color": "#5B21B6",
+            "symbol": "■",
             "source": "School",
             "name_col": "Name",
             "district_col": "District",
@@ -2454,7 +1930,8 @@ elif page == "Care Services Explorer":
 
         "Health Centers": {
             "df": health_centers,
-            "color": "#4DAF4A",
+            "color": "#7F47ED",
+            "symbol": "★",
             "source": "Health Facility",
             "name_col": "Name of Facility",
             "district_col": "District",
@@ -2465,18 +1942,20 @@ elif page == "Care Services Explorer":
 
         "Older Persons Facilities": {
             "df": older_person_care,
-            "color": "#984EA3",
+            "color": "#8B5CF6",
+            "symbol": "◆",
             "source": "Older Persons Facility",
-            "name_col": "name_original",
-            "district_col": "district",
-            "address_col": "address",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
             "lat_col": "latitude",
             "lon_col": "longitude"
         },
 
         "Long-Term Care & Rehabilitation": {
             "df": long_term_care,
-            "color": "#FF7F00",
+            "color": "#A78BFA",
+            "symbol": "▲",
             "source": "Rehabilitation Facility",
             "name_col": "Name",
             "district_col": "District",
@@ -2487,7 +1966,8 @@ elif page == "Care Services Explorer":
 
         "Satellite Offices": {
             "df": satellite_offices,
-            "color": "#A65628",
+            "color": "#DDD6FE",
+            "symbol": "⬢",
             "source": "Satellite Office",
             "name_col": "Name",
             "district_col": "District",
@@ -2501,25 +1981,26 @@ elif page == "Care Services Explorer":
     # LEGEND
     # --------------------------------------------------
 
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    st.markdown("### Service Categories")
 
-    with c1:
-        st.markdown("🔴 Childcare")
+    cols = st.columns(6)
 
-    with c2:
-        st.markdown("🔵 Schools")
+    for i, (layer_name, layer) in enumerate(service_layers.items()):
 
-    with c3:
-        st.markdown("🟢 Health")
-
-    with c4:
-        st.markdown("🟣 Older Persons")
-
-    with c5:
-        st.markdown("🟠 Rehab")
-
-    with c6:
-        st.markdown("🟤 Satellite")
+        cols[i].markdown(
+            f"""
+            <span style="
+                color:{layer['color']};
+                font-size:22px;
+            ">
+            {layer['symbol']}
+            </span>
+            <span style="color:#7F47ED;">
+            {layer_name}
+            </span>
+            """,
+            unsafe_allow_html=True
+        )
 
     st.divider()
 
@@ -2534,10 +2015,7 @@ elif page == "Care Services Explorer":
         selected_layers = st.multiselect(
             "Services to Display",
             list(service_layers.keys()),
-            default=[
-                "Health Centers",
-                "Older Persons Facilities"
-            ]
+            default=list(service_layers.keys())[:3]
         )
 
     with col2:
@@ -2545,7 +2023,7 @@ elif page == "Care Services Explorer":
         districts = sorted(
             health_centers["District"]
             .dropna()
-            .astype(str)
+            .astype(int)
             .unique()
         )
 
@@ -2562,19 +2040,10 @@ elif page == "Care Services Explorer":
         st.session_state.selected_explorer_item = None
 
     # --------------------------------------------------
-    # MAP CENTER
-    # --------------------------------------------------
-
-    minx, miny, maxx, maxy = geo.total_bounds
-
-    center_lon = (minx + maxx) / 2
-    center_lat = (miny + maxy) / 2
-
-    # --------------------------------------------------
     # LAYOUT
     # --------------------------------------------------
 
-    map_col, info_col = st.columns([4, 1])
+    map_col, info_col = st.columns([2, 1])
 
     # --------------------------------------------------
     # MAP
@@ -2596,14 +2065,10 @@ elif page == "Care Services Explorer":
         }
     ).add_to(m)
 
-    # --------------------------------------------------
-    # STORE FILTERED DATA
-    # --------------------------------------------------
-
     filtered_layers = {}
 
     # --------------------------------------------------
-    # PLOT LAYERS
+    # ADD MARKERS
     # --------------------------------------------------
 
     for layer_name in selected_layers:
@@ -2614,11 +2079,9 @@ elif page == "Care Services Explorer":
 
         if selected_district != "All":
 
-            district_col = layer["district_col"]
-
             df = df[
-                df[district_col]
-                .astype(str)
+                df[layer["district_col"]]
+                .astype(int)
                 == selected_district
             ]
 
@@ -2629,35 +2092,61 @@ elif page == "Care Services Explorer":
             popup_html = f"""
             <b>{row[layer['name_col']]}</b><br>
             Type: {layer['source']}<br>
-            District: {row[layer['district_col']]}
+            District: {int(row[layer['district_col']])}
             """
 
-            folium.CircleMarker(
+            # determine color based on the same rules used in each page
+            if layer_name == "Childcare Centers":
+                marker_color_value = childcare_color(row["Category"])
+
+            elif layer_name == "Schools":
+                marker_color_value = school_color(row["Category"])
+
+            elif layer_name == "Health Centers":
+                marker_color_value = marker_color(row["Category"])
+
+            elif layer_name == "Older Persons Facilities":
+                marker_color_value = opc_color(row["Category"])
+
+            elif layer_name == "Long-Term Care & Rehabilitation":
+                marker_color_value = ltc_color(row["Category"])
+
+            elif layer_name == "Satellite Offices":
+                marker_color_value = district_color(row["District"])
+
+            else:
+                marker_color_value = "#7F47ED"
+
+            folium.Marker(
                 location=[
                     row[layer["lat_col"]],
                     row[layer["lon_col"]]
                 ],
-                radius=6,
-                color=layer["color"],
-                fill=True,
-                fill_color=layer["color"],
-                fill_opacity=0.9,
-                weight=2,
-                popup=popup_html,
-                tooltip=str(
-                    row[layer["name_col"]]
-                )
+                icon=folium.DivIcon(
+                    html=f"""
+                    <div style="
+                        color:{marker_color_value};
+                        font-size:18px;
+                        font-weight:bold;
+                        text-align:center;
+                    ">
+                        {layer['symbol']}
+                    </div>
+                    """
+                ),
+                popup=folium.Popup(popup_html, max_width=350),
+                tooltip=str(row[layer["name_col"]])
             ).add_to(m)
 
     # --------------------------------------------------
-    # DISPLAY MAP
+    # MAP DISPLAY
     # --------------------------------------------------
 
     with map_col:
 
         map_data = st_folium(
             m,
-            height=750,
+            height=700,
             returned_objects=["last_object_clicked"]
         )
 
@@ -2707,7 +2196,7 @@ elif page == "Care Services Explorer":
             )
 
     # --------------------------------------------------
-    # INFO PANEL
+    # DETAILS PANEL
     # --------------------------------------------------
 
     with info_col:
@@ -2727,7 +2216,7 @@ elif page == "Care Services Explorer":
             )
 
             st.write(
-                f"**District:** {item[item['district_field']]}"
+                f"**District:** {int(item[item['district_field']])}"
             )
 
             if item["address_field"] in item.index:
@@ -2748,17 +2237,9 @@ elif page == "Care Services Explorer":
                     f"**Category:** {item['Category']}"
                 )
 
-            if "category" in item.index:
-
-                st.write(
-                    f"**Category:** {item['category']}"
-                )
-
         else:
 
-            st.info(
-                "Click a facility on the map."
-            )
+            st.info("Click a facility on the map.")
 
     # --------------------------------------------------
     # SUMMARY
@@ -2766,13 +2247,11 @@ elif page == "Care Services Explorer":
 
     st.divider()
 
-    cols = st.columns(
-        max(1, len(selected_layers))
-    )
+    summary_cols = st.columns(max(1, len(selected_layers)))
 
     for i, layer_name in enumerate(selected_layers):
 
-        cols[i].metric(
+        summary_cols[i].metric(
             layer_name,
             len(filtered_layers[layer_name])
         )
