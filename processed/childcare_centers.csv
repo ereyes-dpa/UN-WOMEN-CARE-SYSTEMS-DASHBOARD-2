@@ -1,309 +1,304 @@
-barangay,center_name,address
-Vasra,Vasra I,40 Forestry St.
-Vasra,Vasra II,40 Forestry St.
-Bagong Pag-asa,Bagong Pag-asa,Road 9 cor. Road 11
-Bagong Pag-asa,Kampilan I,"Hona St., San Roque"
-Sto. Cristo,Sto. Cristo,5 Romblon St.
-Sto. Cristo,Bahay Bulilit,4 Misamis Ext. RSCC Compound
-Ramon Magsaysay,Ramon Magsaysay I,Ilocos Sur St.
-Ramon Magsaysay,Ramon Magsaysay II,Ilocos Sur St.
-Alicia,Alicia,#2 Batangas St.
-Project 6,Project 6,Alley 3 Project 6
-Bahay Toro,Sitio Maligaya I,14 Bayanihan Drive
-Bahay Toro,Sitio Maligaya II,14 Bayanihan Drive
-Bahay Toro,San Jose Seminary I,"Road 19 Bahay Toro, Proj. 8"
-Bahay Toro,San Jose Seminary II,Road 19 Bahay Toro Proj. 8
-Bahay Toro,Pook Masagana,Alley 25 Pook Masagana
-Katipunan,Katipunan,E. Beltran St.
-San Antonio,San Antonio I,173 West Riverside St.
-San Antonio,San Antonio II,47 Guerrero St.
-San Antonio,San Antonio III,"Lot 5 Alley 7, 31 San Jose St."
-Veterans Village,Veterans Village,#3 Palomaria St. cor. Bansalangin St.
-Nayong Kanluran,Nayong Kanluran,37 Sorsogon St.
-Bungad,Bungad I,Sanches St. cor. Supnet St.
-Bungad,Bungad II,Sanches.St.corner Supnet St.
-Paltok,Paltok,"Brgy. Hall, Mendoza cor. Basa"
-Paltok,East Anak Bayan,75 Anakbayan Dulo St.
+barangay,center_name,address,district,latitude,longitude
+Vasra,Vasra I,40 Forestry St.,District 1,14.656936632770154,121.04646942958874
+Vasra,Vasra II,40 Forestry St.,District 1,14.656936632770154,121.04646942958874
+Bagong Pag-asa,Bagong Pag-asa,Road 9 cor. Road 11,District 1,14.654748530132741,121.03542366714137
+Bagong Pag-asa,Kampilan I,"Hona St., San Roque",District 1,14.654748530132741,121.03542366714137
+Sto. Cristo,Sto. Cristo,5 Romblon St.,District 1,14.659098514819854,121.03005560102883
+Sto. Cristo,Bahay Bulilit,4 Misamis Ext. RSCC Compound,District 1,14.659098514819854,121.03005560102883
+Ramon Magsaysay,Ramon Magsaysay I,Ilocos Sur St.,District 1,14.659148073422365,121.02280858455565
+Ramon Magsaysay,Ramon Magsaysay II,Ilocos Sur St.,District 1,14.659148073422365,121.02280858455565
+Alicia,Alicia,#2 Batangas St.,District 1,14.661459886657038,121.02502556403468
+Project 6,Project 6,Alley 3 Project 6,District 1,14.656698150704795,121.04081032939912
+Bahay Toro,Sitio Maligaya I,14 Bayanihan Drive,District 1,14.667456716146651,121.02866330853908
+Bahay Toro,Sitio Maligaya II,14 Bayanihan Drive,District 1,14.667456716146651,121.02866330853908
+Bahay Toro,San Jose Seminary I,"Road 19 Bahay Toro, Proj. 8",District 1,14.667456716146651,121.02866330853908
+Bahay Toro,San Jose Seminary II,Road 19 Bahay Toro Proj. 8,District 1,14.667456716146651,121.02866330853908
+Bahay Toro,Pook Masagana,Alley 25 Pook Masagana,District 1,14.667456716146651,121.02866330853908
+Katipunan,Katipunan,E. Beltran St.,District 1,14.656217253783469,121.01726723784498
+San Antonio,San Antonio I,173 West Riverside St.,District 1,14.650044833815716,121.01703705833786
+San Antonio,San Antonio II,47 Guerrero St.,District 1,14.650044833815716,121.01703705833786
+San Antonio,San Antonio III,"Lot 5 Alley 7, 31 San Jose St.",District 1,14.650044833815716,121.01703705833786
+Veterans Village,Veterans Village,#3 Palomaria St. cor. Bansalangin St.,District 1,14.654567730878938,121.02412951771363
+Nayong Kanluran,Nayong Kanluran,37 Sorsogon St.,District 1,14.640142513621038,121.02499009147394
+Bungad,Bungad I,Sanches St. cor. Supnet St.,District 1,14.649984982053079,121.02471840719117
+Bungad,Bungad II,Sanches.St.corner Supnet St.,District 1,14.649984982053079,121.02471840719117
+Paltok,Paltok,"Brgy. Hall, Mendoza cor. Basa",District 1,14.643553648088433,121.02308738511535
+Paltok,East Anak Bayan,75 Anakbayan Dulo St.,District 1,14.643553648088433,121.02308738511535
 Sta. Cruz,Sta. Cruz,"2nd Flr. Multi-purpose Hall
-23D Gen. Lim St."
-Mariblo,Mariblo,#1 Bernardo St. cor. San Pedro Bautista
+23D Gen. Lim St.",District 1,14.635630197123408,121.02066259241232
+Mariblo,Mariblo,#1 Bernardo St. cor. San Pedro Bautista,District 1,14.634653485782811,121.01596277871482
 Del Monte,Bukal ng Pag-asa,"21 Florencia West SFDM
-Multipurpose Hall"
+Multipurpose Hall",District 1,14.643268129867653,121.01515037625168
 Del Monte,Del Monte,"21 Florencia West SFDM
-Multipurpose Hall"
-Damayan,Damayan,30 San Vicente St.
-Masambong,Saint John Masambong I,4 Capuas St.
-Masambong,Saint John Masambong II,4 Capuas St.
-Talayan,Talayan Calamba,199 Calamba ext. Talayan Village
-Sto. Domingo,Sto. Domingo,14 Maria Clara St.
-Manresa,Manresa,Biak na Bato cor. Makaturing
-Manresa,Matutum,Multi-Purpose Hall
-San Jose,San Jose,80 Tendido St.
-Pag-ibig sa Nayon,Pag-ibig sa Nayon,23 J. Pineda St.
-Balingasa,Tibagan,11 Road Harmony St.
-Balingasa,Sitio Sto. Cristo,#25 Sitio Sto. Cristo
-N.S. Amoranto,N.S. Amoranto,Barangay Hall Angelo St.
-Salvacion,Salvacion,#74 Bulusan St.
-Paang Bundok,Paang Bundok,"Barangay Hall 166 Iriga St., La Loma"
-Sta. Teresita,Sta. Teresita,Mayon cor. Dapitan St. Barangay Hall Compd.
-San Isidro Labrador,San Isidro Labrador,#91 Halcon St.
-BARANGAY,CHILD DEVELOPMENT CENTER,ADDRESS
-Holy Spirit,Kaligtasan,"120 Don Vicente Kaligtasan St., Brgy. Holy Spirit"
-Holy Spirit,Barangay Complex,"Don Faustino St., (inside Barangay Hall compound) Brgy. Holy Spirit"
-Holy Spirit,Kasiyahan,"Kasiyahan Covered Court, Brgy. Holy Spirit"
-Holy Spirit,Sto. Niño,"Side of Sto. Niño Covered Court, Brgy. Holy Spirit"
-Holy Spirit,Mapayapa,"Area 7 Nawasa Line, Brgy. Holy Spirit"
-Holy Spirit,Sto. Domingo,"Republic Chapel (inside the gate), Brgy. Holy Spirit"
-Holy Spirit,St. Catherine,"St. Catherine St., Brgy. Holy Spirit"
-Holy Spirit,Zebra,"San Simon St. (back of Brgy. Annex), Brgy. Holy Spirit"
-Batasan Hills,Jasmin,"Lot 35-A, Jasmin St., Brgy. Batasan Hills"
-Batasan Hills,Luzviminda,"Luzviminda Subd., Brgy. Batasan Hills"
-Batasan Hills,Talanay,"31 Alton St., Sitio Talanay, Brgy. Batasan Hills"
-Batasan Hills,Area 3 Sitio Talanay,"Lot 16 Block 26 Ground Floor, Precious Complex, Area 3 Sitio Talanay, Brgy. Batasan Hills"
-Batasan Hills,Pook Pag-asa,"B1 L21 Pook Pagasa St., Brgy. Batasan Hills"
-Batasan Hills,Kalayaan B1,"Lot No. 41-C-3, Kalayaan B St., Brgy. Batasan Hills"
-Batasan Hills,Kalayaan B2,"Lot No. 41-C-3, Kalayaan B St., Brgy. Batasan Hills"
-Batasan Hills,Kalayaan B3,"Lot No. 41-C-3, Kalayaan B St., Brgy. Batasan Hills"
-Batasan Hills,Freedom Park 3 & 4,"Fortune St., Brgy. Batasan Hills"
-Batasan Hills,Freedom Park 5,"Jordan St., Freedom Park 5, Brgy. Batasan Hills"
-Batasan Hills,De Gloria,"De Gloria Taniman Ext. Talanay Area, Brgy. Batasan Hills"
-Commonwealth,Kasunduan,"Ground floor, Kasunduan Multi-purpose Hall, Unit 2, Kasunduan Extension, Brgy. Commonwealth"
-Commonwealth,Kaunlaran,"Lot 9A, Unit 2, Kaunlaran St., Brgy. Commonwealth"
-Commonwealth,Litex,"Payatas Road corner Bayanihan St., Brgy. Commonwealth"
-Commonwealth,Soliven,"Commonwealth Heights, Soliven St. corner President Quezon St., Brgy. Commonwealth"
-Commonwealth,E. Castillo,"E. Castillo St., Brgy. Commonwealth"
-Commonwealth,Don Fabian,"Don Fabian, Brgy. Commonwealth"
-Commonwealth,Gold,"Gold St., near Commonwealth Highschool, Brgy. Commonwealth"
-Commonwealth,Unit IV,"Unit IV, Plaza Riverside, Brgy. Commonwealth"
-Commonwealth,Unit V,"Ground floor, DCC Paulate Bldg., Bato bato St., Brgy. Commonwealth"
-Commonwealth,Upper Nawasa,"Unit VII Upper NAWASA, Brgy. Commonwealth"
-Commonwealth,Pinadama,"Pinadama Pilot Drive, Brgy. Commonwealth"
-Commonwealth,Purok 12,"Purok 12, Adarna St., Brgy. Commonwealth"
-Commonwealth,Purok 15,"Purok 15, Pinagnayon St., Brgy. Commonwealth"
-Commonwealth,Purok 16,"Unit V, Purok 16, Brgy. Commonwealth"
-Commonwealth,Purok 20,"Unit V, Purok 20, Brgy. Commonwealth"
-Commonwealth,Lower Nawasa,"Purok 6, Unit 7 Lower NAWASA, Brgy. Commonwealth"
-Commonwealth,Gravel Pit,"St. Paulia St., Gravel Pit, Brgy. Commonwealth"
-Bagong Silangan,Bagong Silangan,"Lot 1, Block 18, Bonifacio St., corner Geronimo St. (beside Brgy. Hall), Brgy. Bagong Silangan"
-Bagong Silangan,Sitio Veterans I,"Ground Floor, Sitio Veterans CDC, Lot 1 Block 18, Dove St., Area 1 Sitio Veterans, corner Don Vicente St., Brgy. Bagong Silangan"
-Bagong Silangan,Sitio Veterans II,"Second Floor, Sitio Veterans CDC, Lot 1 Block 18, Dove St., Area 1 Sitio Veterans, corner Don Vicente St., Brgy. Bagong Silangan"
-Bagong Silangan,Asprer,"Area 6, Bgy. Bagong Silangan, Brgy. Bagong Silangan"
-Bagong Silangan,Covenant,"David St., Covenant Village, Brgy. Bagong Silangan"
-Bagong Silangan,Area 5,"Lot 1 Block 18, Baesang Pass St., Area 5, Sitio Veterans, Brgy. Bagong Silangan"
-Bagong Silangan,Bakas,"052A Bakas Compound, Brgy. Bagong Silangan"
-Bagong Silangan,Filside,"Lot Block 6, Filside Homes, Brgy. Bagong Silangan"
-Bagong Silangan,Rolling Hills,"Purok 7, Sitio Rolling Hills (Boundary QC & Montalban)"
-Payatas A,Springfield,"Springfield St., Brgy. Payatas"
-Payatas A,Sto. Niño De Payatas I,"Ground floor, SÑDP CDC, Sto. Niño De Payatas St., Brgy. Payatas"
-Payatas A,Sto. Niño De Payatas II,"Second floor, SÑDP CDC, Sto. Niño De Payatas St., Brgy. Payatas"
-Payatas A,Azucena,"Azucena St., Brgy. Payatas"
-Payatas A,Upper Everlasting,"Upper Everlasting, Brgy. Payatas"
-Payatas A,Lower Everlasting,"Lower Everlasting (Sto. Niño Gala), Brgy. Payatas"
-Payatas A,Banaba,"Banaba St., Brgy. Payatas"
-Payatas B,Empire,"Empire St., Brgy. Payatas"
-Payatas B,Bahay Pangarap,"48 Bulacan St., near brgy. hall, Brgy. Payatas"
-Payatas B,Golden Shower,"Golden Shower St., Brgy. Payatas"
-Payatas B,Narraville,"Lower Narra St., Brgy. Payatas"
-Payatas B,Molave,"Molave St., near Tahanan, Brgy. Payatas"
-Payatas B,Mutya,"Mutya St., Brgy. Payatas"
-Payatas B,Lupang Pangako,"Phase 2, Park 13, Lupang Pangako, Brgy. Payatas"
-Payatas B,Phase IV-A,"Ground floor, Livelihood Center, Davao St., Phase IV, Brgy. Payatas"
-Payatas B,Phase IV-B,"2nd floor, Livelihood Center, Davao St., Phase IV, Brgy. Payatas"
-BARANGAY,CHILD DEVELOPMENT CENTER,ADDRESS
-Silangan,Silangan,"193 Ermin Garcia St., Cubao, Brgy. Silangan"
-Socorro,Socorro,"#1 15th ave. cor. Boni Serrano Rd., Brgy. Socorro"
-E. Rodriguez Sr.,E. Rodriguez Sr.,"181 Ermin Garcia St., Cubao, Brgy. E. Rodriguez Sr."
-West Kamias,West Kamias,"2nd Flr. Barangay Hall, 2 K 10th St., , Brgy. West Kamias"
-East Kamias,East Kamias,"65 K 10th St., Brgy. East Kamias"
-Quirino 2A,Quirino 2A,"Anonas St., Brgy. Quirino 2A"
-Quirino 2B,Quirino 2B,"157B Pajo St., cor. Langka, Proj. 2, Brgy. Quirino 2B"
-Quirino 2C,Quirino 2C,"179 Bignay St., Project 2, Brgy. Quirino 2C"
-Quirino 3B/ Claro,Claro,"20 Almon St., Brgy. Claro"
-Duyan-duyan,Duyan-duyan,"Kamagong St., cor. Kalanatas St., Brgy. Duyan-duyan"
-Amihan,Amihan,"Bgy. Hall, Palosapis St., Brgy. Amihan Quezon City"
-Old Balara,Area I Luzon,"Mafran Area I, Brgy. Matandang Balara"
-Old Balara,Area VA,"Area 5 Luzon near INC Church, Brgy. Matandang Balara"
-Old Balara,Area VB,"2nd floor, Old Balara, Area 5 Luzon, Brgy. Matandang Balara"
-Old Balara,Feria I,"Ground Flr., Feria CDC, Dao St., Feria Road, Brgy. Matandang Balara"
-Old Balara,Feria II,"2nd Flr., Feria CDC, Dao St., Feria Rd., Brgy. Matandang Balara"
-Old Balara,Visayan Hills,"Visayan Hills, Brgy. Matandang Balara"
-Old Balara,Calderon,"251 Calderon St., Brgy. Matandang Balara"
-Old Balara,Dupax I,"Road 44 Dupax St., Bgy. Satellite, Brgy. Matandang Balara"
-Old Balara,Laura I,"Purok 3 Area 5 Ground Floor, Brgy. Matandang Balara"
-Old Balara,Laura II,"Purok 3 Area 5 2nd Floor, Brgy. Matandang Balara"
-Old Balara,Bahay Bulilit,"Bgy.Hall Compound, Villa Beatriz, Brgy. Matandang Balara"
-Old Balara,Sapang Kangkong,"168 Kilusan St., Brgy. Matandang Balara"
-Old Balara,Villa Beatriz,"Villa Beatriz Extension, Brgy. Matandang Balara"
-Old Balara,Samadores,"Area 2, Luzon, Brgy. Matandang Balara"
-Pansol,Pansol Proper,"SK Building Plaza St., Barangay Hall, Brgy. Pansol"
-Pansol,Kaingin I,"Block 1 Kaingin 1, Brgy. Pansol"
-Pansol,Kaingin II,"Bungad Kaingin II, near Bgy. Hall Extension, Brgy. Pansol"
-Loyola Heights,Loyola Heights,"Loyola Heights Brgy. Hall Compound, E. Abada St., Katipunan, Brgy. Loyola Heights"
-Loyola Heights,Daan Tubo,"Area II, across Dela Estrada Church, Brgy. Loyola Heights"
-San Roque,San Roque,"85 19th ave., Brgy. San Roque"
-Villa Maria Clara,Villa Maria Clara,"Barangay Hall, Rajah Matanda, Brgy. Villa Maria Clara"
-Bayanihan,Bayanihan,"321 Pedro Martinez St. Project 4, Brgy. Bayanihan"
-Masagana,Masagana,"7 Conchu St., Project 4, Brgy. Masagana"
-Mangga,Mangga,"950 Int. Aurora Blvd., Cubao, Brgy. Mangga"
-Camp Aguinaldo,Camp Aguinaldo,"General Lim St., Brgy. Camp Aguinaldo"
-Libis,Libis,"Brgy. Hall, E. Rodriguez Jr. Avenue, Brgy. Libis"
-Milagrosa,Milagrosa,"5K Oval Belarmino St., Brgy. Milagrosa"
-Bagumbayan,Bagumbayan,"75 San Roque St., Brgy. Bagumbayan"
-Escopa 2,Escopa 2,"Mapagmahal St., Barangay Hall, Brgy. Escopa 2"
-Escopa 3,Escopa 3A,"P. Burgos PUD Site Bliss, Brgy. Hall Compound, Project 4, Brgy. Escopa 3"
-Escopa 3,Escopa 3B,"P. Burgos PUD Site Bliss, Brgy. Hall Compound, Project 4, Brgy. Escopa 3"
-Escopa 4,Escopa 4,"Senior Citizen Bldg. Escopa 4 Ibaba, Brgy. Escopa 4"
-Dioquino Zobel,Dioquino Zobel,"18 Lizardo St. 20th Ave., Brgy. Dioquino Zobel"
-Bagumbuhay,Bagumbuhay,"Plaza Malvar, Malvar St., Brgy. Bagumbuhay"
-Marilag,Marilag I,"Plaza Camerino, Camerino St., Brgy. Marilag"
-Marilag,Marilag II,"Plaza Camerino, Camerino St., Brgy. Marilag"
-Tagumpay,Tagumpay,"2B P. Tuazon Blvd., Brgy. Tagumpay"
-BARANGAY,CHILD DEVELOPMENT CENTER,ADDRESS
-Obrero,Obrero,"Brgy. Obrero Bgy Hall, Parkway St. cor. Tomas Morato Ave."
-Paligsahan,Paligsahan,Roces Avenue Brgy. Paligsahan
-Kamuning,Kamuning,"Bgy. Hall, #113 Kamuning Rd. Brgy. Kamuning"
-South Triangle,South Triangle,Brgy. South Triangle Barangay Hall Sct. Bayoran St.
-Roxas,Roxas,Champaca cor. Dahlia St. Brgy. Roxas
-Pinagkaisahan,Pinagkaisahan,Ermin Garcia St. (near Bernardo Park)
-Immaculate Concepcion,Hillcrest,"Hillcrest St., Cubao (sidewalk) Brgy. Immaculate Concepcion"
-Immaculate Concepcion,F. Manalo,F. Manalo St. Brgy. Immaculate Concepcion
-Kaunlaran,Planas Site,Planas Site III St. Brgy. Kaunlaran
-San Martin de Porres,San Martin de Porres I,Conrado Benitez St. Brgy. San Martin de Porres
-San Martin de Porres,San Martin de Porres Annex,Conrado Benitez St. Brgy. San Martin de Porres
-Horseshoe,Horseshoe,"Brgy. Horsehoe Bgy. Hall, Sunset Drive"
-Tatalon,Manunggal I,Manunggal St. Brgy. Tatalon
-Tatalon,Manunggal II,"#15 Senior Citizen Bldg., Manunggal St. Brgy. Tatalon"
-Kristong Hari,Kristong Hari,"Broadway, Brgy. Kristong Hari"
-Damayang Lagi,Damayang Lagi,Block 4 (Chapel) E. Rodriguez Sr. Ave. Brgy. Damayang Lagi
-San Isidro Galas,San Isidro Galas,"Brgy. San Isidro Galas Bgy. Hall Compound, Unang Hakbang St."
-Sto Niño,Sto. Niño,Inocando St. Corner Santol St. Brgy. Sto. Niño
-Santol,Santol,"Brgy. Santol Brgy. Hall, Silencio cor. Baloy St."
-Doña Imelda,Chamberette Doña Imelda,Chamberette Building Guirayan St. Brgy. Doña Imelda
-Doña Imelda,Palanza,#38 Kapiligan St. Brgy. Doña Imelda
-Doña Josefa,Doña Josefa,Brgy. Doña Josefa Brgy. Hall Agno cor. Kitanlad St.
-Don Manuel,Don Manuel,L. Castillo corner Matimyas St. Brgy. Don Manuel
-Doña Aurora,Doña Aurora,E. Jacinto St. Brgy. Doña Aurora
-Old Capitol Site,Old Capitol Site,Masaya St. Interior (near Bgy. Hall) Brgy. Old Capitol Site
-Old Capitol Site,Pechayan,Zone 1 Brgy. Old Capitol Site
-San Vicente,San Vicente,Fatima St. cor. Maayusin Ext. Brgy. San Vicente
-U.P. Campus,Amorsolo,"Barangay Hall Compd., Pook Amorsolo Brgy. UP Campus"
-U.P. Campus,Amorsolo II,
-U.P. Campus,Pook Village B,Pook Village B Brgy. UP Campus
-U.P. Campus,Pook Libis,Pook Libis Brgy. UP Campus
-U.P. Campus,Pook Daang Tubo,Pook Daang Tubo Brgy. UP Campus
-Central,Forestry,BFD Compound Brgy. Central
-Central,Kalayaan,#81 Kalayaan Ave. Brgy. Central
-Central,Botanical,128 Orchid St. Brgy. Central
-Central,Quezon City Yakap,"QC Hall Compound, Brgy. Central (Back of QC Public Library)"
-Krus na Ligas,KNL-CDO,V. Francisco St. (beside KNL High School) Brgy. Krus Na Ligas
-Krus na Ligas,Sitio Lambak,Flores St. Brgy. Krus Na Ligas
-Krus na Ligas,Kabalitang,Kabalitang St. Brgy. Krus Na Ligas
-Botocan,Botocan,"Brgy. Botocan Brgy. Hall, Makadios St."
-Malaya,Malaya,"Brgy. Malaya Brgy. Hall, Matahimik St."
-Pinyahan,Pinyahan Proper,"#35 Malakas St. Brgy. Hall Compd., Brgy. Pinyahan"
-BARANGAY,CHILD DEVELOPMENT CENTER,ADDRESS
-Greater Lagro,Greater Lagro I,"1st floor Greater Largo Daycare Center Building, Ascension Rd., Greater Lagro Subd. Brgy. Greater Lagro"
-Greater Lagro,Greater Lagro II,"2nd floor Greater Largo Daycare Center Building, Ascension Rd., Greater Lagro Subd. Brgy. Greater Lagro"
-Pasong Putik Proper,SAMAPINA,"Block 1 Lot 60 Sampaguita St. Maligaya Park, Brgy. Pasong Putik Proper"
-Pasong Putik Proper,Pechayan,"Block 31 Lot 23 Ilang-Ilang St. Pechayan Kanan, Maligaya Park, Brgy. Pasong Putik"
-North Fairview,Milenyo,"Milenyo Daycare Center Building, Milenyo St. Phase 8-I, Brgy. North Fairview"
-North Fairview,Avon,"13-A Avon St., North Fairview Subd., Brgy. North Fairview"
-North Fairview,NAMAPA,"NAMAPA Compound, Brgy. North Fairview"
-North Fairview,Phase 8-I,"1st Floor Daycare and Livelihood Center Building, Peso St., United North Fairview Subd., Brgy. North Fairview"
-North Fairview,Phase 8-II,"2nd Floor Daycare and Livelihood Center Building, Peso St., United North Fairview Subd., Brgy. North Fairview"
-Fairview,Fairview,"Ground floor Vargas Hall, Barangay Hall Complex, Dahlia St., Brgy. Fairview"
-Fairview,Sitio Ruby,"Sitio Ruby St. SERNAI East Fairview, Brgy. Fairview"
-Fairview,MMTC,"Basilio St., cor Republic Ave., Brgy. Fairview"
-Fairview,Sitio Kislap,"Sitio Kislap Pearl St, Brgy. Fairview"
-Fairview,Sitio Urlina,Sitio Urlina Lilac St. Brgy. Fairview
-Fairview,SAPAMANAI,"2nd Floor SAPAMANAI Bldg., Molave St. cor Mahogany St. Brgy Fairview"
-Fairview,Sitio RABOSNA,"14 Ruby St Sitio Rabosna, Brgy. Fairview"
-Kaligayahan,Kingfisher,Kingfisher St. Zabarte Subd. Brgy. Kaligayahan (beside Kaligayahan Health Center)
-Kaligayahan,Junji,"Junji Street, Rolling Hills Western Village, Brgy. Kaligayahan"
-Kaligayahan,Mockingbird,"Barangay Kaligayahan Hall, Mockingbird St. Zabarte Subd., Brgy. Kaligayahan"
-Kaligayahan,Tawid Sapa I,"Blk. 10 Phase 1, Kalinga Tawid Sapa, Brgy. Kaligayahan"
-Kaligayahan,Tawid Sapa II,"Zone 1 cor. Sampalucan St., Tawid Sapa, Brgy. Kaligayahan"
-Kaligayahan,Bistekville 2,"1st Flr Bistekville II Multi-Purpose Hall Building, Brgy. Kaligayahan"
-Sta. Lucia,Bonifacio,"2/F BPSO Building, Brgy. Hall Compound, A. Bonifacio St. Brgy. Sta. Lucia Ave."
-Sta. Lucia,Balagtas,25 Balagtas St. cor. M. Aquino St. Brgy. Sta. Lucia
-Sta. Lucia,Sitio 6,"Lot 18 Blk 52, Abad Santos St, Sitio 6, Brgy. Sta Lucia"
-Sta. Lucia,Tarhaville,"Blk 13 Lapu-lapu, Tarhaville Village, Brgy. Sta Lucia"
-Sta. Lucia,Plainville,"St. Joseph St., Plainville Subdivision"
-San Agustin,St. Francis,"Barangay Hall Compd., Patnubay Street, St. Francis Village"
-San Agustin,T.S. Cruz,"T.S. Cruz Day Care and Livelihood Center, Fidel St., T.S. Cruz Subdivision, Brgy. San Agustin"
-San Agustin,Nova Homes,"Narra St., Nova Homes Subd. Brgy. San Agustin"
-Novaliches Proper,Novaliches Proper I,"3rd Floor, Livelihood CHILD DEVELOPMENT CENTER Bldg., Nova Plaza, Buenamar St.,Brgy. Novaliches Proper"
-Novaliches Proper,Novaliches Proper II,"2nd Floor Multi-purpose Bldg., P. Tupaz St., Doña Rosario, Brgy. Novaliches Proper"
-Novaliches Proper,Doña Rosario,"Ground Floor Multi-purpose Bldg., P. Tupaz St., Doña Rosario, Brgy. Novaliches Proper"
-Nagkaisang Nayon,Nagkaisang Nayon I,"Barangay Hall Compound., #7 Banahaw St. Brgy. Nagkaisang Nayon"
-Nagkaisang Nayon,Nagkaisang Nayon II,
-Nagkaisang Nayon,Jonaville I,"St.Joseph St., Jonaville Subdivision, Brgy. Nagkaisang Nayon"
-Nagkaisang Nayon,Villa Nova,"St. Michael St. cor Francis St. Villanova Subd., Brgy. Nagkaisang Nayon"
-Nagkaisang Nayon,Lazaro,"Lot 5 Blk 5, Damong Maliit, Lazaro Subd., Brgy. Nagkaisang Nayon"
-Nagkaisang Nayon,Pasacola I,"Blk 1, Dormitory Phase 1 (Nagkakaisang Lakas) , Brgy. Nagkaisang Nayon"
-Nagkaisang Nayon,Pasacola II,"Lot 158-B, Area C, Pasacola, Brgy. Nagkaisang Nayon"
-Nagkaisang Nayon,Robina,"Robina Rd. Sierra Vista Subd., Brgy. Nagkaisang Nayon"
-Nagkaisang Nayon,St. Andrew,"Sampaguita St., Dantes Subd., Damong Maliit, Brgy. Nagkaisang Nayon"
-Nagkaisang Nayon,Queensland I,"Princess Grace St., Queensland Phase I Subd., Damong Maliit, Brgy. Nagkaisang Nayon"
-Nagkaisang Nayon,Queensland II,"Ground Floor Vargas Building, Blk 5 Lot 14 Ruby St. Queensland 2 Village, Brgy Nagkaisang Nayon"
-Capri,Champaca,"Barangay Hall Building, Sampaguita St., Area 5"
-Capri,Narra,"Barangay Hall Building, Sampaguita St., Area 5"
-Sta. Monica,Aguardiente,"1st floor Barangay Sta Monica Daycare Center Building, Pugong Ginto St., Aguardiente, Brgy. Sta Monica"
-Sta. Monica,Sta. Monica,"Barangay Hall Compd., Moises St., Jordan Plains Subd., Brgy. Sta Monica"
-Sta. Monica,Palmera,"Multi-purpose Hall Mangga St. Phase I-A Palmera Homes, Brgy. Sta Monica"
-Gulod,Joan of Arc,"2nd Floor HOA Bldg., Victoria St. Joan of Arc, Brgy. Gulod"
-Gulod,Villareal,"3rd floor Old Barangay Hall Building, Quirino Highway, Brgy. Gulod"
-Gulod,POCC (Holy Trinity),"Nenita Extn. POCC Compound Area VI, Brgy. Gulod"
-Gulod,Nitang,# 47 Nitang Avenue Brgy Gulod
-Gulod,Don Crispulo,"Bering St. cor Don Crispulo Street, Area V, Brgy. Gulod"
-Gulod,Florentina,"Interior Florentina St. Castro Compound, Brgy. Gulod"
-Gulod,Golden HOA I,"Ground flr. Golden HOA Livelihood Center Building, Golden HOA Area, Brgy Gulod"
-San Bartolome,Nomar 2,"Santan St., Nomar Subd., Brgy. San Bartolome"
-San Bartolome,Angela,"2nd flr. Vargas Hall, Marcos St., Doña Faustina"
-San Bartolome,Sampaguita,"Sampaguita Compound, Atlas Road, Brgy. San Bartolome"
-Bagbag,Goodwill Homes 2,"Mark St. cor. Ruth St., Goodwill Homes 2 Subd., Brgy. Bagbag"
-Bagbag,Maligaya,
-Bagbag,Remarville,"Asteroid St. cor. Pisces St., Remarville Subd., Brgy. Bagbag"
-Bagbag,Ibayo,"Ibayo 2 68 Pascual Road, Brgy. Bagbag"
-Bagbag,San Pedro IX,Santan St. San Pedro IX Subd. Brgy. Bagbag
-BARANGAY,CHILD DEVELOPMENT CENTER,ADDRESS
-Sauyo,Old Cabuyao,15 Old Cabuyao
-Sauyo,135-99 (Alma Nova),135-99 Sauyo Rd.
-Sauyo,Sitio Cabuyao I,"Area 5a, Sauyo Road"
-Sauyo,Sitio Cabuyao II,"Area 6, Sauyo Road"
-Sauyo,Baluyot,5 Baluyot I
-Sauyo,MASARNA,"201 Mabuhay Compd., Sauyo Rd."
-Sauyo,Lower Gulod,"135 Lower Gulod, Brgy. Sauyo"
-Talipapa,Talipapa,Siklot St. Pleasantville Subd.
-Talipapa,Gloria V,"Candido St. cor. Sampaguita, Gloria V Subd."
-Talipapa,La Trinidad,La Trinidad Village Whole Court
-Talipapa,CANO,Blk 5 Lot 1 Sto. Niño Village
-Talipapa,Campo 2,"Campo 2, Tandang Sora"
-Talipapa,Del Nacia,Dal Nacia 3 Subd.
-Baesa,Asamba,Asamba Compound Sitio Compound
-Baesa,Sitio Pajo,GK Sitio Pajo
-Baesa,Howmart,Alley 2 Howmart St.
-Baesa,F. Carlos,F. Carlos St. (near Basketball Court)
-Baesa,Mendez,Mendez Road
-Sangandaan,Redemption 1,Parklane Ext. Gertrudes St. Livelihood Building
-Sangandaan,Redemption 2,Parklane Ext. Gertrudes St. Livelihood Building
-Sangandaan,Sitio San Roque,Sitio San Roque Compound
-Sangandaan,Insurance,72 Insurance St.
-Balon Bato,Balon Bato,11 E Maximina Drive beside Brgy. Hall
-Unang Sigaw,Unang Sigaw,3 North Diversion Rd. Balintawak
-Apolonio Samson,Apolonio Samson,"Kaingin Rd., Bgy. Hall Apolonio Samson"
-Apolonio Samson,Apolonio Samson Annex,Bgy. Apolonio Samson
-Apolonio Samson,Oliveros,26 M Oliveros Drive (Dulo)
-Pasong Tamo,Veterans Area I,"Area I, Freedom Park St. Veterans Village"
-Pasong Tamo,Veterans Area II,Corner Diego Silang St. Veterans Village
-Pasong Tamo,Veterans Area III,7th Street Veterans Village Area 3
-Pasong Tamo,Pingkian II,Pingkian II
-Pasong Tamo,Pingkian 3 Zone 2,"Lily St. Pingkian 3, Zone 2"
-Pasong Tamo,Pingkian 3 Zone 3,Santan St.
-Pasong Tamo,Centerville,Philand back of basketball court
-Tandang Sora,Carmel V,"37 Taurus St., Carmel V"
-Tandang Sora,Tandang Sora Shrine,228 Banlat Road
-Tandang Sora,Apo Ville,"Multi-Purpose Hall Delta Vill. Ext., Tandang Sora"
-Culiat,Purok I,"251 Purok I, Luzon Avenue"
-Culiat,Metro Heights,"Adelfa Metro Heights, Visayas Ave."
-Culiat,Cenacle Drive,"5A Cenacle Drive, Sitio Mabilog"
+Multipurpose Hall",District 1,14.643268129867653,121.01515037625168
+Damayan,Damayan,30 San Vicente St.,District 1,14.637873170624376,121.0140585515347
+Masambong,Saint John Masambong I,4 Capuas St.,District 1,14.642152978227562,121.00872240267755
+Masambong,Saint John Masambong II,4 Capuas St.,District 1,14.642152978227562,121.00872240267755
+Talayan,Talayan Calamba,199 Calamba ext. Talayan Village,District 1,14.63474175270494,121.01133780962316
+Sto. Domingo,Sto. Domingo,14 Maria Clara St.,District 1,14.629700805286772,121.00780149219332
+Manresa,Manresa,Biak na Bato cor. Makaturing,District 1,14.641563512283119,121.0008677958591
+Manresa,Matutum,Multi-Purpose Hall,District 1,14.641563512283119,121.0008677958591
+San Jose,San Jose,80 Tendido St.,District 1,14.640492158810469,120.99367655931428
+Pag-ibig sa Nayon,Pag-ibig sa Nayon,23 J. Pineda St.,District 1,14.647110769674281,120.9966097671458
+Balingasa,Tibagan,11 Road Harmony St.,District 1,14.651741554726597,121.00154084378181
+Balingasa,Sitio Sto. Cristo,#25 Sitio Sto. Cristo,District 1,14.651741554726597,121.00154084378181
+N.S. Amoranto,N.S. Amoranto,Barangay Hall Angelo St.,District 1,14.632797579036707,120.99354043610921
+Salvacion,Salvacion,#74 Bulusan St.,District 1,14.626588041684217,120.99409888609271
+Paang Bundok,Paang Bundok,"Barangay Hall 166 Iriga St., La Loma",District 1,14.62815164756996,120.99197074500714
+Sta. Teresita,Sta. Teresita,Mayon cor. Dapitan St. Barangay Hall Compd.,District 1,14.620733768925444,121.00032909107458
+San Isidro Labrador,San Isidro Labrador,#91 Halcon St.,District 1,14.623920199889508,120.9962386052501
+Holy Spirit,Kaligtasan,"120 Don Vicente Kaligtasan St., Brgy. Holy Spirit",District 2,14.684964597544562,121.07801018409732
+Holy Spirit,Barangay Complex,"Don Faustino St., (inside Barangay Hall compound) Brgy. Holy Spirit",District 2,14.684964597544562,121.07801018409732
+Holy Spirit,Kasiyahan,"Kasiyahan Covered Court, Brgy. Holy Spirit",District 2,14.684964597544562,121.07801018409732
+Holy Spirit,Sto. Niño,"Side of Sto. Niño Covered Court, Brgy. Holy Spirit",District 2,14.684964597544562,121.07801018409732
+Holy Spirit,Mapayapa,"Area 7 Nawasa Line, Brgy. Holy Spirit",District 2,14.684964597544562,121.07801018409732
+Holy Spirit,Sto. Domingo,"Republic Chapel (inside the gate), Brgy. Holy Spirit",District 2,14.684964597544562,121.07801018409732
+Holy Spirit,St. Catherine,"St. Catherine St., Brgy. Holy Spirit",District 2,14.684964597544562,121.07801018409732
+Holy Spirit,Zebra,"San Simon St. (back of Brgy. Annex), Brgy. Holy Spirit",District 2,14.684964597544562,121.07801018409732
+Batasan Hills,Jasmin,"Lot 35-A, Jasmin St., Brgy. Batasan Hills",District 2,14.68350669259852,121.09834284282383
+Batasan Hills,Luzviminda,"Luzviminda Subd., Brgy. Batasan Hills",District 2,14.68350669259852,121.09834284282383
+Batasan Hills,Talanay,"31 Alton St., Sitio Talanay, Brgy. Batasan Hills",District 2,14.68350669259852,121.09834284282383
+Batasan Hills,Area 3 Sitio Talanay,"Lot 16 Block 26 Ground Floor, Precious Complex, Area 3 Sitio Talanay, Brgy. Batasan Hills",District 2,14.68350669259852,121.09834284282383
+Batasan Hills,Pook Pag-asa,"B1 L21 Pook Pagasa St., Brgy. Batasan Hills",District 2,14.68350669259852,121.09834284282383
+Batasan Hills,Kalayaan B1,"Lot No. 41-C-3, Kalayaan B St., Brgy. Batasan Hills",District 2,14.68350669259852,121.09834284282383
+Batasan Hills,Kalayaan B2,"Lot No. 41-C-3, Kalayaan B St., Brgy. Batasan Hills",District 2,14.68350669259852,121.09834284282383
+Batasan Hills,Kalayaan B3,"Lot No. 41-C-3, Kalayaan B St., Brgy. Batasan Hills",District 2,14.68350669259852,121.09834284282383
+Batasan Hills,Freedom Park 3 & 4,"Fortune St., Brgy. Batasan Hills",District 2,14.68350669259852,121.09834284282383
+Batasan Hills,Freedom Park 5,"Jordan St., Freedom Park 5, Brgy. Batasan Hills",District 2,14.68350669259852,121.09834284282383
+Batasan Hills,De Gloria,"De Gloria Taniman Ext. Talanay Area, Brgy. Batasan Hills",District 2,14.68350669259852,121.09834284282383
+Commonwealth,Kasunduan,"Ground floor, Kasunduan Multi-purpose Hall, Unit 2, Kasunduan Extension, Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Kaunlaran,"Lot 9A, Unit 2, Kaunlaran St., Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Litex,"Payatas Road corner Bayanihan St., Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Soliven,"Commonwealth Heights, Soliven St. corner President Quezon St., Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,E. Castillo,"E. Castillo St., Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Don Fabian,"Don Fabian, Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Gold,"Gold St., near Commonwealth Highschool, Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Unit IV,"Unit IV, Plaza Riverside, Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Unit V,"Ground floor, DCC Paulate Bldg., Bato bato St., Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Upper Nawasa,"Unit VII Upper NAWASA, Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Pinadama,"Pinadama Pilot Drive, Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Purok 12,"Purok 12, Adarna St., Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Purok 15,"Purok 15, Pinagnayon St., Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Purok 16,"Unit V, Purok 16, Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Purok 20,"Unit V, Purok 20, Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Lower Nawasa,"Purok 6, Unit 7 Lower NAWASA, Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Commonwealth,Gravel Pit,"St. Paulia St., Gravel Pit, Brgy. Commonwealth",District 2,14.700624527897887,121.08411895972014
+Bagong Silangan,Bagong Silangan,"Lot 1, Block 18, Bonifacio St., corner Geronimo St. (beside Brgy. Hall), Brgy. Bagong Silangan",District 2,14.708614835377926,121.11108501003582
+Bagong Silangan,Sitio Veterans I,"Ground Floor, Sitio Veterans CDC, Lot 1 Block 18, Dove St., Area 1 Sitio Veterans, corner Don Vicente St., Brgy. Bagong Silangan",District 2,14.708614835377926,121.11108501003582
+Bagong Silangan,Sitio Veterans II,"Second Floor, Sitio Veterans CDC, Lot 1 Block 18, Dove St., Area 1 Sitio Veterans, corner Don Vicente St., Brgy. Bagong Silangan",District 2,14.708614835377926,121.11108501003582
+Bagong Silangan,Asprer,"Area 6, Bgy. Bagong Silangan, Brgy. Bagong Silangan",District 2,14.708614835377926,121.11108501003582
+Bagong Silangan,Covenant,"David St., Covenant Village, Brgy. Bagong Silangan",District 2,14.708614835377926,121.11108501003582
+Bagong Silangan,Area 5,"Lot 1 Block 18, Baesang Pass St., Area 5, Sitio Veterans, Brgy. Bagong Silangan",District 2,14.708614835377926,121.11108501003582
+Bagong Silangan,Bakas,"052A Bakas Compound, Brgy. Bagong Silangan",District 2,14.708614835377926,121.11108501003582
+Bagong Silangan,Filside,"Lot Block 6, Filside Homes, Brgy. Bagong Silangan",District 2,14.708614835377926,121.11108501003582
+Bagong Silangan,Rolling Hills,"Purok 7, Sitio Rolling Hills (Boundary QC & Montalban)",District 2,14.708614835377926,121.11108501003582
+Payatas A,Springfield,"Springfield St., Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas A,Sto. Niño De Payatas I,"Ground floor, SÑDP CDC, Sto. Niño De Payatas St., Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas A,Sto. Niño De Payatas II,"Second floor, SÑDP CDC, Sto. Niño De Payatas St., Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas A,Azucena,"Azucena St., Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas A,Upper Everlasting,"Upper Everlasting, Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas A,Lower Everlasting,"Lower Everlasting (Sto. Niño Gala), Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas A,Banaba,"Banaba St., Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas B,Empire,"Empire St., Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas B,Bahay Pangarap,"48 Bulacan St., near brgy. hall, Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas B,Golden Shower,"Golden Shower St., Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas B,Narraville,"Lower Narra St., Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas B,Molave,"Molave St., near Tahanan, Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas B,Mutya,"Mutya St., Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas B,Lupang Pangako,"Phase 2, Park 13, Lupang Pangako, Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas B,Phase IV-A,"Ground floor, Livelihood Center, Davao St., Phase IV, Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Payatas B,Phase IV-B,"2nd floor, Livelihood Center, Davao St., Phase IV, Brgy. Payatas",District 2,14.711499985060277,121.10082684368048
+Silangan,Silangan,"193 Ermin Garcia St., Cubao, Brgy. Silangan",District 3,14.62751281397944,121.05889049263536
+Socorro,Socorro,"#1 15th ave. cor. Boni Serrano Rd., Brgy. Socorro",District 3,14.617518522719386,121.05648313891712
+E. Rodriguez Sr.,E. Rodriguez Sr.,"181 Ermin Garcia St., Cubao, Brgy. E. Rodriguez Sr.",District 3,14.626337570713758,121.05216462327228
+West Kamias,West Kamias,"2nd Flr. Barangay Hall, 2 K 10th St., , Brgy. West Kamias",District 3,14.630432230190083,121.04938735286122
+East Kamias,East Kamias,"65 K 10th St., Brgy. East Kamias",District 3,14.632239952579319,121.05630481957424
+Quirino 2A,Quirino 2A,"Anonas St., Brgy. Quirino 2A",District 3,14.630366162189045,121.05908317002341
+Quirino 2B,Quirino 2B,"157B Pajo St., cor. Langka, Proj. 2, Brgy. Quirino 2B",District 3,14.632233342823886,121.06192218249635
+Quirino 2C,Quirino 2C,"179 Bignay St., Project 2, Brgy. Quirino 2C",District 3,14.63457536172823,121.06329042496627
+Quirino 3B/ Claro,Claro,"20 Almon St., Brgy. Claro",District 3,14.63157449928462,121.0646025242225
+Duyan-duyan,Duyan-duyan,"Kamagong St., cor. Kalanatas St., Brgy. Duyan-duyan",District 3,14.630009820996875,121.0672388234011
+Amihan,Amihan,"Bgy. Hall, Palosapis St., Brgy. Amihan Quezon City",District 3,14.632261157786505,121.06851473121716
+Old Balara,Area I Luzon,"Mafran Area I, Brgy. Matandang Balara",District 3,14.670506795289098,121.0808897938343
+Old Balara,Area VA,"Area 5 Luzon near INC Church, Brgy. Matandang Balara",District 3,14.670506795289098,121.0808897938343
+Old Balara,Area VB,"2nd floor, Old Balara, Area 5 Luzon, Brgy. Matandang Balara",District 3,14.670506795289098,121.0808897938343
+Old Balara,Feria I,"Ground Flr., Feria CDC, Dao St., Feria Road, Brgy. Matandang Balara",District 3,14.670506795289098,121.0808897938343
+Old Balara,Feria II,"2nd Flr., Feria CDC, Dao St., Feria Rd., Brgy. Matandang Balara",District 3,14.670506795289098,121.0808897938343
+Old Balara,Visayan Hills,"Visayan Hills, Brgy. Matandang Balara",District 3,14.670506795289098,121.0808897938343
+Old Balara,Calderon,"251 Calderon St., Brgy. Matandang Balara",District 3,14.670506795289098,121.0808897938343
+Old Balara,Dupax I,"Road 44 Dupax St., Bgy. Satellite, Brgy. Matandang Balara",District 3,14.670506795289098,121.0808897938343
+Old Balara,Laura I,"Purok 3 Area 5 Ground Floor, Brgy. Matandang Balara",District 3,14.670506795289098,121.0808897938343
+Old Balara,Laura II,"Purok 3 Area 5 2nd Floor, Brgy. Matandang Balara",District 3,14.670506795289098,121.0808897938343
+Old Balara,Bahay Bulilit,"Bgy.Hall Compound, Villa Beatriz, Brgy. Matandang Balara",District 3,14.670506795289098,121.0808897938343
+Old Balara,Sapang Kangkong,"168 Kilusan St., Brgy. Matandang Balara",District 3,14.670506795289098,121.0808897938343
+Old Balara,Villa Beatriz,"Villa Beatriz Extension, Brgy. Matandang Balara",District 3,14.670506795289098,121.0808897938343
+Old Balara,Samadores,"Area 2, Luzon, Brgy. Matandang Balara",District 3,14.670506795289098,121.0808897938343
+Pansol,Pansol Proper,"SK Building Plaza St., Barangay Hall, Brgy. Pansol",District 3,14.657461508572677,121.08301139763023
+Pansol,Kaingin I,"Block 1 Kaingin 1, Brgy. Pansol",District 3,14.657461508572677,121.08301139763023
+Pansol,Kaingin II,"Bungad Kaingin II, near Bgy. Hall Extension, Brgy. Pansol",District 3,14.657461508572677,121.08301139763023
+Loyola Heights,Loyola Heights,"Loyola Heights Brgy. Hall Compound, E. Abada St., Katipunan, Brgy. Loyola Heights",District 3,14.638283213249004,121.0739382435671
+Loyola Heights,Daan Tubo,"Area II, across Dela Estrada Church, Brgy. Loyola Heights",District 3,14.638283213249004,121.0739382435671
+San Roque,San Roque,"85 19th ave., Brgy. San Roque",District 3,14.619118390877812,121.06220315822215
+Villa Maria Clara,Villa Maria Clara,"Barangay Hall, Rajah Matanda, Brgy. Villa Maria Clara",District 3,14.616564338763283,121.06887223561434
+Bayanihan,Bayanihan,"321 Pedro Martinez St. Project 4, Brgy. Bayanihan",District 3,14.615440096193929,121.06963249055882
+Masagana,Masagana,"7 Conchu St., Project 4, Brgy. Masagana",District 3,14.61845196403823,121.06692711348596
+Mangga,Mangga,"950 Int. Aurora Blvd., Cubao, Brgy. Mangga",District 3,14.62561498760333,121.06208869172181
+Camp Aguinaldo,Camp Aguinaldo,"General Lim St., Brgy. Camp Aguinaldo",District 3,14.607343359218039,121.06385966277443
+Libis,Libis,"Brgy. Hall, E. Rodriguez Jr. Avenue, Brgy. Libis",District 3,14.616067875538159,121.07699277013369
+Milagrosa,Milagrosa,"5K Oval Belarmino St., Brgy. Milagrosa",District 3,14.620613573035227,121.06984547878666
+Bagumbayan,Bagumbayan,"75 San Roque St., Brgy. Bagumbayan",District 3,14.606859221341413,121.0814493015973
+Escopa 2,Escopa 2,"Mapagmahal St., Barangay Hall, Brgy. Escopa 2",District 3,14.624340030504943,121.07462083525937
+Escopa 3,Escopa 3A,"P. Burgos PUD Site Bliss, Brgy. Hall Compound, Project 4, Brgy. Escopa 3",District 3,14.626957705680098,121.07333152307797
+Escopa 3,Escopa 3B,"P. Burgos PUD Site Bliss, Brgy. Hall Compound, Project 4, Brgy. Escopa 3",District 3,14.626957705680098,121.07333152307797
+Escopa 4,Escopa 4,"Senior Citizen Bldg. Escopa 4 Ibaba, Brgy. Escopa 4",District 3,14.625642366630641,121.07445102170936
+Dioquino Zobel,Dioquino Zobel,"18 Lizardo St. 20th Ave., Brgy. Dioquino Zobel",District 3,14.619831381783921,121.06480906708597
+Bagumbuhay,Bagumbuhay,"Plaza Malvar, Malvar St., Brgy. Bagumbuhay",District 3,14.625127003478772,121.06525838880444
+Marilag,Marilag I,"Plaza Camerino, Camerino St., Brgy. Marilag",District 3,14.625524498822685,121.07002058809255
+Marilag,Marilag II,"Plaza Camerino, Camerino St., Brgy. Marilag",District 3,14.625524498822685,121.07002058809255
+Tagumpay,Tagumpay,"2B P. Tuazon Blvd., Brgy. Tagumpay",District 3,14.622249438126318,121.06371284746854
+Obrero,Obrero,"Brgy. Obrero Bgy Hall, Parkway St. cor. Tomas Morato Ave.",District 4,14.62827069428976,121.02981668448756
+Paligsahan,Paligsahan,Roces Avenue Brgy. Paligsahan,District 4,14.632351849419658,121.02286507845444
+Kamuning,Kamuning,"Bgy. Hall, #113 Kamuning Rd. Brgy. Kamuning",District 4,14.62794131431696,121.03979515620242
+South Triangle,South Triangle,Brgy. South Triangle Barangay Hall Sct. Bayoran St.,District 4,14.637950399837742,121.03617981108485
+Roxas,Roxas,Champaca cor. Dahlia St. Brgy. Roxas,District 4,14.627607148175699,121.02200223805224
+Pinagkaisahan,Pinagkaisahan,Ermin Garcia St. (near Bernardo Park),District 4,14.625997811063934,121.04430308176129
+Immaculate Concepcion,Hillcrest,"Hillcrest St., Cubao (sidewalk) Brgy. Immaculate Concepcion",District 4,14.62235878160645,121.0443959602095
+Immaculate Concepcion,F. Manalo,F. Manalo St. Brgy. Immaculate Concepcion,District 4,14.62235878160645,121.0443959602095
+Kaunlaran,Planas Site,Planas Site III St. Brgy. Kaunlaran,District 4,14.616626238370166,121.04414373837794
+San Martin de Porres,San Martin de Porres I,Conrado Benitez St. Brgy. San Martin de Porres,District 4,14.617549565114942,121.04986218148206
+San Martin de Porres,San Martin de Porres Annex,Conrado Benitez St. Brgy. San Martin de Porres,District 4,14.617549565114942,121.04986218148206
+Horseshoe,Horseshoe,"Brgy. Horsehoe Bgy. Hall, Sunset Drive",District 4,14.612437020233784,121.04178202240738
+Tatalon,Manunggal I,Manunggal St. Brgy. Tatalon,District 4,14.623586738702077,121.01400113075826
+Tatalon,Manunggal II,"#15 Senior Citizen Bldg., Manunggal St. Brgy. Tatalon",District 4,14.623586738702077,121.01400113075826
+Kristong Hari,Kristong Hari,"Broadway, Brgy. Kristong Hari",District 4,14.624791852079886,121.03068349479068
+Damayang Lagi,Damayang Lagi,Block 4 (Chapel) E. Rodriguez Sr. Ave. Brgy. Damayang Lagi,District 4,14.616070634670752,121.02335215154328
+San Isidro Galas,San Isidro Galas,"Brgy. San Isidro Galas Bgy. Hall Compound, Unang Hakbang St.",District 4,14.650044833815716,121.01703705833786
+Sto Niño,Sto. Niño,Inocando St. Corner Santol St. Brgy. Sto. Niño,District 4,14.611193054226334,121.01178609772393
+Santol,Santol,"Brgy. Santol Brgy. Hall, Silencio cor. Baloy St.",District 4,14.610486847576269,121.01537577472891
+Doña Imelda,Chamberette Doña Imelda,Chamberette Building Guirayan St. Brgy. Doña Imelda,District 4,14.612971124857213,121.01732335585564
+Doña Imelda,Palanza,#38 Kapiligan St. Brgy. Doña Imelda,District 4,14.612971124857213,121.01732335585564
+Doña Josefa,Doña Josefa,Brgy. Doña Josefa Brgy. Hall Agno cor. Kitanlad St.,District 4,14.620009809301912,121.00687155796344
+Don Manuel,Don Manuel,L. Castillo corner Matimyas St. Brgy. Don Manuel,District 4,14.61635877346639,121.00526541298164
+Doña Aurora,Doña Aurora,E. Jacinto St. Brgy. Doña Aurora,District 4,14.616161931151089,121.00930429852849
+Old Capitol Site,Old Capitol Site,Masaya St. Interior (near Bgy. Hall) Brgy. Old Capitol Site,District 4,14.650906683454618,121.05313383682653
+Old Capitol Site,Pechayan,Zone 1 Brgy. Old Capitol Site,District 4,14.650906683454618,121.05313383682653
+San Vicente,San Vicente,Fatima St. cor. Maayusin Ext. Brgy. San Vicente,District 4,14.65327513228838,121.05651287100167
+U.P. Campus,Amorsolo,"Barangay Hall Compd., Pook Amorsolo Brgy. UP Campus",District 4,14.654307875421697,121.06426562851439
+U.P. Campus,Amorsolo II,"Barangay Hall Compd., Pook Amorsolo Brgy. UP Campus",District 4,14.654307875421697,121.06426562851439
+U.P. Campus,Pook Village B,Pook Village B Brgy. UP Campus,District 4,14.654307875421697,121.06426562851439
+U.P. Campus,Pook Libis,Pook Libis Brgy. UP Campus,District 4,14.654307875421697,121.06426562851439
+U.P. Campus,Pook Daang Tubo,Pook Daang Tubo Brgy. UP Campus,District 4,14.654307875421697,121.06426562851439
+Central,Forestry,BFD Compound Brgy. Central,District 4,14.646306998262187,121.04863343840385
+Central,Kalayaan,#81 Kalayaan Ave. Brgy. Central,District 4,14.646306998262187,121.04863343840385
+Central,Botanical,128 Orchid St. Brgy. Central,District 4,14.646306998262187,121.04863343840385
+Central,Quezon City Yakap,"QC Hall Compound, Brgy. Central (Back of QC Public Library)",District 4,14.646306998262187,121.04863343840385
+Krus na Ligas,KNL-CDO,V. Francisco St. (beside KNL High School) Brgy. Krus Na Ligas,District 4,14.64246745091116,121.06311876267155
+Krus na Ligas,Sitio Lambak,Flores St. Brgy. Krus Na Ligas,District 4,14.64246745091116,121.06311876267155
+Krus na Ligas,Kabalitang,Kabalitang St. Brgy. Krus Na Ligas,District 4,14.64246745091116,121.06311876267155
+Botocan,Botocan,"Brgy. Botocan Brgy. Hall, Makadios St.",District 4,14.636425630802774,121.06262213706542
+Malaya,Malaya,"Brgy. Malaya Brgy. Hall, Matahimik St.",District 4,14.63601387784135,121.05561152508278
+Pinyahan,Pinyahan Proper,"#35 Malakas St. Brgy. Hall Compd., Brgy. Pinyahan",District 4,14.637909672929842,121.04710851905813
+Greater Lagro,Greater Lagro I,"1st floor Greater Largo Daycare Center Building, Ascension Rd., Greater Lagro Subd. Brgy. Greater Lagro",District 5,14.725465007567777,121.06177280365941
+Greater Lagro,Greater Lagro II,"2nd floor Greater Largo Daycare Center Building, Ascension Rd., Greater Lagro Subd. Brgy. Greater Lagro",District 5,14.725465007567777,121.06177280365941
+Pasong Putik Proper,SAMAPINA,"Block 1 Lot 60 Sampaguita St. Maligaya Park, Brgy. Pasong Putik Proper",District 5,14.735006119425236,121.06011733652764
+Pasong Putik Proper,Pechayan,"Block 31 Lot 23 Ilang-Ilang St. Pechayan Kanan, Maligaya Park, Brgy. Pasong Putik",District 5,14.735006119425236,121.06011733652764
+North Fairview,Milenyo,"Milenyo Daycare Center Building, Milenyo St. Phase 8-I, Brgy. North Fairview",District 5,14.712578649608357,121.06118431212
+North Fairview,Avon,"13-A Avon St., North Fairview Subd., Brgy. North Fairview",District 5,14.712578649608357,121.06118431212
+North Fairview,NAMAPA,"NAMAPA Compound, Brgy. North Fairview",District 5,14.712578649608357,121.06118431212
+North Fairview,Phase 8-I,"1st Floor Daycare and Livelihood Center Building, Peso St., United North Fairview Subd., Brgy. North Fairview",District 5,14.712578649608357,121.06118431212
+North Fairview,Phase 8-II,"2nd Floor Daycare and Livelihood Center Building, Peso St., United North Fairview Subd., Brgy. North Fairview",District 5,14.712578649608357,121.06118431212
+Fairview,Fairview,"Ground floor Vargas Hall, Barangay Hall Complex, Dahlia St., Brgy. Fairview",District 5,14.702494477300986,121.06891136149652
+Fairview,Sitio Ruby,"Sitio Ruby St. SERNAI East Fairview, Brgy. Fairview",District 5,14.702494477300986,121.06891136149652
+Fairview,MMTC,"Basilio St., cor Republic Ave., Brgy. Fairview",District 5,14.702494477300986,121.06891136149652
+Fairview,Sitio Kislap,"Sitio Kislap Pearl St, Brgy. Fairview",District 5,14.702494477300986,121.06891136149652
+Fairview,Sitio Urlina,Sitio Urlina Lilac St. Brgy. Fairview,District 5,14.702494477300986,121.06891136149652
+Fairview,SAPAMANAI,"2nd Floor SAPAMANAI Bldg., Molave St. cor Mahogany St. Brgy Fairview",District 5,14.702494477300986,121.06891136149652
+Fairview,Sitio RABOSNA,"14 Ruby St Sitio Rabosna, Brgy. Fairview",District 5,14.702494477300986,121.06891136149652
+Kaligayahan,Kingfisher,Kingfisher St. Zabarte Subd. Brgy. Kaligayahan (beside Kaligayahan Health Center),District 5,14.73462079197254,121.04604649872279
+Kaligayahan,Junji,"Junji Street, Rolling Hills Western Village, Brgy. Kaligayahan",District 5,14.73462079197254,121.04604649872279
+Kaligayahan,Mockingbird,"Barangay Kaligayahan Hall, Mockingbird St. Zabarte Subd., Brgy. Kaligayahan",District 5,14.73462079197254,121.04604649872279
+Kaligayahan,Tawid Sapa I,"Blk. 10 Phase 1, Kalinga Tawid Sapa, Brgy. Kaligayahan",District 5,14.73462079197254,121.04604649872279
+Kaligayahan,Tawid Sapa II,"Zone 1 cor. Sampalucan St., Tawid Sapa, Brgy. Kaligayahan",District 5,14.73462079197254,121.04604649872279
+Kaligayahan,Bistekville 2,"1st Flr Bistekville II Multi-Purpose Hall Building, Brgy. Kaligayahan",District 5,14.73462079197254,121.04604649872279
+Sta. Lucia,Bonifacio,"2/F BPSO Building, Brgy. Hall Compound, A. Bonifacio St. Brgy. Sta. Lucia Ave.",District 5,14.706486672684054,121.05091908281818
+Sta. Lucia,Balagtas,25 Balagtas St. cor. M. Aquino St. Brgy. Sta. Lucia,District 5,14.706486672684054,121.05091908281818
+Sta. Lucia,Sitio 6,"Lot 18 Blk 52, Abad Santos St, Sitio 6, Brgy. Sta Lucia",District 5,14.706486672684054,121.05091908281818
+Sta. Lucia,Tarhaville,"Blk 13 Lapu-lapu, Tarhaville Village, Brgy. Sta Lucia",District 5,14.706486672684054,121.05091908281818
+Sta. Lucia,Plainville,"St. Joseph St., Plainville Subdivision",District 5,14.706486672684054,121.05091908281818
+San Agustin,St. Francis,"Barangay Hall Compd., Patnubay Street, St. Francis Village",District 5,14.731242521029854,121.0355837937614
+San Agustin,T.S. Cruz,"T.S. Cruz Day Care and Livelihood Center, Fidel St., T.S. Cruz Subdivision, Brgy. San Agustin",District 5,14.731242521029854,121.0355837937614
+San Agustin,Nova Homes,"Narra St., Nova Homes Subd. Brgy. San Agustin",District 5,14.731242521029854,121.0355837937614
+Novaliches Proper,Novaliches Proper I,"3rd Floor, Livelihood CHILD DEVELOPMENT CENTER Bldg., Nova Plaza, Buenamar St.,Brgy. Novaliches Proper",District 5,14.720739752749116,121.03729543507342
+Novaliches Proper,Novaliches Proper II,"2nd Floor Multi-purpose Bldg., P. Tupaz St., Doña Rosario, Brgy. Novaliches Proper",District 5,14.720739752749116,121.03729543507342
+Novaliches Proper,Doña Rosario,"Ground Floor Multi-purpose Bldg., P. Tupaz St., Doña Rosario, Brgy. Novaliches Proper",District 5,14.720739752749116,121.03729543507342
+Nagkaisang Nayon,Nagkaisang Nayon I,"Barangay Hall Compound., #7 Banahaw St. Brgy. Nagkaisang Nayon",District 5,14.719229892408087,121.02552325857123
+Nagkaisang Nayon,Nagkaisang Nayon II,"Barangay Hall Compound., #7 Banahaw St. Brgy. Nagkaisang Nayon",District 5,14.719229892408087,121.02552325857123
+Nagkaisang Nayon,Jonaville I,"St.Joseph St., Jonaville Subdivision, Brgy. Nagkaisang Nayon",District 5,14.719229892408087,121.02552325857123
+Nagkaisang Nayon,Villa Nova,"St. Michael St. cor Francis St. Villanova Subd., Brgy. Nagkaisang Nayon",District 5,14.719229892408087,121.02552325857123
+Nagkaisang Nayon,Lazaro,"Lot 5 Blk 5, Damong Maliit, Lazaro Subd., Brgy. Nagkaisang Nayon",District 5,14.719229892408087,121.02552325857123
+Nagkaisang Nayon,Pasacola I,"Blk 1, Dormitory Phase 1 (Nagkakaisang Lakas) , Brgy. Nagkaisang Nayon",District 5,14.719229892408087,121.02552325857123
+Nagkaisang Nayon,Pasacola II,"Lot 158-B, Area C, Pasacola, Brgy. Nagkaisang Nayon",District 5,14.719229892408087,121.02552325857123
+Nagkaisang Nayon,Robina,"Robina Rd. Sierra Vista Subd., Brgy. Nagkaisang Nayon",District 5,14.719229892408087,121.02552325857123
+Nagkaisang Nayon,St. Andrew,"Sampaguita St., Dantes Subd., Damong Maliit, Brgy. Nagkaisang Nayon",District 5,14.719229892408087,121.02552325857123
+Nagkaisang Nayon,Queensland I,"Princess Grace St., Queensland Phase I Subd., Damong Maliit, Brgy. Nagkaisang Nayon",District 5,14.719229892408087,121.02552325857123
+Nagkaisang Nayon,Queensland II,"Ground Floor Vargas Building, Blk 5 Lot 14 Ruby St. Queensland 2 Village, Brgy Nagkaisang Nayon",District 5,14.719229892408087,121.02552325857123
+Capri,Champaca,"Barangay Hall Building, Sampaguita St., Area 5",District 5,14.716803127491923,121.02853581140666
+Capri,Narra,"Barangay Hall Building, Sampaguita St., Area 5",District 5,14.716803127491923,121.02853581140666
+Sta. Monica,Aguardiente,"1st floor Barangay Sta Monica Daycare Center Building, Pugong Ginto St., Aguardiente, Brgy. Sta Monica",District 5,14.71900475406491,121.04629788295189
+Sta. Monica,Sta. Monica,"Barangay Hall Compd., Moises St., Jordan Plains Subd., Brgy. Sta Monica",District 5,14.71900475406491,121.04629788295189
+Sta. Monica,Palmera,"Multi-purpose Hall Mangga St. Phase I-A Palmera Homes, Brgy. Sta Monica",District 5,14.71900475406491,121.04629788295189
+Gulod,Joan of Arc,"2nd Floor HOA Bldg., Victoria St. Joan of Arc, Brgy. Gulod",District 5,14.711564106191425,121.04100529863547
+Gulod,Villareal,"3rd floor Old Barangay Hall Building, Quirino Highway, Brgy. Gulod",District 5,14.711564106191425,121.04100529863547
+Gulod,POCC (Holy Trinity),"Nenita Extn. POCC Compound Area VI, Brgy. Gulod",District 5,14.711564106191425,121.04100529863547
+Gulod,Nitang,# 47 Nitang Avenue Brgy Gulod,District 5,14.711564106191425,121.04100529863547
+Gulod,Don Crispulo,"Bering St. cor Don Crispulo Street, Area V, Brgy. Gulod",District 5,14.711564106191425,121.04100529863547
+Gulod,Florentina,"Interior Florentina St. Castro Compound, Brgy. Gulod",District 5,14.711564106191425,121.04100529863547
+Gulod,Golden HOA I,"Ground flr. Golden HOA Livelihood Center Building, Golden HOA Area, Brgy Gulod",District 5,14.711564106191425,121.04100529863547
+San Bartolome,Nomar 2,"Santan St., Nomar Subd., Brgy. San Bartolome",District 5,14.70624324779375,121.0310343333294
+San Bartolome,Angela,"2nd flr. Vargas Hall, Marcos St., Doña Faustina",District 5,14.70624324779375,121.0310343333294
+San Bartolome,Sampaguita,"Sampaguita Compound, Atlas Road, Brgy. San Bartolome",District 5,14.70624324779375,121.0310343333294
+Bagbag,Goodwill Homes 2,"Mark St. cor. Ruth St., Goodwill Homes 2 Subd., Brgy. Bagbag",District 5,14.697407115719098,121.03065170270602
+Bagbag,Maligaya,"Mark St. cor. Ruth St., Goodwill Homes 2 Subd., Brgy. Bagbag",District 5,14.697407115719098,121.03065170270602
+Bagbag,Remarville,"Asteroid St. cor. Pisces St., Remarville Subd., Brgy. Bagbag",District 5,14.697407115719098,121.03065170270602
+Bagbag,Ibayo,"Ibayo 2 68 Pascual Road, Brgy. Bagbag",District 5,14.697407115719098,121.03065170270602
+Bagbag,San Pedro IX,Santan St. San Pedro IX Subd. Brgy. Bagbag,District 5,14.697407115719098,121.03065170270602
+Sauyo,Old Cabuyao,15 Old Cabuyao,District 6,14.694866171688043,121.04579656172699
+Sauyo,135-99 (Alma Nova),135-99 Sauyo Rd.,District 6,14.694866171688043,121.04579656172699
+Sauyo,Sitio Cabuyao I,"Area 5a, Sauyo Road",District 6,14.694866171688043,121.04579656172699
+Sauyo,Sitio Cabuyao II,"Area 6, Sauyo Road",District 6,14.694866171688043,121.04579656172699
+Sauyo,Baluyot,5 Baluyot I,District 6,14.694866171688043,121.04579656172699
+Sauyo,MASARNA,"201 Mabuhay Compd., Sauyo Rd.",District 6,14.694866171688043,121.04579656172699
+Sauyo,Lower Gulod,"135 Lower Gulod, Brgy. Sauyo",District 6,14.694866171688043,121.04579656172699
+Talipapa,Talipapa,Siklot St. Pleasantville Subd.,District 6,14.68610174453187,121.02525289134869
+Talipapa,Gloria V,"Candido St. cor. Sampaguita, Gloria V Subd.",District 6,14.68610174453187,121.02525289134869
+Talipapa,La Trinidad,La Trinidad Village Whole Court,District 6,14.68610174453187,121.02525289134869
+Talipapa,CANO,Blk 5 Lot 1 Sto. Niño Village,District 6,14.68610174453187,121.02525289134869
+Talipapa,Campo 2,"Campo 2, Tandang Sora",District 6,14.68610174453187,121.02525289134869
+Talipapa,Del Nacia,Dal Nacia 3 Subd.,District 6,14.68610174453187,121.02525289134869
+Baesa,Asamba,Asamba Compound Sitio Compound,District 6,14.669631294622212,121.01164658876664
+Baesa,Sitio Pajo,GK Sitio Pajo,District 6,14.669631294622212,121.01164658876664
+Baesa,Howmart,Alley 2 Howmart St.,District 6,14.669631294622212,121.01164658876664
+Baesa,F. Carlos,F. Carlos St. (near Basketball Court),District 6,14.669631294622212,121.01164658876664
+Baesa,Mendez,Mendez Road,District 6,14.669631294622212,121.01164658876664
+Sangandaan,Redemption 1,Parklane Ext. Gertrudes St. Livelihood Building,District 6,14.674651336556758,121.02038862872573
+Sangandaan,Redemption 2,Parklane Ext. Gertrudes St. Livelihood Building,District 6,14.674651336556758,121.02038862872573
+Sangandaan,Sitio San Roque,Sitio San Roque Compound,District 6,14.674651336556758,121.02038862872573
+Sangandaan,Insurance,72 Insurance St.,District 6,14.674651336556758,121.02038862872573
+Balon Bato,Balon Bato,11 E Maximina Drive beside Brgy. Hall,District 6,14.663343477071367,121.00288318365206
+Unang Sigaw,Unang Sigaw,3 North Diversion Rd. Balintawak,District 6,14.659597742410833,121.00091712310211
+Apolonio Samson,Apolonio Samson,"Kaingin Rd., Bgy. Hall Apolonio Samson",District 6,14.65465372262995,121.00929568510024
+Apolonio Samson,Apolonio Samson Annex,Bgy. Apolonio Samson,District 6,14.65465372262995,121.00929568510024
+Apolonio Samson,Oliveros,26 M Oliveros Drive (Dulo),District 6,14.65465372262995,121.00929568510024
+Pasong Tamo,Veterans Area I,"Area I, Freedom Park St. Veterans Village",District 6,14.681536014183077,121.05889488764738
+Pasong Tamo,Veterans Area II,Corner Diego Silang St. Veterans Village,District 6,14.681536014183077,121.05889488764738
+Pasong Tamo,Veterans Area III,7th Street Veterans Village Area 3,District 6,14.681536014183077,121.05889488764738
+Pasong Tamo,Pingkian II,Pingkian II,District 6,14.681536014183077,121.05889488764738
+Pasong Tamo,Pingkian 3 Zone 2,"Lily St. Pingkian 3, Zone 2",District 6,14.681536014183077,121.05889488764738
+Pasong Tamo,Pingkian 3 Zone 3,Santan St.,District 6,14.681536014183077,121.05889488764738
+Pasong Tamo,Centerville,Philand back of basketball court,District 6,14.681536014183077,121.05889488764738
+Tandang Sora,Carmel V,"37 Taurus St., Carmel V",District 6,14.682299874174491,121.04047950632412
+Tandang Sora,Tandang Sora Shrine,228 Banlat Road,District 6,14.682299874174491,121.04047950632412
+Tandang Sora,Apo Ville,"Multi-Purpose Hall Delta Vill. Ext., Tandang Sora",District 6,14.682299874174491,121.04047950632412
+Culiat,Purok I,"251 Purok I, Luzon Avenue",District 6,14.668255024533348,121.05554804036234
+Culiat,Metro Heights,"Adelfa Metro Heights, Visayas Ave.",District 6,14.668255024533348,121.05554804036234
+Culiat,Cenacle Drive,"5A Cenacle Drive, Sitio Mabilog",District 6,14.668255024533348,121.05554804036234

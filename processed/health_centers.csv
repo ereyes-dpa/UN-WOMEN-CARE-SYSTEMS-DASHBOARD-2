@@ -1,0 +1,85 @@
+Name of Facility,Address,District,Category,Has Pharmacy,latitude,longitude
+Novaliches District Hospital,"683 Quirino Highway, Barangay San Bartolome, Novaliches",District 5,QC LGU-RUN HOSPITALS,FALSE,14.700917618923800,121.03473551346400
+Quezon City General Hospital,"Seminary Road, Barangay Bahay Toro, Project 8, QCGH",District 1,QC LGU-RUN HOSPITALS,FALSE,14.661408761312000,121.01859895379400
+Rosario Maclang Bautista General Hospital,IBP Road Batasan Hills,District 2,QC LGU-RUN HOSPITALS,FALSE,14.686174549848700,121.08969467286900
+National Children’s Hospital,"264 E. Rodriguez Sr. Avenue, Quezon City, Philippines",District 4,NATIONAL GOVERNMENT-OWNED HOSPITALS LOCATED IN QUEZON CITY,FALSE,14.620622174983400,121.02077961346800
+Philippine Orthopedic Center,Maria Clara cor. Banawe Street,District 1,NATIONAL GOVERNMENT-OWNED HOSPITALS LOCATED IN QUEZON CITY,FALSE,14.627784387938600,121.00328423075500
+Quirino Memorial Medical Center,"JP Rizal cor. P. Tuazon Sts, Project 4",District 3,NATIONAL GOVERNMENT-OWNED HOSPITALS LOCATED IN QUEZON CITY,FALSE,14.622395935845100,121.07307349229200
+Lung Center of the Philippines,"Quezon Avenue, Barangay Central, Diliman",District 4,NATIONAL GOVERNMENT-OWNED HOSPITALS LOCATED IN QUEZON CITY,FALSE,14.647847271391400,121.04550327872900
+Philippine Children’s Medical Center,"Quezon Avenue cor. Sen. Miriam Defensor-Santiago Avenue, Bagong Pag-asa",District 1,NATIONAL GOVERNMENT-OWNED HOSPITALS LOCATED IN QUEZON CITY,FALSE,14.647909092339500,121.04160759811700
+National Kidney and Transplant Institute,"East Avenue, Diliman",District 4,NATIONAL GOVERNMENT-OWNED HOSPITALS LOCATED IN QUEZON CITY,FALSE,14.647536723494900,121.04725368434200
+Philippine Heart Center,"East Avenue, Diliman",District 4,NATIONAL GOVERNMENT-OWNED HOSPITALS LOCATED IN QUEZON CITY,FALSE,14.647536723494900,121.04725368434200
+East Avenue Medical Center,"East Avenue, Diliman",District 4,NATIONAL GOVERNMENT-OWNED HOSPITALS LOCATED IN QUEZON CITY,FALSE,14.647536723494900,121.04725368434200
+Bago Bantay,"84 Sto. Niño St., Brgy. Alicia",District 1,HEALTH CENTER,FALSE,14.70556838219450,121.09775706008600
+Bagong Pag-asa,"36 Road 9 cor. Road 10, Brgy. Bagong Pag-asa",District 1,HEALTH CENTER,FALSE,14.66229805747790,121.03461229358200
+Balingasa,"26 J. Aquino Cruz St., Brgy. Balingasa",District 1,HEALTH CENTER,FALSE,14.648366775510100,121.00458832894300
+La Loma,"225 Mariveles St., Brgy. Paang Bundok",District 1,HEALTH CENTER,FALSE,14.627248844053200,120.9910780901960
+Masambong,"8 Malac St., Brgy. Masambong",District 1,HEALTH CENTER,FALSE,14.640861123457300,121.01152982094800
+Paltok,"14 Matias St., Brgy. Paltok",District 1,HEALTH CENTER,TRUE,14.642727812303200,121.02228667593900
+Mercedes de Joya,"Dapitan cor. Mayon St., Brgy. Sta. Teresita",District 1,HEALTH CENTER,FALSE,14.622250832153200,121.00007996373800
+Project 6,"58 Alley 3, Brgy. Project 6",District 1,HEALTH CENTER,FALSE,14.66202953310930,121.04039205917800
+Project 7,"39 Bansalangin St., Brgy Veterans Village",District 1,HEALTH CENTER,FALSE,14.654521110040700,121.02382285380400
+San Antonio,"38 San Jose, St. Brgy. San Antonio",District 1,HEALTH CENTER,TRUE,14.648948110116700,121.01685023450500
+San Francisco Super,H. Francisco cor. San Vicente St. Brgy Damayan,District 1,HEALTH CENTER,FALSE,14.639569138818500,121.01504282199800
+San Jose,"27 Tinagan St., Brgy. San Jose",District 1,HEALTH CENTER,FALSE,14.63962466209570,120.99452803900500
+Toro Hills,"Road 11, Brgy. Bahay Toro",District 1,HEALTH CENTER,FALSE,14.664523763779200,121.0212528178900
+Bagong Silangan,"Bonifacio St., Brgy. Bagong Silangan",District 2,HEALTH CENTER,FALSE,14.697635492416500,121.11077286656300
+Batasan Hills Annex,"Bill cor. Saret St., Brgy. Batasan Hills",District 2,HEALTH CENTER,FALSE,14.687000622318900,121.09907664866000
+Batasan Hills Super,"2 IBP Road, Brgy. Batasan Hills",District 2,HEALTH CENTER,FALSE,14.686378879073600,121.08840609438500
+Betty Go Belmonte Super,"2nd Flr. 12 Artillery Road, Brgy. Holy Spirit",District 2,HEALTH CENTER,TRUE,14.678445466458500,121.0727924148880
+Commonwealth,"Katuparan St., Brgy. Commonwealth",District 2,HEALTH CENTER,FALSE,14.69691528698620,121.08821261755700
+Doña Nicasia,"689 Matapang St., Doña Nicasia Subd.",District 2,HEALTH CENTER,FALSE,14.707458450963300,121.09172298963100
+Holy Spirit,"373 Sta. Catalina St., Brgy. Holy Spirit",District 2,HEALTH CENTER,FALSE,14.685642873873400,121.08390539534900
+Lupang Pangako,"Phase I, Lupang Pangako, Brgy. Payatas",District 2,HEALTH CENTER,FALSE,14.719334376058500,121.10641241188100
+National Government Center Super,"MRB, Phase 1 Pilot Drive, Brgy. Commonwealth",District 2,HEALTH CENTER,TRUE,14.69653138121420,121.08971154832500
+Payatas A,"Ilang-Ilang St., Brgy. Payatas",District 2,HEALTH CENTER,FALSE,14.698140162874600,121.09467876746500
+Payatas B,"Bulacan St., Brgy. Payatas",District 2,HEALTH CENTER,FALSE,14.716310047698800,121.10135090181300
+Veterans,"6 Faustino St., Brgy Holy Spirit",District 2,HEALTH CENTER,FALSE,14.683950148465800,121.07605932735500
+District III – Health Office,"New DHO Bldg., beside E. Rodriguez Health Center",District 3,HEALTH CENTER,FALSE,14.632304767814300,121.06339816834600
+E. Rodriguez,"150 Pajo St. Projec 2, Brgy. Quirino 2B",District 3,HEALTH CENTER,FALSE,14.632304767814300,121.06339816834600
+Ermin Garcia,"53 Cambridge St., Cubao",District 3,HEALTH CENTER,FALSE,14.626158530479800,121.05261182101300
+Escopa,"P. Burgos St., Brgy. Escopa 1",District 3,HEALTH CENTER,TRUE,14.62483586891210,121.07371466798000
+Libis,"E. Rodriguez Jr. Avenue cor. L. Pasco St., Brgy Libis",District 3,HEALTH CENTER,FALSE,14.615249710850600,121.0760290486760
+Old Balara (Main),"19 Doña Filomena St., Villa Beatriz, Brgy. Old Balara",District 3,HEALTH CENTER,FALSE,14.671401831602600,121.07461455736800
+Old Balara (Annex),"99A Tandang Sora Ave, Brgy. Matandang Balara",District 3,HEALTH CENTER,FALSE,14.663050661484300,121.07473983168500
+Pansol,"Plaza St., Brgy. Pansol",District 3,HEALTH CENTER,TRUE,14.651201493272400,121.0772118643420
+Project 4,"Kalantiaw st. cor. P. Tuazon, Brgy. Bagumbuhay",District 3,HEALTH CENTER,FALSE,14.622371480787600,121.06544204119700
+Socorro,"139 15th Avenue, Brgy. Socorro",District 3,HEALTH CENTER,FALSE,14.630870488881400,121.07905176131600
+District IV – Health Office,"Tatalon Health Center, #33 Victory Ave., Brgy. Tatalon",District 4,HEALTH CENTER,FALSE,14.621587052907600,121.01347256244000
+Bernardo,"95 Ermin Garcia St., Brgy. Pinagkaisahan",District 4,HEALTH CENTER,FALSE,14.62822261347750,121.04657838751500
+Cubao,"22 Mayor Ignacio Diaz St., Brgy. Kaunlaran",District 4,HEALTH CENTER,FALSE,14.616661143554100,121.04705230632200
+Galas,"46 Bayani St. Brgy. San Isidro, Galas",District 4,HEALTH CENTER,FALSE,14.612987187001200,121.0108552381140
+Gen. Roxas,"Jasmin St. cor. Madre Silva St., Roxas District",District 4,HEALTH CENTER,TRUE,14.628238403628700,121.02277060982700
+Kalayaan,"91 Guirayan St., Brgy. Doña Imelda",District 4,HEALTH CENTER,FALSE,14.615721909859200,121.01815271518500
+Krus na Ligas,"89 Lt. J. Francisco, Brgy. Krus na Ligas",District 4,HEALTH CENTER,TRUE,14.644508550409900,121.0646984178350
+Pinyahan,"37 Malakas St., Brgy. Pinyahan",District 4,HEALTH CENTER,FALSE,14.635258958131600,121.04780617329700
+San Vicente,"#14 Maayusin Ext., Brgy. San Vicente",District 4,HEALTH CENTER,TRUE,14.652967703352200,121.05657080087000
+Tatalon,"33 Victory Ave., Brgy. Tatalon",District 4,HEALTH CENTER,FALSE,14.621504066593200,121.01407337801900
+District V – Health Office,Arsenia J. Maximo (Novaliches) Super HC,District 5,HEALTH CENTER,FALSE,14.725051534462300,121.04385772381300
+Bagbag,"18 Parokya ng Pagkabuhay Road, Brgy. Bagbag",District 5,HEALTH CENTER,FALSE,14.696613235472300,121.03204030472100
+Capri,"Narra St. Area 5, Brgy. Capri, Novaliches",District 5,HEALTH CENTER,FALSE,14.717230604593600,121.02915568482500
+Fairview,"Dahlia Avenue, Brgy. Fairview",District 5,HEALTH CENTER,FALSE,14.702237438317900,121.06441159509300
+Greater Lagro,"Blk, 47, Lot 1, Ascension Avenue, Brgy. Greater Lagro",District 5,HEALTH CENTER,TRUE,14.726065092785000,121.06638863517200
+Gulod,"#47 Villaflor Village, Brgy. Gulod",District 5,HEALTH CENTER,FALSE,14.712704109491700,121.0391692032190
+Kaligayahan,"58 Kingfisher St., Zabarte Subd.,, Brgy. Kaligayahan",District 5,HEALTH CENTER,FALSE,14.736110668590300,121.05421391060800
+Maligaya,"Pechayan St., Maligaya Park Subd., Brgy. Pasong Putik",District 5,HEALTH CENTER,TRUE,14.740869687736200,121.06570023338100
+Nagkaisang Nayon,"Terio St., FB de Jesus,Sitio Damong Maliit Bgy. Nagkaisang Nayon",District 5,HEALTH CENTER,TRUE,14.725775377701100,121.02846650322300
+North Fairview,"Avon St., North Fairview Park Subd., Brgy. North Fairview",District 5,HEALTH CENTER,FALSE,14.708794104450800,121.06532718194300
+San Bartolome,"Angela Covered Court, Marcus St. Doña Faustina Subd., Brgy. San Bartolome",District 5,HEALTH CENTER,FALSE,14.708883578005700,121.02469088101100
+District VI – Health Office,Banlat Health Center,District 6,HEALTH CENTER,FALSE,14.679729328411900,121.03452475540500
+Apolonio Samson,"150 Kaingin Road, Brgy. Apolonio Samson, Balintawak",District 6,HEALTH CENTER,TRUE,14.65531881745780,121.01238392334400
+Baesa,"57 Baesa Road, Brgy. Baesa",District 6,HEALTH CENTER,TRUE,14.669164103342,121.006498905541
+Banlat,"13 Daffodil St. cor. Daisy St., Del Nacia 1 Village, Brgy. Tandang Sora",District 6,HEALTH CENTER,TRUE,14.679750087334400,121.03440673757800
+Melchora Aquino,"Loboc St. Napocor Village, Brgy. Tandang Sora",District 6,HEALTH CENTER,FALSE,14.686291829499200,121.04762916793900
+Magdaleno H. Pedro,"13 J.P. Eugenio St., Philand Subd., Brgy. Pasong Tamo",District 6,HEALTH CENTER,FALSE,14.674615010883000,121.04869736901300
+Sangandaan,"Premium St., Brgy. Sangandaan",District 6,HEALTH CENTER,FALSE,14.674086629489000,121.02146836880800
+Sauyo,"Greenville Drive, Brgy. Sauyo",District 6,HEALTH CENTER,FALSE,14.689579114439100,121.03740472984700
+Tandang Sora,"506 Quirino Highway, Talipapa People Civic Center, Brgy. Talipapa",District 6,HEALTH CENTER,FALSE,14.68811444325880,121.02647262877200
+Wenceslao Dela Paz (Culiat),"Sta. Felicia St. , San Antonio Homes, Brgy. Culiat",District 6,HEALTH CENTER,FALSE,14.667006579490500,121.05754251447400
+District I – Health Office,San Francisco Super Health Center,District 1,Super Health Center,FALSE,17.172629719894300,122.93136556715000
+District II – Health Office,Batasan Hills Super Health Center,District 2,Super Health Center,FALSE,14.686396215994700,121.08871989628200
+Payatas Super,"Molave St., Diamond Hills St., Brgy. Payatas",District 2,Super Health Center,FALSE,14.710153567047800,121.0970169909040
+Murphy Super,"37 18th Avenue, Brgy. San Roque",District 3,Super Health Center,FALSE,14.615723257794300,121.06351839133700
+Kamuning Super,"2nd Flr., 19 T. Gener St. cor. K-5th St., Brgy. Kamuning",District 4,Super Health Center,FALSE,14.626008935846300,121.03766796897500
+Sta. Lucia Super,"Sta. Lucia Ave., Brgy. Sta. Lucia",District 5,Super Health Center,TRUE,14.70766381232790,121.0544487820650
+Arsenia de Jesus Maximo Super,"Quirino Highway, Brgy. Novaliches Proper",District 5,Super Health Center,FALSE,14.7219738,121.040833863689
