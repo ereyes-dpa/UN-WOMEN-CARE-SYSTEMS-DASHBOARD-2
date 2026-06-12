@@ -6,8 +6,98 @@ import geopandas as gpd
 def get_base64(img_path):
     with open(img_path, "rb") as f:
         return base64.b64encode(f.read()).decode()
+    
 
-# Long Term Care Palette 
+# --------------------------------------------------
+# CHILDCARE FUNCTIONS
+# --------------------------------------------------
+def childcare_color(category):
+
+    category = str(category).upper()
+
+    if "CHILD DEVELOPMENT" in category:
+        return "#5B21B6"
+
+    elif "CHILD LEARNING" in category:
+        return "#7F47ED"
+
+    elif "DAY CARE" in category:
+        return "#A78BFA"
+
+    return "#DDD6FE"
+
+
+# --------------------------------------------------
+# SCHOOLS FUNCTIONS
+# --------------------------------------------------
+def school_color(category):
+
+    category = str(category).upper()
+
+    if "PUBLIC SCHOOL" in category:
+        return "#5B21B6"
+
+    elif "PRIVATE SCHOOL" in category:
+        return "#A78BFA"
+
+    return "#DDD6FE"
+
+# --------------------------------------------------
+# OLDERS CARE FUCNTIONS
+# --------------------------------------------------
+def opc_color(category):
+
+    category = str(category).upper()
+
+    if "NURSING" in category:
+        return "#5B21B6"
+
+    elif "BAHAY ARUGA" in category:
+        return "#A78BFA"
+
+    return "#DDD6FE"
+
+
+# --------------------------------------------------
+# HEALTHCARE FUNCTIONS
+# --------------------------------------------------
+def category_hex(cat):
+
+    rgb = category_color(cat)
+
+    return "#{:02X}{:02X}{:02X}".format(
+        rgb[0],
+        rgb[1],
+        rgb[2]
+    )
+
+def marker_color(category):
+
+    category = str(category).upper()
+
+    if "QC LGU" in category:
+        return "#4C1D95"   # dark purple
+
+    elif "NATIONAL" in category:
+        return "#5B21B6"
+
+    elif "SUPER HEALTH" in category:
+        return "#6D28D9"
+
+    elif "HEALTH CENTER" in category:
+        return "#7C3AED"
+
+    elif "PHARMACY" in category:
+        return "#8B5CF6"
+
+    elif "MILK BANK" in category:
+        return "#9333EA"   # much darker
+
+    return "#6D28D9"
+
+# --------------------------------------------------
+# LONGTERM CARE FUNCTIONS
+# --------------------------------------------------
 def ltc_color(category):
 
     category = str(category).upper()
@@ -41,7 +131,9 @@ def ltc_color(category):
 def ltc_hex(category):
     return ltc_color(category)
 
-# Satellite palette
+# --------------------------------------------------
+# SATELLITE OFFICES FUNCTIONS
+# --------------------------------------------------
 DISTRICT_COLORS = {
     1: "#5B21B6",
     2: "#6D28D9",
@@ -68,24 +160,24 @@ def category_color(cat):
     cat = str(cat).upper()
 
     if "QC LGU" in cat:
-        return [76, 29, 149]      # Deep Purple
+        return [76, 29, 149]
 
     elif "NATIONAL" in cat:
-        return [91, 33, 182]      # Purple Dark
+        return [91, 33, 182]
 
     elif "SUPER HEALTH" in cat:
-        return [127, 71, 237]     # Main Purple
+        return [109, 40, 217]
 
     elif "HEALTH CENTER" in cat:
-        return [167, 139, 250]    # Light Purple
+        return [124, 58, 237]
 
     elif "PHARMACY" in cat:
-        return [196, 181, 253]    # Very Light Purple
+        return [139, 92, 246]
 
     elif "MILK BANK" in cat:
-        return [221, 214, 254]    # Pale Purple
+        return [147, 51, 234]
 
-    return [235, 230, 255]
+    return [109, 40, 217]
 
 
 def health_category_mapper(cat):
@@ -117,29 +209,6 @@ def health_category_mapper(cat):
 
 @st.cache_data
 def load_data():
-
-    city_kpis = pd.read_csv("processed/city_kpis.csv")
-    health = pd.read_csv("processed/health.csv")
-    district_summary = pd.read_csv("processed/district_summary.csv")
-    senior_summary = pd.read_csv("processed/senior_summary.csv")
-    senior_by_district = pd.read_csv("processed/senior_by_district.csv")
-    pwd_summary = pd.read_csv("processed/pwd_summary.csv")
-    pwd_types = pd.read_csv("processed/pwd_types.csv")
-    businesses = pd.read_csv("processed/businesses.csv")
-    childcare_summary = pd.read_csv("processed/childcare_summary.csv")
-    childcare_centers = pd.read_csv("processed/childcare_centers.csv")
-    facilities = pd.read_csv("processed/facilities.csv")
-    barangays = pd.read_csv("processed/barangays.csv")
-
-
-    population_sex = pd.read_csv(
-    "processed/population/2024_population_by_sex.csv"
-    )
-
-    population_age = pd.read_csv(
-        "processed/population/2024_population_by_age_group.csv"
-    )
-
     geo = gpd.read_file(
         "processed/qc_barangays.geojson",
         engine="pyogrio"
@@ -180,30 +249,18 @@ def load_data():
         ].copy()
 
     return (
-        city_kpis,
-        health,
-        district_summary,
-        senior_summary,
-        senior_by_district,
-        pwd_summary,
-        pwd_types,
-        businesses,
-        childcare_summary,
-        childcare_centers,
-        facilities,
-        barangays,
         geo, 
-        population_sex,
-        population_age,
+        childcare_centers,
+        schools,
         health_centers,
         older_person_care, 
-        schools,
         long_term_care,
         satellite_offices
     )
 
-# Clean Child care centers
-
+# --------------------------------------------------
+# CLEANNING
+# --------------------------------------------------
 def clean_health_centers(df) :
     df["Category"] = (
         df["category"]
@@ -224,14 +281,10 @@ def clean_health_centers(df) :
         .astype(str)
     )
 
-    df["District"] = (
-        "District " +
-        df["District"]
-    )
+    df["Name of Facility"] = df["Name of Facility"].str.title()
+
 
     return df
-
-# Clean Health Centers
 
 def clean_dataframe(df) :
     df = df.rename(
@@ -245,10 +298,13 @@ def clean_dataframe(df) :
     )
 
     df = df.dropna(
-    subset=[
-        "latitude",
-        "longitude"
-    ]
-)
+        subset=[
+            "latitude",
+            "longitude"
+        ]
+    )
+
+    df["Name"] = df["Name"].str.title()
+    
 
     return df
