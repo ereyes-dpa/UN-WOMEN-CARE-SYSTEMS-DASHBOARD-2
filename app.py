@@ -5,69 +5,42 @@ import plotly.express as px
 import folium
 import pydeck as pdk
 from streamlit_folium import st_folium
-import base64
 
-def get_base64(img_path):
-    with open(img_path, "rb") as f:
-        return base64.b64encode(f.read()).decode()
-
-def get_icon_url(path):
-    with open(path, "rb") as f:
-        encoded = base64.b64encode(f.read()).decode()
-
-    return f"data:image/png;base64,{encoded}"
-
-# --------------------------------------------------
-# HELPER FUNCTIONS
-# --------------------------------------------------
-def get_icon(category):
-
-    category = str(category).upper()
-
-    if "QC LGU" in category:
-        return "hospital"
-
-    elif "NATIONAL" in category:
-        return "plus-square"
-
-    elif "SUPER HEALTH" in category:
-        return "heartbeat"
-
-    elif "HEALTH CENTER" in category:
-        return "clinic-medical"
-
-    return "hospital"
-    
-# --------------------------------------------------
-# CATEGORY COLORS
-# --------------------------------------------------
-def category_color(cat):
-
-    cat = str(cat).upper()
-
-    if "QC LGU" in cat:
-        return [228, 26, 28]
-
-    elif "NATIONAL" in cat:
-        return [55, 126, 184]
-
-    elif "SUPER HEALTH" in cat:
-        return [255, 204, 0]
-
-    elif "HEALTH CENTER" in cat:
-        return [77, 175, 74]
-
-    return [255, 127, 0]
+from functions import *
 
 # --------------------------------------------------
 # PAGE CONFIG
 # --------------------------------------------------
 
 st.set_page_config(
-    page_title="Quezon City Caring Cities Dashboard",
-    page_icon="🏙️",
+    page_title="Quezon Caring City Dashboard",
     layout="wide"
 )
+
+st.markdown("""
+<style>
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Roboto:wght@300;400;500&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Roboto', sans-serif;
+}
+
+h1, h2, h3, h4 {
+    font-family: 'Montserrat', sans-serif !important;
+    color: #7F47ED !important;
+}
+
+[data-testid="stMetricLabel"] {
+    font-family: 'Montserrat', sans-serif;
+}
+
+[data-testid="stMetricValue"] {
+    color: #7F47ED;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 un_logo = get_base64("assets/unwomen_logo.png")
 qc_logo = get_base64("assets/qc_logo.png")
@@ -89,11 +62,8 @@ with col2:
         """
         <div style="text-align:center;">
             <h1 style="color:#003B5C;">
-                Quezon City Caring Cities Dashboard
+                Quezon Caring City Dashboard
             </h1>
-            <p>
-                Urban Care Systems & Accessibility Analysis
-            </p>
         </div>
         """,
         unsafe_allow_html=True
@@ -115,77 +85,6 @@ st.divider()
 # DATA LOADING
 # --------------------------------------------------
 
-@st.cache_data
-def load_data():
-
-    city_kpis = pd.read_csv("processed/city_kpis.csv")
-    health = pd.read_csv("processed/health.csv")
-    district_summary = pd.read_csv("processed/district_summary.csv")
-    senior_summary = pd.read_csv("processed/senior_summary.csv")
-    senior_by_district = pd.read_csv("processed/senior_by_district.csv")
-    pwd_summary = pd.read_csv("processed/pwd_summary.csv")
-    pwd_types = pd.read_csv("processed/pwd_types.csv")
-    businesses = pd.read_csv("processed/businesses.csv")
-    childcare_summary = pd.read_csv("processed/childcare_summary.csv")
-    childcare_centers = pd.read_csv("processed/childcare_centers.csv")
-    facilities = pd.read_csv("processed/facilities.csv")
-    barangays = pd.read_csv("processed/barangays.csv")
-
-    population_sex = pd.read_csv(
-    "processed/population/2024_population_by_sex.csv"
-    )
-
-    population_age = pd.read_csv(
-        "processed/population/2024_population_by_age_group.csv"
-    )
-
-    geo = gpd.read_file(
-        "processed/qc_barangays.geojson",
-        engine="pyogrio"
-    )
-
-    health_centers = pd.read_csv(
-    "processed/health_centers.csv"
-    )
-
-    health_centers["Has Pharmacy"] = (
-    health_centers["Has Pharmacy"]
-    .astype(str)
-    .str.strip()
-    .str.upper()
-    .map({
-        "TRUE": True,
-        "FALSE": False
-    })
-    )
-
-
-    older_person_care = pd.read_csv(
-        "processed/olders_person_care.csv"
-    )
-
-    print(health_centers) 
-
-    return (
-        city_kpis,
-        health,
-        district_summary,
-        senior_summary,
-        senior_by_district,
-        pwd_summary,
-        pwd_types,
-        businesses,
-        childcare_summary,
-        childcare_centers,
-        facilities,
-        barangays,
-        geo, 
-        population_sex,
-        population_age,
-        health_centers,
-        older_person_care
-    )
-
 (
     city_kpis,
     health,
@@ -203,7 +102,10 @@ def load_data():
     population_sex,
     population_age,
     health_centers,
-    older_person_care
+    older_person_care, 
+    schools,
+    long_term_care,
+    satellite_offices
 ) = load_data()
 
 # --------------------------------------------------
@@ -266,6 +168,14 @@ for col in age_cols:
     )
 
 # --------------------------------------------------
+# CLEANING
+# --------------------------------------------------
+health_centers = clean_health_centers(health_centers)
+childcare_centers = clean_dataframe(childcare_centers)
+schools = clean_dataframe(schools)
+long_term_care = clean_dataframe(long_term_care)
+satellite_offices = clean_dataframe(satellite_offices)
+# --------------------------------------------------
 # KPI VALUES
 # --------------------------------------------------
 
@@ -276,17 +186,6 @@ population = int(
     ].iloc[0]
 )
 
-seniors = int(
-    senior_summary.loc[
-        senior_summary["metric"] == "registered_seniors_2026",
-        "value"
-    ].iloc[0]
-)
-
-pwds = int(
-    pwd_summary["value"].iloc[0]
-)
-
 child_centers = int(
     childcare_summary.loc[
         childcare_summary["metric"] == "child_development_centers",
@@ -294,13 +193,6 @@ child_centers = int(
     ].iloc[0]
 )
 
-doctors_total = int(
-    health["doctors"].sum()
-)
-
-health_centers_total = int(
-    health["health_centers"].sum()
-)
 
 # --------------------------------------------------
 # GIS DATASET
@@ -359,12 +251,25 @@ demo_map = demo_map.merge(
 
 st.sidebar.title("Navigation")
 
+st.markdown("""
+<style>
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color:#7F47ED !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 page = st.sidebar.selectbox(
     "Section",
     [
         "Childcare Centers",
+        "Schools", 
         "Health Centers Map",
-        "Older Persons & Senior Citizens",
+        "Older Persons Center Map",
+        "Long-Term Care & Rehabilitation",
+        "Satellite Offices",
         "Care Services Explorer"
     ]
 )
@@ -381,6 +286,7 @@ def category_hex(cat):
         rgb[2]
     )
 
+
 if page == "Health Centers Map":
 
     selected_category = st.sidebar.radio(
@@ -389,23 +295,46 @@ if page == "Health Centers Map":
             "All",
             "QC LGU",
             "National",
-            "Health Center",
             "Super Health",
-            "Pharmacy"
+            "Health Center",
+            "Pharmacy",
+            "Milk Bank"
         ]
     )
 
     category_descriptions = {
-        "QC LGU": "Local government-managed facilities",
-        "National": "National government hospitals and facilities",
-        "Health Center": "Primary healthcare facilities",
-        "Super Health": "Enhanced facilities with expanded services"
+        "QC LGU":
+            "LGU-run hospitals and lying-in clinics.",
+
+        "National":
+            "National government-owned hospitals.",
+
+        "Super Health":
+            "Enhanced primary healthcare facilities.",
+
+        "Health Center":
+            "Community-based primary healthcare centers.",
+
+        "Pharmacy":
+            "Health center pharmacy facilities.",
+
+        "Milk Bank":
+            "Human milk bank services."
     }
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("### Facility Categories")
 
-    for cat in category_descriptions:
+    ordered_categories = [
+        "QC LGU",
+        "National",
+        "Super Health",
+        "Health Center",
+        "Pharmacy",
+        "Milk Bank"
+    ]
+
+    for cat in ordered_categories:
 
         st.sidebar.markdown(
             f"""
@@ -418,11 +347,81 @@ if page == "Health Centers Map":
             """,
             unsafe_allow_html=True
         )
-    
-if page == "Older Persons & Senior Citizens":
+
+if page == "Childcare Centers":
+
+    selected_childcare_sector = st.sidebar.radio(
+        "Provider Type",
+        [
+            "All",
+            "Public",
+            "Private"
+        ]
+    )
+
+    if selected_childcare_sector == "Public":
+
+        category_options = [
+            "All",
+            "Child Development Center"
+        ]
+
+    elif selected_childcare_sector == "Private":
+
+        category_options = [
+            "All",
+            "Child Learning Center",
+            "Day Care Center"
+        ]
+
+    else:
+
+        category_options = [
+            "All",
+            "Child Development Center",
+            "Child Learning Center",
+            "Day Care Center"
+        ]
+
+    selected_childcare_category = st.sidebar.radio(
+        "Facility Category",
+        category_options
+    )
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Facility Categories")
+
+    st.sidebar.markdown(
+        """
+        <span style="color:#5B21B6;font-size:22px;">●</span>
+        <b>Child Development Center</b><br>
+        <small>Public childcare and early childhood development services.</small>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.sidebar.markdown(
+        """
+        <span style="color:#7F47ED;font-size:22px;">●</span>
+        <b>Child Learning Center</b><br>
+        <small>Private childcare and early learning services.</small>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.sidebar.markdown(
+        """
+        <span style="color:#A78BFA;font-size:22px;">●</span>
+        <b>Day Care Center</b><br>
+        <small>Private day care and supervision services.</small>
+        """,
+        unsafe_allow_html=True
+    )
+
+if page == "Older Persons Center Map":
 
     selected_opc_category = st.sidebar.radio(
-        "Facility Category",
+        "Facility Type",
         [
             "All",
             "Nursing Care Center",
@@ -435,22 +434,119 @@ if page == "Older Persons & Senior Citizens":
 
     st.sidebar.markdown(
         """
-        <span style="color:#377EB8;font-size:22px;">●</span>
+        <span style="color:#4C1D95;font-size:22px;">●</span>
         <b>Nursing Care Center</b><br>
-        <small>Residential and nursing care services for older persons.</small>
+        <small>Residential facilities providing long-term nursing and care services.</small>
         """,
         unsafe_allow_html=True
     )
 
     st.sidebar.markdown(
         """
-        <span style="color:#4DAF4A;font-size:22px;">●</span>
+        <span style="color:#A78BFA;font-size:22px;">●</span>
         <b>Bahay Aruga</b><br>
-        <small>Temporary accommodation and support services.</small>
+        <small>Temporary accommodation and support services for vulnerable older persons.</small>
         """,
         unsafe_allow_html=True
     )
 
+if page == "Schools":
+
+    selected_school_sector = st.sidebar.radio(
+        "Provider Type",
+        [
+            "All",
+            "Public",
+            "Private"
+        ]
+    )
+
+    if selected_school_sector == "Public":
+
+        category_options = [
+            "All",
+            "Public School"
+        ]
+
+    elif selected_school_sector == "Private":
+
+        category_options = [
+            "All",
+            "Private School"
+        ]
+
+    else:
+
+        category_options = [
+            "All",
+            "Public School",
+            "Private School"
+        ]
+
+    selected_school_category = st.sidebar.radio(
+        "School Category",
+        category_options
+    )
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### School Categories")
+
+    st.sidebar.markdown(
+        """
+        <span style="color:#5B21B6;font-size:22px;">●</span>
+        <b>Public School</b><br>
+        <small>Government-operated educational institutions.</small>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.sidebar.markdown(
+        """
+        <span style="color:#A78BFA;font-size:22px;">●</span>
+        <b>Private School</b><br>
+        <small>Privately operated educational institutions.</small>
+        """,
+        unsafe_allow_html=True
+    )
+
+if page == "Long-Term Care & Rehabilitation":
+
+    ltc_categories = sorted(
+        long_term_care["Category"]
+        .dropna()
+        .unique()
+    )
+
+    selected_ltc_category = st.sidebar.radio(
+        "Facility Category",
+        ["All"] + list(ltc_categories)
+    )
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Facility Categories")
+
+    for cat in ltc_categories:
+
+        st.sidebar.markdown(
+            f"""
+            <span style="
+                color:{ltc_color(cat)};
+                font-size:22px;
+            ">●</span>
+            <b>{cat}</b>
+            """,
+            unsafe_allow_html=True
+        )
+
+if page == "Satellite Offices":
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(
+        """
+        Satellite offices provide decentralized access
+        to city government services across Quezon City.
+        """
+    )
 
 if page == "Care Services Explorer":
 
@@ -514,71 +610,28 @@ if page == "Care Services Explorer":
         """,
         unsafe_allow_html=True
     )
-# ------------------------------------------
-# Childcare page
-# ------------------------------------------
 
-if page == "Childcare Centers":
+# --------------------------------------------------
+# PAGES
+# --------------------------------------------------
 
-    st.title("👶 Childcare Centers")
+elif page == "Childcare Centers":
 
-    # =========================
-    # KPIs
-    # =========================
+    st.title("Child Care Facilities")
 
-    metrics = dict(
-        zip(
-            childcare_summary["metric"],
-            childcare_summary["value"]
-        )
-    )
+    st.markdown("""
+    Explore the spatial distribution of childcare facilities in Quezon City,
+    including public Child Development Centers and private childcare providers.
+    """)
 
-    c1, c2 = st.columns(2)
-
-    with c1:
-        st.metric(
-            "Child Development Centers",
-            f"{int(metrics.get('child_development_centers', 0)):,}"
-        )
-
-    with c2:
-        st.metric(
-            "ECCD Enrollees",
-            f"{int(metrics.get('eccd_enrollees', 0)):,}"
-        )
-
-    st.divider()
-
-    # =========================
-    # MAP DATA
-    # =========================
-
-    childcare_by_barangay = (
-        childcare_centers
-        .groupby("barangay")
-        .size()
-        .reset_index(name="childcare_centers")
-    )
-
-    childcare_map = geo.merge(
-        childcare_by_barangay,
-        left_on="barangay_name",
-        right_on="barangay",
-        how="left"
-    )
-
-    childcare_map["childcare_centers"] = (
-        childcare_map["childcare_centers"]
-        .fillna(0)
-    )
-
-    # =========================
+    # --------------------------------------------------
     # DISTRICT FILTER
-    # =========================
+    # --------------------------------------------------
 
     districts = sorted(
-        childcare_centers["district"]
+        childcare_centers["District"]
         .dropna()
+        .astype(int)
         .unique()
     )
 
@@ -587,98 +640,719 @@ if page == "Childcare Centers":
         ["All"] + list(districts)
     )
 
-    centers_filtered = childcare_centers.copy()
-    map_filtered = childcare_map.copy()
+    # --------------------------------------------------
+    # DATA FILTERING
+    # --------------------------------------------------
+
+    cc = childcare_centers.copy()
 
     if selected_district != "All":
 
-        centers_filtered = centers_filtered[
-            centers_filtered["district"] == selected_district
+        cc = cc[
+            cc["District"].astype(int)
+            == selected_district
         ]
 
-        map_filtered = map_filtered[
-            map_filtered["district"] == selected_district
+    if selected_childcare_sector != "All":
+
+        cc = cc[
+            cc["Sector"]
+            .str.contains(
+                selected_childcare_sector,
+                case=False,
+                na=False
+            )
         ]
 
-    # =========================
-    # DECK.GL MAP
-    # =========================
+    if selected_childcare_category != "All":
 
-    district_layer = pdk.Layer(
-        "GeoJsonLayer",
-        map_filtered.__geo_interface__,
-        pickable=True,
-        stroked=True,
-        filled=True,
-        get_fill_color="[255 - childcare_centers*8, 150, childcare_centers*8, 180]",
-        get_line_color=[80, 80, 80],
-        line_width_min_pixels=1,
+        cc = cc[
+            cc["Category"]
+            .str.contains(
+                selected_childcare_category,
+                case=False,
+                na=False
+            )
+        ]
+
+    # --------------------------------------------------
+    # COLORS
+    # --------------------------------------------------
+
+    def childcare_color(category):
+
+        category = str(category).upper()
+
+        if "CHILD DEVELOPMENT" in category:
+            return "#5B21B6"
+
+        elif "CHILD LEARNING" in category:
+            return "#7F47ED"
+
+        elif "DAY CARE" in category:
+            return "#A78BFA"
+
+        return "#DDD6FE"
+
+    # --------------------------------------------------
+    # MAP CENTER
+    # --------------------------------------------------
+
+    minx, miny, maxx, maxy = geo.total_bounds
+
+    center_lon = (minx + maxx) / 2
+    center_lat = (miny + maxy) / 2
+
+    # --------------------------------------------------
+    # SESSION STATE
+    # --------------------------------------------------
+
+    if "selected_childcare_facility" not in st.session_state:
+
+        st.session_state.selected_childcare_facility = None
+
+    # --------------------------------------------------
+    # LAYOUT
+    # --------------------------------------------------
+
+    map_col, info_col = st.columns([4, 1])
+
+    # --------------------------------------------------
+    # MAP
+    # --------------------------------------------------
+
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=12,
+        tiles="CartoDB positron"
     )
 
-    centers_layer = pdk.Layer(
-        "ScatterplotLayer",
-        centers_filtered,
-        get_position='[longitude, latitude]',
-        get_radius=80,
-        get_fill_color=[220, 30, 30, 220],
-        pickable=True
-    )
-
-    center_lat = centers_filtered["latitude"].mean()
-    center_lon = centers_filtered["longitude"].mean()
-
-    deck = pdk.Deck(
-        map_style="light",
-        initial_view_state=pdk.ViewState(
-            latitude=center_lat,
-            longitude=center_lon,
-            zoom=11,
-            pitch=0,
-        ),
-        layers=[
-            district_layer,
-            centers_layer,
-        ],
-        tooltip={
-            "html": """
-            <b>{center_name}</b><br/>
-            Barangay: {barangay}<br/>
-            District: {district}<br/>
-            Address: {address}
-            """
+    folium.GeoJson(
+        geo,
+        style_function=lambda x: {
+            "fillColor": "#7fbf7f",
+            "color": "#666666",
+            "weight": 1,
+            "fillOpacity": 0.15,
         }
+    ).add_to(m)
+
+    # --------------------------------------------------
+    # MARKERS
+    # --------------------------------------------------
+
+    for _, row in cc.iterrows():
+
+        popup_html = f"""
+        <b>{row['Name']}</b><br>
+        Sector: {row['Sector']}<br>
+        Category: {row['Category']}<br>
+        District: {int(row['District'])}<br>
+        Address: {row['Address']}
+        """
+
+        folium.CircleMarker(
+            location=[
+                row["latitude"],
+                row["longitude"]
+            ],
+            radius=4,
+            color=childcare_color(row["Category"]),
+            fill=True,
+            fill_color=childcare_color(row["Category"]),
+            fill_opacity=0.9,
+            weight=2,
+            popup=popup_html,
+            tooltip=row["Name"]
+        ).add_to(m)
+
+    # --------------------------------------------------
+    # MAP DISPLAY
+    # --------------------------------------------------
+
+    with map_col:
+
+        map_data = st_folium(
+            m,
+            height=700,
+            returned_objects=["last_object_clicked"]
+        )
+
+    # --------------------------------------------------
+    # CLICK DETECTION
+    # --------------------------------------------------
+
+    if (
+        map_data
+        and map_data.get("last_object_clicked")
+    ):
+
+        clicked_lat = map_data["last_object_clicked"]["lat"]
+        clicked_lon = map_data["last_object_clicked"]["lng"]
+
+        tmp = cc.copy()
+
+        tmp["distance"] = (
+            (tmp["latitude"] - clicked_lat) ** 2 +
+            (tmp["longitude"] - clicked_lon) ** 2
+        )
+
+        st.session_state.selected_childcare_facility = (
+            tmp.loc[
+                tmp["distance"].idxmin()
+            ]
+        )
+
+    # --------------------------------------------------
+    # INFO PANEL
+    # --------------------------------------------------
+
+    with info_col:
+
+        st.subheader("Facility Details")
+
+        if st.session_state.selected_childcare_facility is not None:
+
+            facility = (
+                st.session_state.selected_childcare_facility
+            )
+
+            st.markdown(
+                f"### {facility['Name']}"
+            )
+
+            st.write(
+                f"**Sector:** {facility['Sector']}"
+            )
+
+            st.write(
+                f"**Category:** {facility['Category']}"
+            )
+
+            st.write(
+                f"**District:** {int(facility['District'])}"
+            )
+
+            st.write(
+                f"**Address:** {facility['Address']}"
+            )
+
+            if (
+                "open_hours" in facility.index
+                and "close_hours" in facility.index
+                and pd.notna(facility["open_hours"])
+                and pd.notna(facility["close_hours"])
+            ):
+
+                st.write(
+                    f"**Hours:** {facility['open_hours']} – {facility['close_hours']}"
+                )
+
+            elif (
+                "open_hours" in facility.index
+                and pd.notna(facility["open_hours"])
+            ):
+
+                st.write(
+                    f"**Opens:** {facility['open_hours']}"
+                )
+
+            elif (
+                "close_hours" in facility.index
+                and pd.notna(facility["close_hours"])
+            ):
+
+                st.write(
+                    f"**Closes:** {facility['close_hours']}"
+                )
+
+        else:
+
+            st.info(
+                "Click a facility on the map."
+            )
+
+    # --------------------------------------------------
+    # KPIs
+    # --------------------------------------------------
+
+    st.divider()
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Facilities",
+        len(cc)
     )
 
-    st.pydeck_chart(
-        deck,
+    c2.metric(
+        "Public",
+        len(
+            cc[
+                cc["Sector"]
+                .str.contains(
+                    "Public",
+                    case=False,
+                    na=False
+                )
+            ]
+        )
+    )
+
+    c3.metric(
+        "Private",
+        len(
+            cc[
+                cc["Sector"]
+                .str.contains(
+                    "Private",
+                    case=False,
+                    na=False
+                )
+            ]
+        )
+    )
+
+    # --------------------------------------------------
+    # CATEGORY SUMMARY
+    # --------------------------------------------------
+
+    st.subheader("Facilities by Category")
+
+    category_summary = (
+        cc.groupby("Category")
+        .size()
+        .reset_index(name="count")
+        .sort_values(
+            "count",
+            ascending=False
+        )
+    )
+
+    TEAL_SCALE = [
+        "#DDD6FE",
+        "#C4B5FD",
+        "#A78BFA",
+        "#7F47ED",
+        "#5B21B6"
+    ]
+
+    fig = px.bar(
+        category_summary,
+        x="count",
+        y="Category",
+        orientation="h",
+        text="count",
+        color="count",
+        color_continuous_scale=TEAL_SCALE
+    )
+
+    fig.update_layout(
+        height=400,
+        yaxis_title="",
+        xaxis_title="Facilities"
+    )
+
+    st.plotly_chart(
+        fig,
         use_container_width=True
     )
 
-    # =========================
+    # --------------------------------------------------
     # TABLE
-    # =========================
+    # --------------------------------------------------
 
-    st.subheader("Childcare Centers")
+    st.subheader("Facilities")
 
     st.dataframe(
-        centers_filtered[
+        cc[
             [
-                "center_name",
-                "barangay",
-                "district",
-                "address"
+                "Name",
+                "Sector",
+                "Category",
+                "District",
+                "Address"
             ]
         ],
         use_container_width=True
     )
 
 # --------------------------------------------------
-# HEALTH CENTERS MAP
+# SCHOOLS
 # --------------------------------------------------
+
+if page == "Schools":
+
+    st.title("Schools")
+
+    st.markdown("""
+    Explore the spatial distribution of schools across Quezon City,
+    including both public and private educational institutions.
+    """)
+
+    # --------------------------------------------------
+    # DISTRICT FILTER
+    # --------------------------------------------------
+
+    districts = sorted(
+        schools["District"]
+        .dropna()
+        .astype(str)
+        .unique()
+    )
+
+    selected_district = st.selectbox(
+        "District",
+        ["All"] + list(districts)
+    )
+
+    # --------------------------------------------------
+    # FILTERING
+    # --------------------------------------------------
+
+    sch = schools.copy()
+
+    if selected_district != "All":
+
+        sch = sch[
+            sch["District"].astype(int)
+            == selected_district
+        ]
+
+    if selected_school_sector != "All":
+
+        sch = sch[
+            sch["Sector"]
+            .str.contains(
+                selected_school_sector,
+                case=False,
+                na=False
+            )
+        ]
+
+    if selected_school_category != "All":
+
+        sch = sch[
+            sch["Category"]
+            .str.contains(
+                selected_school_category,
+                case=False,
+                na=False
+            )
+        ]
+
+    # --------------------------------------------------
+    # MISSING COORDINATES
+    # --------------------------------------------------
+
+    missing_locations = (
+        sch["latitude"].isna() |
+        sch["longitude"].isna()
+    ).sum()
+
+    if missing_locations > 0:
+
+        st.warning(
+            f"{missing_locations} schools do not have coordinates and are not shown on the map."
+        )
+
+    sch_map = sch.dropna(
+        subset=["latitude", "longitude"]
+    )
+
+    # --------------------------------------------------
+    # COLORS
+    # --------------------------------------------------
+
+    def school_color(category):
+
+        category = str(category).upper()
+
+        if "PUBLIC SCHOOL" in category:
+            return "#5B21B6"
+
+        elif "PRIVATE SCHOOL" in category:
+            return "#A78BFA"
+
+        return "#DDD6FE"
+
+    # --------------------------------------------------
+    # MAP CENTER
+    # --------------------------------------------------
+
+    minx, miny, maxx, maxy = geo.total_bounds
+
+    center_lon = (minx + maxx) / 2
+    center_lat = (miny + maxy) / 2
+
+    # --------------------------------------------------
+    # SESSION STATE
+    # --------------------------------------------------
+
+    if "selected_school" not in st.session_state:
+
+        st.session_state.selected_school = None
+
+    # --------------------------------------------------
+    # LAYOUT
+    # --------------------------------------------------
+
+    map_col, info_col = st.columns([4, 1])
+
+    # --------------------------------------------------
+    # MAP
+    # --------------------------------------------------
+
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=12,
+        tiles="CartoDB positron"
+    )
+
+    folium.GeoJson(
+        geo,
+        style_function=lambda x: {
+            "fillColor": "#7fbf7f",
+            "color": "#666666",
+            "weight": 1,
+            "fillOpacity": 0.15,
+        }
+    ).add_to(m)
+
+    # --------------------------------------------------
+    # MARKERS
+    # --------------------------------------------------
+
+    for _, row in sch_map.iterrows():
+
+        popup_html = f"""
+        <b>{row['Name']}</b><br>
+        Sector: {row['Sector']}<br>
+        Category: {row['Category']}<br>
+        District: {int(row['District'])}<br>
+        Address: {row['Address']}
+        """
+
+        if pd.notna(row.get("open_hours")):
+            popup_html += f"<br>Open: {row['open_hours']}"
+
+        if pd.notna(row.get("close_hours")):
+            popup_html += f"<br>Close: {row['close_hours']}"
+
+        folium.CircleMarker(
+            location=[
+                row["latitude"],
+                row["longitude"]
+            ],
+            radius=4,
+            color=school_color(row["Category"]),
+            fill=True,
+            fill_color=school_color(row["Category"]),
+            fill_opacity=0.9,
+            weight=2,
+            popup=popup_html,
+            tooltip=row["Name"]
+        ).add_to(m)
+
+    # --------------------------------------------------
+    # MAP DISPLAY
+    # --------------------------------------------------
+
+    with map_col:
+
+        map_data = st_folium(
+            m,
+            height=700,
+            returned_objects=["last_object_clicked"]
+        )
+
+    # --------------------------------------------------
+    # CLICK DETECTION
+    # --------------------------------------------------
+
+    if (
+        map_data
+        and map_data.get("last_object_clicked")
+    ):
+
+        clicked_lat = map_data["last_object_clicked"]["lat"]
+        clicked_lon = map_data["last_object_clicked"]["lng"]
+
+        tmp = sch_map.copy()
+
+        tmp["distance"] = (
+            (tmp["latitude"] - clicked_lat) ** 2 +
+            (tmp["longitude"] - clicked_lon) ** 2
+        )
+
+        st.session_state.selected_school = (
+            tmp.loc[
+                tmp["distance"].idxmin()
+            ]
+        )
+
+    # --------------------------------------------------
+    # INFO PANEL
+    # --------------------------------------------------
+
+    with info_col:
+
+        st.subheader("School Details")
+
+        if st.session_state.selected_school is not None:
+
+            facility = st.session_state.selected_school
+
+            st.markdown(
+                f"### {facility['Name']}"
+            )
+
+            st.write(
+                f"**Sector:** {facility['Sector']}"
+            )
+
+            st.write(
+                f"**Category:** {facility['Category']}"
+            )
+
+            st.write(
+                f"**District:** {int(facility['District'])}"
+            )
+
+            st.write(
+                f"**Address:** {facility['Address']}"
+            )
+
+            if pd.notna(facility.get("open_hours")):
+                st.write(
+                    f"**Open:** {facility['open_hours']}"
+                )
+
+            if pd.notna(facility.get("close_hours")):
+                st.write(
+                    f"**Close:** {facility['close_hours']}"
+                )
+
+        else:
+
+            st.info(
+                "Click a school on the map."
+            )
+
+    # --------------------------------------------------
+    # KPIs
+    # --------------------------------------------------
+
+    st.divider()
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Schools",
+        len(sch)
+    )
+
+    c2.metric(
+        "Public",
+        len(
+            sch[
+                sch["Sector"]
+                .str.contains(
+                    "Public",
+                    case=False,
+                    na=False
+                )
+            ]
+        )
+    )
+
+    c3.metric(
+        "Private",
+        len(
+            sch[
+                sch["Sector"]
+                .str.contains(
+                    "Private",
+                    case=False,
+                    na=False
+                )
+            ]
+        )
+    )
+
+    # --------------------------------------------------
+    # CATEGORY SUMMARY
+    # --------------------------------------------------
+
+    PURPLE_SCALE = [
+        "#DDD6FE",
+        "#C4B5FD",
+        "#A78BFA",
+        "#7F47ED",
+        "#5B21B6"
+    ]
+
+    st.subheader("Schools by Category")
+
+    category_summary = (
+        sch.groupby("Category")
+        .size()
+        .reset_index(name="count")
+        .sort_values(
+            "count",
+            ascending=False
+        )
+    )
+
+    color_map = {
+    cat: ltc_color(cat)
+    for cat in category_summary["Category"]
+    }
+
+    fig = px.bar(
+            category_summary,
+            x="count",
+            y="Category",
+            orientation="h",
+            text="count",
+            color="Category",
+            color_discrete_map=color_map
+    )
+
+
+    fig.update_layout(
+        height=400,
+        yaxis_title="",
+        xaxis_title="Schools"
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+    # --------------------------------------------------
+    # TABLE
+    # --------------------------------------------------
+
+    st.subheader("Schools")
+
+    st.dataframe(
+        sch[
+            [
+                "Name",
+                "Sector",
+                "Category",
+                "District",
+                "Address"
+            ]
+        ],
+        use_container_width=True
+    )
 
 elif page == "Health Centers Map":
 
-    st.title("🏥 Health Centers & Hospitals") 
+    st.title("Health Centers & Hospitals") 
     
     st.markdown("""
         Explore the spatial distribution of healthcare facilities in Quezon City.
@@ -725,15 +1399,7 @@ elif page == "Health Centers Map":
     # Category filter
     if selected_category != "All":
 
-        if selected_category == "Pharmacy":
-
-            hc = hc[
-                hc["Has Pharmacy"] == True
-            ]
-
-        else:
-
-            hc = hc[
+        hc = hc[
                 hc["Category"]
                 .str.contains(
                     selected_category,
@@ -741,21 +1407,6 @@ elif page == "Health Centers Map":
                     na=False
                 )
             ]
-    # --------------------------------------------------
-    # PHARMACY BOOLEAN CLEANING
-    # --------------------------------------------------
-
-    hc["Has Pharmacy"] = (
-        hc["Has Pharmacy"]
-        .astype(str)
-        .str.strip()
-        .str.upper()
-        .map({
-            "TRUE": True,
-            "FALSE": False
-        })
-        .fillna(False)
-    )
 
     hc["color"] = hc["Category"].apply(category_color)
 
@@ -814,18 +1465,24 @@ elif page == "Health Centers Map":
         category = str(category).upper()
 
         if "QC LGU" in category:
-            return "#E41A1C"      # red
+            return "#4C1D95"
 
         elif "NATIONAL" in category:
-            return "#377EB8"      # blue
+            return "#5B21B6"
 
         elif "SUPER HEALTH" in category:
-            return "#FFCC00"      # yellow
+            return "#7F47ED"
 
         elif "HEALTH CENTER" in category:
-            return "#4DAF4A"      # green
+            return "#A78BFA"
 
-        return "#999999"          # gray
+        elif "PHARMACY" in category:
+            return "#C4B5FD"
+
+        elif "MILK BANK" in category:
+            return "#DDD6FE"
+
+        return "#EDE9FE"
 
 
     # --------------------------------------------------
@@ -837,8 +1494,7 @@ elif page == "Health Centers Map":
         popup_html = f"""
         <b>{row['Name of Facility']}</b><br>
         Category: {row['Category']}<br>
-        District: {row['District']}<br>
-        Has Pharmacy: {'Yes' if row['Has Pharmacy'] else 'No'}<br>
+        District: {row['District'].split(" ")[1]}<br>
         Address: {row['Address']}
         """
 
@@ -918,17 +1574,17 @@ elif page == "Health Centers Map":
             )
 
             st.write(
-                f"**District:** {facility['District']}"
+                f"**District:** {int(facility['District'])}"
             )
 
-            st.write(
-                f"**Has Pharmacy:** {'Yes' if facility['Has Pharmacy'] else 'No'}"
-            )
+            if "barangay" in facility.index:
+                st.write(
+                    f"**Barangay:** {facility['barangay']}"
+                )
 
             st.write(
                 f"**Address:** {facility['Address']}"
             )
-
         else:
 
             st.info(
@@ -938,7 +1594,7 @@ elif page == "Health Centers Map":
     # KPIs
     # --------------------------------------------------
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
 
     c1.metric(
         "Facilities",
@@ -946,11 +1602,6 @@ elif page == "Health Centers Map":
     )
 
     c2.metric(
-        "With Pharmacy",
-        int(hc["Has Pharmacy"].sum())
-    )
-
-    c3.metric(
         "Categories",
         hc["Category"].nunique()
     )
@@ -958,6 +1609,14 @@ elif page == "Health Centers Map":
     # --------------------------------------------------
     # CATEGORY SUMMARY
     # --------------------------------------------------
+
+    PURPLE_SCALE = [
+    "#DDD6FE",
+    "#C4B5FD",
+    "#A78BFA",
+    "#7F47ED",
+    "#5B21B6"
+    ]
 
     st.subheader("Facilities by Category")
 
@@ -972,11 +1631,13 @@ elif page == "Health Centers Map":
     )
 
     fig = px.bar(
-        category_summary,
-        x="count",
-        y="Category",
-        orientation="h",
-        text="count"
+    category_summary,
+    x="count",
+    y="Category",
+    orientation="h",
+    text="count",
+    color="count",
+    color_continuous_scale=PURPLE_SCALE
     )
 
     fig.update_layout(
@@ -1002,15 +1663,13 @@ elif page == "Health Centers Map":
                 "Name of Facility",
                 "District",
                 "Category",
-                "Has Pharmacy",
                 "Address"
             ]
         ],
         use_container_width=True
     )
 
-
-elif page == "Older Persons & Senior Citizens":
+elif page == "Older Persons Center Map":
 
     st.title("Older Persons & Senior Citizens")
 
@@ -1020,46 +1679,6 @@ elif page == "Older Persons & Senior Citizens":
         including nursing care centers and Bahay Aruga facilities.
         """
     )
-
-    # --------------------------------------------------
-    # METRICS
-    # --------------------------------------------------
-
-    metrics = dict(
-        zip(
-            senior_summary["metric"],
-            senior_summary["value"]
-        )
-    )
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-
-    c1.metric(
-        "Registered Seniors",
-        f"{int(metrics['registered_seniors_2026']):,}"
-    )
-
-    c2.metric(
-        "Female",
-        f"{int(metrics['female']):,}"
-    )
-
-    c3.metric(
-        "Male",
-        f"{int(metrics['male']):,}"
-    )
-
-    c4.metric(
-        "Age 60–79",
-        f"{int(metrics['age_60_79']):,}"
-    )
-
-    c5.metric(
-        "Age 80+",
-        f"{int(metrics['age_80_plus']):,}"
-    )
-
-    st.divider()
 
     # --------------------------------------------------
     # FILTERS
@@ -1107,12 +1726,12 @@ elif page == "Older Persons & Senior Citizens":
         category = str(category).upper()
 
         if "NURSING" in category:
-            return "#377EB8"
+            return "#5B21B6"
 
         elif "BAHAY ARUGA" in category:
-            return "#4DAF4A"
+            return "#A78BFA"
 
-        return "#999999"
+        return "#DDD6FE"
 
     # --------------------------------------------------
     # SESSION STATE
@@ -1158,9 +1777,9 @@ elif page == "Older Persons & Senior Citizens":
     for _, row in opc.iterrows():
 
         popup_html = f"""
-        <b>{row['name']}</b><br>
+        <b>{row['name_original']}</b><br>
         Category: {row['category']}<br>
-        District: {row['district']}<br>
+        District: {int(row['district'])}<br>
         Barangay: {row['barangay']}<br>
         Address: {row['address']}
         """
@@ -1177,7 +1796,7 @@ elif page == "Older Persons & Senior Citizens":
             fill_opacity=0.9,
             weight=2,
             popup=popup_html,
-            tooltip=row["name"]
+            tooltip=row["name_original"]
         ).add_to(m)
 
     # --------------------------------------------------
@@ -1231,7 +1850,7 @@ elif page == "Older Persons & Senior Citizens":
             facility = st.session_state.selected_senior_facility
 
             st.markdown(
-                f"### {facility['name']}"
+                f"### {facility['name_original']}"
             )
 
             st.write(
@@ -1239,7 +1858,7 @@ elif page == "Older Persons & Senior Citizens":
             )
 
             st.write(
-                f"**District:** {facility['district']}"
+                f"**District:** {int(facility['district'])}"
             )
 
             st.write(
@@ -1248,10 +1867,6 @@ elif page == "Older Persons & Senior Citizens":
 
             st.write(
                 f"**Address:** {facility['address']}"
-            )
-
-            st.write(
-                f"**Major Division:** {facility['major_division']}"
             )
 
         else:
@@ -1273,7 +1888,7 @@ elif page == "Older Persons & Senior Citizens":
     st.dataframe(
         opc[
             [
-                "name",
+                "name_original",
                 "district",
                 "barangay",
                 "category",
@@ -1283,9 +1898,512 @@ elif page == "Older Persons & Senior Citizens":
         use_container_width=True
     )
 
-# --------------------------------------------------
-# CARE SERVICE EXPLORER
-# --------------------------------------------------
+elif page == "Long-Term Care & Rehabilitation":
+
+    st.title(
+        "Long-Term Care & Rehabilitation Services"
+    )
+
+    st.markdown("""
+    Explore facilities providing long-term care,
+    rehabilitation, therapy, and specialized
+    recovery services in Quezon City.
+    """)
+
+    # ----------------------------------
+    # DISTRICT FILTER
+    # ----------------------------------
+
+    districts = sorted(
+        long_term_care["District"]
+        .dropna()
+        .astype(int)
+        .unique()
+    )
+
+    selected_district = st.selectbox(
+        "District",
+        ["All"] + list(districts)
+    )
+
+    # ----------------------------------
+    # FILTERING
+    # ----------------------------------
+
+    ltc = long_term_care.copy()
+
+    if selected_district != "All":
+
+        ltc = ltc[
+            ltc["District"].astype(int)
+            == selected_district
+        ]
+
+    if selected_ltc_category != "All":
+
+        ltc = ltc[
+            ltc["Category"]
+            .str.contains(
+                selected_ltc_category,
+                case=False,
+                na=False
+            )
+        ]
+
+    # ----------------------------------
+    # COORDINATES
+    # ----------------------------------
+
+    missing_locations = (
+        ltc["latitude"].isna() |
+        ltc["longitude"].isna()
+    ).sum()
+
+    if missing_locations > 0:
+
+        st.warning(
+            f"{missing_locations} facilities do not have coordinates and are not shown on the map."
+        )
+
+    ltc_map = ltc.dropna(
+        subset=["latitude", "longitude"]
+    )
+
+    # ----------------------------------
+    # MAP CENTER
+    # ----------------------------------
+
+    minx, miny, maxx, maxy = geo.total_bounds
+
+    center_lon = (minx + maxx) / 2
+    center_lat = (miny + maxy) / 2
+
+    # ----------------------------------
+    # SESSION STATE
+    # ----------------------------------
+
+    if "selected_ltc" not in st.session_state:
+
+        st.session_state.selected_ltc = None
+
+    map_col, info_col = st.columns([4, 1])
+
+    # ----------------------------------
+    # MAP
+    # ----------------------------------
+
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=12,
+        tiles="CartoDB positron"
+    )
+
+    folium.GeoJson(
+        geo,
+        style_function=lambda x: {
+            "fillColor": "#7fbf7f",
+            "color": "#666666",
+            "weight": 1,
+            "fillOpacity": 0.15,
+        }
+    ).add_to(m)
+
+    # ----------------------------------
+    # MARKERS
+    # ----------------------------------
+
+    for _, row in ltc_map.iterrows():
+
+        popup_html = f"""
+        <b>{row['Name']}</b><br>
+        Category: {row['Category']}<br>
+        District: {int(row['District'])}<br>
+        Address: {row['Address']}
+        """
+
+        folium.CircleMarker(
+            location=[
+                row["latitude"],
+                row["longitude"]
+            ],
+            radius=4,
+            color=ltc_color(row["Category"]),
+            fill=True,
+            fill_color=ltc_color(row["Category"]),
+            fill_opacity=0.9,
+            weight=2,
+            popup=popup_html,
+            tooltip=row["Name"]
+        ).add_to(m)
+
+    with map_col:
+
+        map_data = st_folium(
+            m,
+            height=700,
+            returned_objects=["last_object_clicked"]
+        )
+
+    # ----------------------------------
+    # CLICK DETECTION
+    # ----------------------------------
+
+    if (
+        map_data
+        and map_data.get("last_object_clicked")
+    ):
+
+        clicked_lat = map_data["last_object_clicked"]["lat"]
+        clicked_lon = map_data["last_object_clicked"]["lng"]
+
+        tmp = ltc_map.copy()
+
+        tmp["distance"] = (
+            (tmp["latitude"] - clicked_lat) ** 2 +
+            (tmp["longitude"] - clicked_lon) ** 2
+        )
+
+        st.session_state.selected_ltc = (
+            tmp.loc[
+                tmp["distance"].idxmin()
+            ]
+        )
+
+    # ----------------------------------
+    # INFO PANEL
+    # ----------------------------------
+
+    with info_col:
+
+        st.subheader("Facility Details")
+
+        if st.session_state.selected_ltc is not None:
+
+            facility = st.session_state.selected_ltc
+
+            st.markdown(
+                f"### {facility['Name']}"
+            )
+
+            st.write(
+                f"**Category:** {facility['Category']}"
+            )
+
+            st.write(
+                f"**District:** {int(facility['District'])}"
+            )
+
+            st.write(
+                f"**Address:** {facility['Address']}"
+            )
+
+        else:
+
+            st.info(
+                "Click a facility on the map."
+            )
+
+    # ----------------------------------
+    # KPIs
+    # ----------------------------------
+
+    st.divider()
+
+    c1, c2 = st.columns(2)
+
+    c1.metric(
+        "Facilities",
+        len(ltc)
+    )
+
+    c2.metric(
+        "Facility Types",
+        ltc["Category"].nunique()
+    )
+
+    # ----------------------------------
+    # CATEGORY SUMMARY
+    # ----------------------------------
+
+    PURPLE_SCALE = [
+        "#DDD6FE",
+        "#C4B5FD",
+        "#A78BFA",
+        "#7F47ED",
+        "#5B21B6"
+    ]
+
+    st.subheader(
+        "Facilities by Category"
+    )
+
+    category_summary = (
+        ltc.groupby("Category")
+        .size()
+        .reset_index(name="count")
+        .sort_values(
+            "count",
+            ascending=False
+        )
+    )
+
+    fig = px.bar(
+        category_summary,
+        x="count",
+        y="Category",
+        orientation="h",
+        text="count",
+        color="count",
+        color_continuous_scale=PURPLE_SCALE
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+    # ----------------------------------
+    # TABLE
+    # ----------------------------------
+
+    st.subheader("Facilities")
+
+    st.dataframe(
+        ltc[
+            [
+                "Name",
+                "Category",
+                "District",
+                "Address"
+            ]
+        ],
+        use_container_width=True
+    )
+
+elif page == "Satellite Offices":
+
+    st.title(
+        "Quezon City Satellite Offices"
+    )
+
+    st.caption(
+        """
+        Explore the distribution of Quezon City
+        satellite offices providing local access
+        to government services.
+        """
+    )
+
+    # ----------------------------------
+    # DISTRICT FILTER
+    # ----------------------------------
+
+    districts = sorted(
+        satellite_offices["District"]
+        .dropna()
+        .unique()
+    )
+
+    selected_district = st.selectbox(
+        "District",
+        ["All"] + list(districts)
+    )
+
+    # ----------------------------------
+    # FILTERING
+    # ----------------------------------
+
+    sat = satellite_offices.copy()
+
+    if selected_district != "All":
+
+        sat = sat[
+            sat["District"]
+            == selected_district
+        ]
+
+    # ----------------------------------
+    # COORDINATES
+    # ----------------------------------
+
+    missing_locations = (
+        sat["latitude"].isna() |
+        sat["longitude"].isna()
+    ).sum()
+
+    if missing_locations > 0:
+
+        st.warning(
+            f"{missing_locations} offices do not have coordinates and are not shown on the map."
+        )
+
+    sat_map = sat.dropna(
+        subset=["latitude", "longitude"]
+    )
+
+    # ----------------------------------
+    # MAP CENTER
+    # ----------------------------------
+
+    minx, miny, maxx, maxy = geo.total_bounds
+
+    center_lon = (minx + maxx) / 2
+    center_lat = (miny + maxy) / 2
+
+    # ----------------------------------
+    # SESSION STATE
+    # ----------------------------------
+
+    if "selected_satellite_office" not in st.session_state:
+
+        st.session_state.selected_satellite_office = None
+
+    map_col, info_col = st.columns([4, 1])
+
+    # ----------------------------------
+    # MAP
+    # ----------------------------------
+
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=12,
+        tiles="CartoDB positron"
+    )
+
+    folium.GeoJson(
+        geo,
+        style_function=lambda x: {
+            "fillColor": "#7fbf7f",
+            "color": "#666666",
+            "weight": 1,
+            "fillOpacity": 0.15,
+        }
+    ).add_to(m)
+
+    # ----------------------------------
+    # MARKERS
+    # ----------------------------------
+
+    for _, row in sat_map.iterrows():
+
+        popup_html = f"""
+        {row['Category']}<br>
+        Address: {row['Address']}
+        """
+
+        folium.CircleMarker(
+            location=[
+                row["latitude"],
+                row["longitude"]
+            ],
+            radius=5,
+            color=district_color(row["District"]),
+            fill=True,
+            fill_color=district_color(row["District"]),
+            fill_opacity=0.9,
+            weight=2,
+            popup=popup_html,
+            tooltip=row["Category"]
+        ).add_to(m)
+
+    with map_col:
+
+        map_data = st_folium(
+            m,
+            height=700,
+            returned_objects=["last_object_clicked"]
+        )
+
+    # ----------------------------------
+    # CLICK DETECTION
+    # ----------------------------------
+
+    if (
+        map_data
+        and map_data.get("last_object_clicked")
+    ):
+
+        clicked_lat = map_data["last_object_clicked"]["lat"]
+        clicked_lon = map_data["last_object_clicked"]["lng"]
+
+        tmp = sat_map.copy()
+
+        tmp["distance"] = (
+            (tmp["latitude"] - clicked_lat) ** 2 +
+            (tmp["longitude"] - clicked_lon) ** 2
+        )
+
+        st.session_state.selected_satellite_office = (
+            tmp.loc[
+                tmp["distance"].idxmin()
+            ]
+        )
+
+    # ----------------------------------
+    # INFO PANEL
+    # ----------------------------------
+
+    with info_col:
+
+        st.subheader("Office Details")
+
+        if (
+            st.session_state.selected_satellite_office
+            is not None
+        ):
+
+            office = (
+                st.session_state.selected_satellite_office
+            )
+
+            st.write(
+                f"**District:** {int(office['District'])}"
+            )
+
+            st.write(
+                f"**Address:** {office['Address']}"
+            )
+
+        else:
+
+            st.info(
+                "Click an office on the map."
+            )
+
+    # ----------------------------------
+    # KPIs
+    # ----------------------------------
+
+    st.divider()
+
+    c1, c2 = st.columns(2)
+
+    c1.metric(
+        "Satellite Offices",
+        len(sat)
+    )
+
+    c2.metric(
+        "Districts Covered",
+        sat["District"].nunique()
+    )
+
+    # ----------------------------------
+    # TABLE
+    # ----------------------------------
+
+    st.subheader("Satellite Offices")
+
+    st.dataframe(
+        sat[
+            [
+                "Name",
+                "District",
+                "Address"
+            ]
+        ],
+        use_container_width=True
+    )
 
 elif page == "Care Services Explorer":
 
@@ -1293,27 +2411,133 @@ elif page == "Care Services Explorer":
 
     st.caption(
         """
-        Explore and compare care-related facilities across Quezon City,
-        including health facilities and older persons care services.
+        Explore childcare centers, schools, health facilities,
+        older persons facilities, rehabilitation centers, and
+        Quezon City satellite offices on a single map.
         """
     )
+
+    st.write("Childcare:", len(childcare_centers))
+    st.write("Schools:", len(schools))
+    st.write("Long Term Care:", len(long_term_care))
+    st.write("Satellite:", len(satellite_offices))
+    st.write("Health:", len(health_centers))
+    st.write("Older Persons:", len(older_person_care))
+
+    # --------------------------------------------------
+    # SERVICE CONFIGURATION
+    # --------------------------------------------------
+
+    service_layers = {
+
+        "Childcare Centers": {
+            "df": childcare_centers,
+            "color": "#E41A1C",
+            "source": "Childcare Center",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Schools": {
+            "df": schools,
+            "color": "#377EB8",
+            "source": "School",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Health Centers": {
+            "df": health_centers,
+            "color": "#4DAF4A",
+            "source": "Health Facility",
+            "name_col": "Name of Facility",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Older Persons Facilities": {
+            "df": older_person_care,
+            "color": "#984EA3",
+            "source": "Older Persons Facility",
+            "name_col": "name_original",
+            "district_col": "district",
+            "address_col": "address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Long-Term Care & Rehabilitation": {
+            "df": long_term_care,
+            "color": "#FF7F00",
+            "source": "Rehabilitation Facility",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Satellite Offices": {
+            "df": satellite_offices,
+            "color": "#A65628",
+            "source": "Satellite Office",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        }
+    }
+
+    # --------------------------------------------------
+    # LEGEND
+    # --------------------------------------------------
+
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+
+    with c1:
+        st.markdown("🔴 Childcare")
+
+    with c2:
+        st.markdown("🔵 Schools")
+
+    with c3:
+        st.markdown("🟢 Health")
+
+    with c4:
+        st.markdown("🟣 Older Persons")
+
+    with c5:
+        st.markdown("🟠 Rehab")
+
+    with c6:
+        st.markdown("🟤 Satellite")
+
+    st.divider()
 
     # --------------------------------------------------
     # FILTERS
     # --------------------------------------------------
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns([2, 1])
 
     with col1:
 
-        show_health = st.checkbox(
-            "Health Facilities",
-            value=True
-        )
-
-        show_senior = st.checkbox(
-            "Older Persons Facilities",
-            value=True
+        selected_layers = st.multiselect(
+            "Services to Display",
+            list(service_layers.keys()),
+            default=[
+                "Health Centers",
+                "Older Persons Facilities"
+            ]
         )
 
     with col2:
@@ -1321,6 +2545,7 @@ elif page == "Care Services Explorer":
         districts = sorted(
             health_centers["District"]
             .dropna()
+            .astype(str)
             .unique()
         )
 
@@ -1329,82 +2554,12 @@ elif page == "Care Services Explorer":
             ["All"] + list(districts)
         )
 
-    with col3:
-
-        health_filter = st.selectbox(
-            "Health Category",
-            [
-                "All",
-                "QC LGU",
-                "National",
-                "Health Center",
-                "Super Health"
-            ]
-        )
-
     # --------------------------------------------------
-    # DATA FILTERING
+    # SESSION STATE
     # --------------------------------------------------
 
-    hc = health_centers.copy()
-    opc = older_person_care.copy()
-
-    if selected_district != "All":
-
-        hc = hc[
-            hc["District"] == selected_district
-        ]
-
-        opc = opc[
-            opc["district"].astype(str)
-            == selected_district
-        ]
-
-    if health_filter != "All":
-
-        hc = hc[
-            hc["Category"]
-            .str.contains(
-                health_filter,
-                case=False,
-                na=False
-            )
-        ]
-
-    # --------------------------------------------------
-    # COLOR FUNCTIONS
-    # --------------------------------------------------
-
-    def health_color(category):
-
-        category = str(category).upper()
-
-        if "QC LGU" in category:
-            return "#E41A1C"
-
-        elif "NATIONAL" in category:
-            return "#377EB8"
-
-        elif "SUPER HEALTH" in category:
-            return "#FFCC00"
-
-        elif "HEALTH CENTER" in category:
-            return "#4DAF4A"
-
-        return "#999999"
-
-
-    def senior_color(category):
-
-        category = str(category).upper()
-
-        if "NURSING" in category:
-            return "#984EA3"
-
-        elif "BAHAY ARUGA" in category:
-            return "#FF7F00"
-
-        return "#999999"
+    if "selected_explorer_item" not in st.session_state:
+        st.session_state.selected_explorer_item = None
 
     # --------------------------------------------------
     # MAP CENTER
@@ -1414,14 +2569,6 @@ elif page == "Care Services Explorer":
 
     center_lon = (minx + maxx) / 2
     center_lat = (miny + maxy) / 2
-
-    # --------------------------------------------------
-    # SESSION STATE
-    # --------------------------------------------------
-
-    if "selected_explorer_item" not in st.session_state:
-
-        st.session_state.selected_explorer_item = None
 
     # --------------------------------------------------
     # LAYOUT
@@ -1445,79 +2592,72 @@ elif page == "Care Services Explorer":
             "fillColor": "#7fbf7f",
             "color": "#666666",
             "weight": 1,
-            "fillOpacity": 0.15,
+            "fillOpacity": 0.10,
         }
     ).add_to(m)
 
     # --------------------------------------------------
-    # HEALTH FACILITIES
+    # STORE FILTERED DATA
     # --------------------------------------------------
 
-    if show_health:
+    filtered_layers = {}
 
-        for _, row in hc.iterrows():
+    # --------------------------------------------------
+    # PLOT LAYERS
+    # --------------------------------------------------
+
+    for layer_name in selected_layers:
+
+        layer = service_layers[layer_name]
+
+        df = layer["df"].copy()
+
+        if selected_district != "All":
+
+            district_col = layer["district_col"]
+
+            df = df[
+                df[district_col]
+                .astype(str)
+                == selected_district
+            ]
+
+        filtered_layers[layer_name] = df
+
+        for _, row in df.iterrows():
 
             popup_html = f"""
-            <b>{row['Name of Facility']}</b><br>
-            Category: {row['Category']}<br>
-            District: {row['District']}<br>
-            Pharmacy: {'Yes' if row['Has Pharmacy'] else 'No'}
+            <b>{row[layer['name_col']]}</b><br>
+            Type: {layer['source']}<br>
+            District: {row[layer['district_col']]}
             """
 
             folium.CircleMarker(
                 location=[
-                    row["latitude"],
-                    row["longitude"]
+                    row[layer["lat_col"]],
+                    row[layer["lon_col"]]
                 ],
-                radius=5,
-                color=health_color(row["Category"]),
+                radius=6,
+                color=layer["color"],
                 fill=True,
-                fill_color=health_color(row["Category"]),
+                fill_color=layer["color"],
                 fill_opacity=0.9,
                 weight=2,
                 popup=popup_html,
-                tooltip=row["Name of Facility"]
+                tooltip=str(
+                    row[layer["name_col"]]
+                )
             ).add_to(m)
 
     # --------------------------------------------------
-    # OLDER PERSONS FACILITIES
-    # --------------------------------------------------
-
-    if show_senior:
-
-        for _, row in opc.iterrows():
-
-            popup_html = f"""
-            <b>{row['name']}</b><br>
-            Category: {row['category']}<br>
-            District: {row['district']}<br>
-            Barangay: {row['barangay']}
-            """
-
-            folium.CircleMarker(
-                location=[
-                    row["latitude"],
-                    row["longitude"]
-                ],
-                radius=5,
-                color=senior_color(row["category"]),
-                fill=True,
-                fill_color=senior_color(row["category"]),
-                fill_opacity=0.9,
-                weight=2,
-                popup=popup_html,
-                tooltip=row["name"]
-            ).add_to(m)
-
-    # --------------------------------------------------
-    # MAP DISPLAY
+    # DISPLAY MAP
     # --------------------------------------------------
 
     with map_col:
 
         map_data = st_folium(
             m,
-            height=700,
+            height=750,
             returned_objects=["last_object_clicked"]
         )
 
@@ -1532,29 +2672,26 @@ elif page == "Care Services Explorer":
 
         candidates = []
 
-        if show_health:
+        for layer_name in selected_layers:
 
-            tmp = hc.copy()
-            tmp["source"] = "Health Facility"
+            layer = service_layers[layer_name]
 
-            tmp["distance"] = (
-                (tmp["latitude"] - clicked_lat) ** 2 +
-                (tmp["longitude"] - clicked_lon) ** 2
+            df = filtered_layers[layer_name].copy()
+
+            if len(df) == 0:
+                continue
+
+            df["source"] = layer["source"]
+            df["name_field"] = layer["name_col"]
+            df["address_field"] = layer["address_col"]
+            df["district_field"] = layer["district_col"]
+
+            df["distance"] = (
+                (df[layer["lat_col"]] - clicked_lat) ** 2 +
+                (df[layer["lon_col"]] - clicked_lon) ** 2
             )
 
-            candidates.append(tmp)
-
-        if show_senior:
-
-            tmp = opc.copy()
-            tmp["source"] = "Older Persons Facility"
-
-            tmp["distance"] = (
-                (tmp["latitude"] - clicked_lat) ** 2 +
-                (tmp["longitude"] - clicked_lon) ** 2
-            )
-
-            candidates.append(tmp)
+            candidates.append(df)
 
         if len(candidates):
 
@@ -1575,50 +2712,46 @@ elif page == "Care Services Explorer":
 
     with info_col:
 
-        st.subheader("Facility Details")
+        st.subheader("Details")
 
         item = st.session_state.selected_explorer_item
 
         if item is not None:
 
-            if item["source"] == "Health Facility":
+            st.markdown(
+                f"### {item[item['name_field']]}"
+            )
 
-                st.markdown(
-                    f"### {item['Name of Facility']}"
-                )
+            st.write(
+                f"**Type:** {item['source']}"
+            )
 
-                st.write(
-                    f"**Category:** {item['Category']}"
-                )
+            st.write(
+                f"**District:** {item[item['district_field']]}"
+            )
 
-                st.write(
-                    f"**District:** {item['District']}"
-                )
-
-                st.write(
-                    f"**Address:** {item['Address']}"
-                )
-
-            else:
-
-                st.markdown(
-                    f"### {item['name']}"
-                )
+            if item["address_field"] in item.index:
 
                 st.write(
-                    f"**Category:** {item['category']}"
+                    f"**Address:** {item[item['address_field']]}"
                 )
 
-                st.write(
-                    f"**District:** {item['district']}"
-                )
+            if "barangay" in item.index:
 
                 st.write(
                     f"**Barangay:** {item['barangay']}"
                 )
 
+            if "Category" in item.index:
+
                 st.write(
-                    f"**Address:** {item['address']}"
+                    f"**Category:** {item['Category']}"
+                )
+
+            if "category" in item.index:
+
+                st.write(
+                    f"**Category:** {item['category']}"
                 )
 
         else:
@@ -1633,14 +2766,13 @@ elif page == "Care Services Explorer":
 
     st.divider()
 
-    c1, c2 = st.columns(2)
-
-    c1.metric(
-        "Health Facilities",
-        len(hc) if show_health else 0
+    cols = st.columns(
+        max(1, len(selected_layers))
     )
 
-    c2.metric(
-        "Older Persons Facilities",
-        len(opc) if show_senior else 0
-    )
+    for i, layer_name in enumerate(selected_layers):
+
+        cols[i].metric(
+            layer_name,
+            len(filtered_layers[layer_name])
+        )
