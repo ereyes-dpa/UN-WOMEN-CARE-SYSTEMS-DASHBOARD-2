@@ -247,6 +247,10 @@ def load_data():
         care["major_division"]
         == "Quezon City satellite offices for services"
         ].copy()
+    
+    migration_centers = care[
+        care["major_division"] == "Trainings"
+    ].copy()
 
     return (
         geo, 
@@ -255,7 +259,8 @@ def load_data():
         health_centers,
         older_person_care, 
         long_term_care,
-        satellite_offices
+        satellite_offices,
+        migration_centers
     )
 
 # --------------------------------------------------
