@@ -125,7 +125,8 @@ st.divider()
     health_centers,
     older_person_care, 
     long_term_care,
-    satellite_offices
+    satellite_offices,
+    migration_centers
 ) = load_data()
 
 # --------------------------------------------------
@@ -139,6 +140,7 @@ older_person_care    = clean_dataframe(older_person_care)
 long_term_care    = clean_dataframe(long_term_care)
 satellite_offices = clean_dataframe(satellite_offices)
 satellite_offices["Name"] = "District " + satellite_offices["District"].astype(int).astype(str)
+migration_centers = clean_dataframe(migration_centers)
 
 # --------------------------------------------------
 # QC CENTER
@@ -174,6 +176,7 @@ page = st.sidebar.selectbox(
         "Older Persons Center Map",
         "Long-Term Care & Rehabilitation",
         "Satellite Offices",
+        "Migration Resource Center",
         "Care Services Explorer"
     ]
 )
@@ -442,6 +445,22 @@ if page == "Satellite Offices":
         """
     )
 
+if page == "Migration Resource Center":
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Facility Type")
+
+    st.sidebar.markdown(
+        """
+        <span style="color:#7F47ED;font-size:22px;">●</span>
+        <b>QC Migrants Resource Center</b><br>
+        <small>
+        Provides support, information, training, and services for migrant workers and their families.
+        </small>
+        """,
+        unsafe_allow_html=True
+    )
+
 if page == "Care Services Explorer":
 
     st.sidebar.markdown("---")
@@ -526,6 +545,7 @@ if page == "Care Services Explorer":
             unsafe_allow_html=True
         )
 
+
     st.sidebar.markdown("---")
     st.sidebar.markdown("## Satellite Offices")
 
@@ -536,6 +556,17 @@ if page == "Care Services Explorer":
         """,
         unsafe_allow_html=True
     )
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("## Migration Services")
+
+    st.sidebar.markdown(
+        """
+        <span style="color:#C084FC;font-size:22px;">✦</span>
+        <b>Migration Resource Center</b>
+        """,
+        unsafe_allow_html=True
+    )    
 
 # --------------------------------------------------
 # PAGES
@@ -1886,6 +1917,254 @@ elif page == "Satellite Offices":
         width = 'stretch'
     )
 
+elif page == "Migration Resource Center":
+
+    st.title("Migration Resource Center")
+
+    st.markdown("""
+    Explore facilities providing information, training,
+    referral services, and support for migrant workers
+    and their families in Quezon City.
+    """)
+
+    # ----------------------------------
+    # DISTRICT FILTER
+    # ----------------------------------
+
+    districts = sorted(
+        migration_centers["District"]
+        .dropna()
+        .astype(int)
+        .unique()
+    )
+
+    selected_district = st.selectbox(
+        "District",
+        ["All"] + list(districts)
+    )
+
+    # ----------------------------------
+    # FILTERING
+    # ----------------------------------
+
+    mig = migration_centers.copy()
+
+    if selected_district != "All":
+
+        mig = mig[
+            mig["District"].astype(int)
+            == selected_district
+        ]
+
+    st.divider()
+
+    # ----------------------------------
+    # SESSION STATE
+    # ----------------------------------
+
+    if "selected_migration_center" not in st.session_state:
+
+        st.session_state.selected_migration_center = None
+
+    # ----------------------------------
+    # LAYOUT
+    # ----------------------------------
+
+    map_col, info_col = st.columns([2, 1])
+
+    # ----------------------------------
+    # MAP
+    # ----------------------------------
+
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=12,
+        tiles="CartoDB positron"
+    )
+
+    folium.GeoJson(
+        geo,
+        style_function=lambda x: {
+            "fillColor": "#7fbf7f",
+            "color": "#666666",
+            "weight": 1,
+            "fillOpacity": 0.15,
+        }
+    ).add_to(m)
+
+    # ----------------------------------
+    # MARKERS
+    # ----------------------------------
+
+    for _, row in mig.iterrows():
+
+        popup_html = f"""
+        <b>{row['Name']}</b><br>
+        Category: {row['Category']}<br>
+        District: {int(row['District'])}<br>
+        Address: {row['Address']}
+        """
+
+        folium.CircleMarker(
+            location=[
+                row["latitude"],
+                row["longitude"]
+            ],
+            radius=6,
+            color="#7F47ED",
+            fill=True,
+            fill_color="#7F47ED",
+            fill_opacity=0.9,
+            weight=2,
+            popup=folium.Popup(
+                popup_html,
+                max_width=350
+            ),
+            tooltip=row["Name"]
+        ).add_to(m)
+
+    # ----------------------------------
+    # MAP DISPLAY
+    # ----------------------------------
+
+    with map_col:
+
+        map_data = st_folium(
+            m,
+            height=700,
+            returned_objects=[
+                "last_object_clicked"
+            ]
+        )
+
+    # ----------------------------------
+    # CLICK DETECTION
+    # ----------------------------------
+
+    if (
+        map_data
+        and map_data.get(
+            "last_object_clicked"
+        )
+    ):
+
+        clicked_lat = (
+            map_data["last_object_clicked"]["lat"]
+        )
+
+        clicked_lon = (
+            map_data["last_object_clicked"]["lng"]
+        )
+
+        tmp = mig.copy()
+
+        tmp["distance"] = (
+            (tmp["latitude"] - clicked_lat) ** 2 +
+            (tmp["longitude"] - clicked_lon) ** 2
+        )
+
+        st.session_state.selected_migration_center = (
+            tmp.loc[
+                tmp["distance"].idxmin()
+            ]
+        )
+
+    # ----------------------------------
+    # INFO PANEL
+    # ----------------------------------
+
+    with info_col:
+
+        st.subheader("Facility Details")
+
+        if (
+            st.session_state.selected_migration_center
+            is not None
+        ):
+
+            facility = (
+                st.session_state.selected_migration_center
+            )
+
+            st.markdown(
+                f"### {facility['Name']}"
+            )
+
+            st.write(
+                f"**Category:** {facility['Category']}"
+            )
+
+            st.write(
+                f"**District:** {int(facility['District'])}"
+            )
+
+            if (
+                "barangay" in facility.index
+                and pd.notna(
+                    facility["barangay"]
+                )
+            ):
+
+                st.write(
+                    f"**Barangay:** {facility['barangay']}"
+                )
+
+            st.write(
+                f"**Address:** {facility['Address']}"
+            )
+
+            if (
+                "open_hours" in facility.index
+                and pd.notna(
+                    facility["open_hours"]
+                )
+            ):
+
+                st.write(
+                    f"**Open:** {facility['open_hours']}"
+                )
+
+            if (
+                "close_hours" in facility.index
+                and pd.notna(
+                    facility["close_hours"]
+                )
+            ):
+
+                st.write(
+                    f"**Close:** {facility['close_hours']}"
+                )
+
+        else:
+
+            st.info(
+                "Click the facility on the map."
+            )
+
+    # ----------------------------------
+    # TABLE
+    # ----------------------------------
+
+    st.subheader(
+        "Migration Service Facilities"
+    )
+
+    display_cols = [
+        c for c in [
+            "Name",
+            "Category",
+            "District",
+            "Address"
+        ]
+        if c in mig.columns
+    ]
+
+    st.dataframe(
+        mig[display_cols],
+        width="stretch"
+    )
+
+
 elif page == "Care Services Explorer":
 
     st.title("Care Services Explorer")
@@ -1893,8 +2172,9 @@ elif page == "Care Services Explorer":
     st.caption(
         """
         Explore childcare centers, schools, health facilities,
-        older persons facilities, rehabilitation centers, and
-        Quezon City satellite offices on a single map.
+        older persons facilities, rehabilitation centers,
+        migration resource centers, and Quezon City
+        satellite offices on a single map.
         """
     )
 
@@ -1974,7 +2254,18 @@ elif page == "Care Services Explorer":
             "address_col": "Address",
             "lat_col": "latitude",
             "lon_col": "longitude"
-        }
+        },
+        "Migration Resource Centers": {
+            "df": migration_centers,
+            "color": "#C084FC",
+            "symbol": "✦",
+            "source": "Migration Resource Center",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
     }
 
     # --------------------------------------------------
@@ -1983,7 +2274,7 @@ elif page == "Care Services Explorer":
 
     st.markdown("### Service Categories")
 
-    cols = st.columns(6)
+    cols = st.columns(7)
 
     for i, (layer_name, layer) in enumerate(service_layers.items()):
 
@@ -2113,6 +2404,8 @@ elif page == "Care Services Explorer":
 
             elif layer_name == "Satellite Offices":
                 marker_color_value = district_color(row["District"])
+            elif layer_name == "Migration Resource Centers":
+                marker_color_value = "#C084FC"
 
             else:
                 marker_color_value = "#7F47ED"
@@ -2198,7 +2491,6 @@ elif page == "Care Services Explorer":
     # --------------------------------------------------
     # DETAILS PANEL
     # --------------------------------------------------
-
     with info_col:
 
         st.subheader("Details")
@@ -2215,23 +2507,59 @@ elif page == "Care Services Explorer":
                 f"**Type:** {item['source']}"
             )
 
-            st.write(
-                f"**District:** {int(item[item['district_field']])}"
-            )
+            # --------------------------
+            # DISTRICT
+            # --------------------------
 
-            if item["address_field"] in item.index:
+            district_value = item[item["district_field"]]
+
+            if pd.notna(district_value):
+
+                try:
+                    st.write(
+                        f"**District:** {int(district_value)}"
+                    )
+
+                except:
+                    st.write(
+                        f"**District:** {district_value}"
+                    )
+
+            # --------------------------
+            # ADDRESS
+            # --------------------------
+
+            if (
+                item["address_field"] in item.index
+                and pd.notna(item[item["address_field"]])
+            ):
 
                 st.write(
                     f"**Address:** {item[item['address_field']]}"
                 )
 
-            if "barangay" in item.index:
+            # --------------------------
+            # BARANGAY
+            # --------------------------
+
+            if (
+                "barangay" in item.index
+                and pd.notna(item["barangay"])
+                and str(item["barangay"]).strip() != ""
+            ):
 
                 st.write(
                     f"**Barangay:** {item['barangay']}"
                 )
 
-            if "Category" in item.index:
+            # --------------------------
+            # CATEGORY
+            # --------------------------
+
+            if (
+                "Category" in item.index
+                and pd.notna(item["Category"])
+            ):
 
                 st.write(
                     f"**Category:** {item['Category']}"
@@ -2239,19 +2567,6 @@ elif page == "Care Services Explorer":
 
         else:
 
-            st.info("Click a facility on the map.")
-
-    # --------------------------------------------------
-    # SUMMARY
-    # --------------------------------------------------
-
-    st.divider()
-
-    summary_cols = st.columns(max(1, len(selected_layers)))
-
-    for i, layer_name in enumerate(selected_layers):
-
-        summary_cols[i].metric(
-            layer_name,
-            len(filtered_layers[layer_name])
-        )
+            st.info(
+                "Click a facility on the map."
+            )
