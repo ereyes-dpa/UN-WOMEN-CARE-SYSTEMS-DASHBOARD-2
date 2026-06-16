@@ -263,6 +263,60 @@ def load_data():
         migration_centers
     )
 
+
+@st.cache_data
+def load_data_for_kpis():
+    population_summary = pd.read_csv(
+    "processed/population_summary.csv"
+    )
+
+    population_sex = pd.read_csv(
+        "processed/population_2024_by_sex.csv"
+    )
+
+    population_age = pd.read_csv(
+        "processed/population_2024_by_age_group.csv"
+    )
+
+
+    for col in ["Male", "Female", "Total"]:
+        population_sex[col] = (
+            population_sex[col]
+            .astype(str)
+            .str.replace(",", "")
+            .astype(int)
+        )
+
+    age_cols = [
+        "0-5 \n(Early Childhood)",
+        "6-17 \n(School Age Children)",
+        "18-59 \n(Working Age Adult)",
+        "60+ \n(Elderly)",
+        "Total"
+    ]
+
+    for col in age_cols:
+        population_age[col] = (
+            population_age[col]
+            .astype(str)
+            .str.replace(",", "")
+            .astype(int)
+        )
+
+
+
+
+
+
+
+    return (
+        population_summary, 
+        population_sex,
+        population_age
+    )
+    
+
+
 # --------------------------------------------------
 # CLEANNING
 # --------------------------------------------------
