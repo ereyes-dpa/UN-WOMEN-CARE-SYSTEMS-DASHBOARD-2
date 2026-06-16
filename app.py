@@ -129,6 +129,9 @@ st.divider()
     migration_centers
 ) = load_data()
 
+
+population_summary, population_sex, population_age = load_data_for_kpis()
+
 # --------------------------------------------------
 # CLEANING
 # --------------------------------------------------
@@ -168,13 +171,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 page = st.sidebar.selectbox(
-    "Available Care Maps",
+    "Available Pages",
     [
+        "Population Overview",
         "Childcare Centers",
         "Schools", 
         "Health Centers Map",
         "Older Persons Center Map",
         "Long-Term Care & Rehabilitation",
+        "Persons with Disabilities",
         "Satellite Offices",
         "Migration Resource Center",
         "Care Services Explorer"
@@ -182,6 +187,7 @@ page = st.sidebar.selectbox(
 )
 
 selected_category = "All"
+
 
 if page == "Childcare Centers":
 
@@ -572,6 +578,395 @@ if page == "Care Services Explorer":
 # PAGES
 # --------------------------------------------------
 
+elif page == "Population Overview":
+
+    st.title("Population Overview")
+
+    st.markdown("""
+    Demographic profile of Quezon City to support planning,
+    resource allocation, and care service delivery decisions.
+    """)
+
+    # --------------------------------------------------
+    # CLEANING
+    # --------------------------------------------------
+
+    for col in ["Male", "Female", "Total"]:
+
+        if col in population_sex.columns:
+
+            population_sex[col] = (
+                population_sex[col]
+                .astype(str)
+                .str.replace(",", "")
+                .astype(float)
+            )
+
+    age_columns = [
+        c for c in population_age.columns
+        if c not in ["Barangay", "District"]
+    ]
+
+    for col in age_columns:
+
+        population_age[col] = (
+            population_age[col]
+            .astype(str)
+            .str.replace(",", "")
+            .astype(float)
+        )
+
+    # --------------------------------------------------
+    # SUMMARY VALUES
+    # --------------------------------------------------
+
+    total_population_2024 = (
+        population_sex["Total"]
+        .sum()
+    )
+
+    total_male = (
+        population_sex["Male"]
+        .sum()
+    )
+
+    total_female = (
+        population_sex["Female"]
+        .sum()
+    )
+
+    male_pct = (
+        total_male
+        / total_population_2024
+        * 100
+    )
+
+    female_pct = (
+        total_female
+        / total_population_2024
+        * 100
+    )
+
+    total_barangays = (
+        population_sex["Barangay"]
+        .nunique()
+    )
+
+    total_districts = (
+        population_sex["District"]
+        .nunique()
+    )
+
+    # --------------------------------------------------
+    # POPULATION GROWTH
+    # --------------------------------------------------
+
+    pop_2020 = 2960048
+    pop_2024 = total_population_2024
+
+    growth_rate = (
+        (pop_2024 - pop_2020)
+        / pop_2020
+        * 100
+    )
+
+    # --------------------------------------------------
+    # KPI ROW
+    # --------------------------------------------------
+
+    k1, k2, k3, k4, k5 = st.columns(5)
+
+    k1.metric(
+        "Population (2024)",
+        f"{pop_2024:,.0f}"
+    )
+
+    k2.metric(
+        "Population (2020)",
+        f"{pop_2020:,.0f}"
+    )
+
+    k3.metric(
+        "Growth Rate",
+        f"{growth_rate:.1f}%"
+    )
+
+    k4.metric(
+        "Barangays",
+        f"{total_barangays}"
+    )
+
+    k5.metric(
+        "Districts",
+        f"{total_districts}"
+    )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # SEX + AGE DISTRIBUTION
+    # --------------------------------------------------
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        sex_df = pd.DataFrame(
+            {
+                "Sex": [
+                    "Male",
+                    "Female"
+                ],
+                "Population": [
+                    total_male,
+                    total_female
+                ]
+            }
+        )
+
+        fig = px.pie(
+            sex_df,
+            names="Sex",
+            values="Population",
+            title="Population by Sex"
+        )
+
+        st.plotly_chart(
+            fig,
+            width='stretch'
+        )
+
+        st.caption(
+            f"Male: {male_pct:.1f}% | Female: {female_pct:.1f}%"
+        )
+
+    with col2:
+
+        age_df = pd.DataFrame(
+            {
+                "Age Group": [
+                    "0-5",
+                    "6-17",
+                    "18-59",
+                    "60+"
+                ],
+                "Population": [
+                    population_age[
+                        "0-5 \n(Early Childhood)"
+                    ].sum(),
+
+                    population_age[
+                        "6-17 \n(School Age Children)"
+                    ].sum(),
+
+                    population_age[
+                        "18-59 \n(Working Age Adult)"
+                    ].sum(),
+
+                    population_age[
+                        "60+ \n(Elderly)"
+                    ].sum()
+                ]
+            }
+        )
+
+        fig = px.bar(
+            age_df,
+            x="Age Group",
+            y="Population",
+            title="Population by Age Group"
+        )
+
+        st.plotly_chart(
+            fig,
+            width='stretch'
+        )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # DISTRICT POPULATION
+    # --------------------------------------------------
+
+    st.subheader(
+        "Population by District"
+    )
+
+    district_population = (
+        population_sex
+        .groupby("District", as_index=False)
+        ["Total"]
+        .sum()
+        .sort_values(
+            "Total",
+            ascending=False
+        )
+    )
+
+    fig = px.bar(
+        district_population,
+        x="District",
+        y="Total",
+        title="Population by District",
+        text_auto=","
+    )
+
+    st.plotly_chart(
+        fig,
+        width='stretch'
+    )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # AGE STRUCTURE BY DISTRICT
+    # --------------------------------------------------
+
+    st.subheader(
+        "Age Structure by District"
+    )
+
+    district_age = (
+        population_age
+        .groupby("District")
+        [
+            [
+                "0-5 \n(Early Childhood)",
+                "6-17 \n(School Age Children)",
+                "18-59 \n(Working Age Adult)",
+                "60+ \n(Elderly)"
+            ]
+        ]
+        .sum()
+        .reset_index()
+    )
+
+    district_age_long = district_age.melt(
+        id_vars="District",
+        var_name="Age Group",
+        value_name="Population"
+    )
+
+    fig = px.bar(
+        district_age_long,
+        x="District",
+        y="Population",
+        color="Age Group",
+        title="Population Structure by District"
+    )
+
+    st.plotly_chart(
+        fig,
+        width='stretch'
+    )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # TOP BARANGAYS
+    # --------------------------------------------------
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.subheader(
+            "Top 10 Most Populated Barangays"
+        )
+
+        top_barangays = (
+            population_sex
+            .sort_values(
+                "Total",
+                ascending=False
+            )
+            .head(10)
+        )
+
+        st.dataframe(
+            top_barangays[
+                [
+                    "Barangay",
+                    "District",
+                    "Total"
+                ]
+            ],
+            width='stretch'
+        )
+
+    with col2:
+
+        st.subheader(
+            "Least Populated Barangays"
+        )
+
+        smallest_barangays = (
+            population_sex
+            .sort_values(
+                "Total",
+                ascending=True
+            )
+            .head(10)
+        )
+
+        st.dataframe(
+            smallest_barangays[
+                [
+                    "Barangay",
+                    "District",
+                    "Total"
+                ]
+            ],
+            width='stretch'
+        )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # DISTRICT SUMMARY TABLE
+    # --------------------------------------------------
+
+    st.subheader(
+        "District Demographic Summary"
+    )
+
+    district_summary = (
+        population_sex
+        .groupby("District")
+        .agg(
+            Population=("Total", "sum"),
+            Male=("Male", "sum"),
+            Female=("Female", "sum"),
+            Barangays=("Barangay", "nunique")
+        )
+        .reset_index()
+        .sort_values(
+            "Population",
+            ascending=False
+        )
+    )
+
+    district_summary[
+        "Male %"
+    ] = (
+        district_summary["Male"]
+        / district_summary["Population"]
+        * 100
+    ).round(1)
+
+    district_summary[
+        "Female %"
+    ] = (
+        district_summary["Female"]
+        / district_summary["Population"]
+        * 100
+    ).round(1)
+
+    st.dataframe(
+        district_summary,
+        width='stretch'
+    )
+
 if page == "Childcare Centers":
 
     st.title("Child Care Facilities")
@@ -582,6 +977,96 @@ if page == "Childcare Centers":
                 
                 
     """)
+
+    # --------------------------------------------------
+    # CHILDCARE KPIs
+    # --------------------------------------------------
+
+    childcare_summary = pd.read_csv(
+        "processed/childcare_summary.csv"
+    )
+
+    total_centers = int(
+        childcare_summary.loc[
+            childcare_summary["metric"]
+            == "child_development_centers",
+            "value"
+        ].iloc[0]
+    )
+
+    eccd_enrollees = int(
+        childcare_summary.loc[
+            childcare_summary["metric"]
+            == "eccd_enrollees",
+            "value"
+        ].iloc[0]
+    )
+
+    total_facilities = len(childcare_centers)
+
+    public_centers = (
+        childcare_centers["Sector"]
+        .str.contains(
+            "Public",
+            case=False,
+            na=False
+        )
+        .sum()
+    )
+
+    private_centers = (
+        childcare_centers["Sector"]
+        .str.contains(
+            "Private",
+            case=False,
+            na=False
+        )
+        .sum()
+    )
+
+    covered_barangays = (
+        childcare_centers["barangay"]
+        .nunique()
+    )
+
+    covered_districts = (
+        childcare_centers["District"]
+        .nunique()
+    )
+
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
+
+    k1.metric(
+        "Facilities",
+        f"{total_facilities:,}"
+    )
+
+    k2.metric(
+        "CDCs",
+        f"{total_centers:,}"
+    )
+
+    k3.metric(
+        "ECCD Enrollees",
+        f"{eccd_enrollees:,}"
+    )
+
+    k4.metric(
+        "Public",
+        f"{public_centers:,}"
+    )
+
+    k5.metric(
+        "Private",
+        f"{private_centers:,}"
+    )
+
+    k6.metric(
+        "Barangays Served",
+        f"{covered_barangays:,}"
+    )
+
+    st.divider()
 
     # --------------------------------------------------
     # DISTRICT FILTER
@@ -822,6 +1307,98 @@ if page == "Childcare Centers":
         width = 'stretch'
     )
 
+
+    # --------------------------------------------------
+    # CHILDCARE ANALYTICS
+    # --------------------------------------------------
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        category_counts = (
+            childcare_centers["Category"]
+            .value_counts()
+            .reset_index()
+        )
+
+        category_counts.columns = [
+            "Category",
+            "Facilities"
+        ]
+
+        fig = px.bar(
+            category_counts,
+            x="Category",
+            y="Facilities",
+            title="Facilities by Category"
+        )
+
+        st.plotly_chart(
+            fig,
+            width='stretch'
+        )
+
+    with col2:
+
+        district_counts = (
+            childcare_centers
+            .groupby("District")
+            .size()
+            .reset_index(name="Facilities")
+            .sort_values(
+                "Facilities",
+                ascending=False
+            )
+        )
+
+        fig = px.bar(
+            district_counts,
+            x="District",
+            y="Facilities",
+            title="Facilities by District"
+        )
+
+        st.plotly_chart(
+            fig,
+            width='stretch'
+        )
+
+    early_childhood_population = (
+        population_age[
+            "0-5 \n(Early Childhood)"
+        ]
+        .sum()
+    )
+
+    children_per_center = (
+        early_childhood_population
+        / total_centers
+    )
+
+    enrollment_rate = (
+        eccd_enrollees
+        / early_childhood_population
+        * 100
+    )
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Children (0-5)",
+        f"{early_childhood_population:,.0f}"
+    )
+
+    c2.metric(
+        "Children per CDC",
+        f"{children_per_center:.0f}"
+    )
+
+    c3.metric(
+        "ECCD Coverage",
+        f"{enrollment_rate:.1f}%"
+    )
+
 elif page == "Schools":
 
     st.title("Schools")
@@ -830,6 +1407,96 @@ elif page == "Schools":
     Explore the spatial distribution of schools across Quezon City,
     including both public and private educational institutions.
     """)
+
+    # KPIS
+    total_schools = len(schools)
+
+    public_schools = (
+        schools["Category"]
+        .str.contains(
+            "Public",
+            case=False,
+            na=False
+        )
+        .sum()
+    )
+
+    private_schools = (
+        schools["Category"]
+        .str.contains(
+            "Private",
+            case=False,
+            na=False
+        )
+        .sum()
+    )
+
+    covered_barangays = (
+        schools["barangay"]
+        .nunique()
+    )
+
+    covered_districts = (
+        schools["District"]
+        .nunique()
+    )
+
+    k1, k2, k3, k4, k5 = st.columns(5)
+
+    k1.metric(
+        "Total Schools",
+        f"{total_schools:,}"
+    )
+
+    k2.metric(
+        "Public",
+        f"{public_schools:,}"
+    )
+
+    k3.metric(
+        "Private",
+        f"{private_schools:,}"
+    )
+
+    k4.metric(
+        "Barangays Served",
+        f"{covered_barangays:,}"
+    )
+
+    k5.metric(
+        "Districts Served",
+        f"{covered_districts:,}"
+    )
+
+    st.divider()
+
+    school_age_population = (
+        population_age[
+            "6-17 \n(School Age Children)"
+        ]
+        .sum()
+    )
+
+    children_per_school = (
+        school_age_population
+        / total_schools
+    )
+
+    c1, c2 = st.columns(2)
+
+    c1.metric(
+        "School-Age Population (6-17)",
+        f"{school_age_population:,.0f}"
+    )
+
+    c2.metric(
+        "Children per School",
+        f"{children_per_school:,.0f}"
+    )
+
+    st.divider()
+
+
 
     # --------------------------------------------------
     # DISTRICT FILTER
@@ -1074,6 +1741,139 @@ elif page == "Schools":
         width = 'stretch'
     )
 
+
+    # --------------------------------------------------
+    # SCHOOL KPIs
+    # --------------------------------------------------
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        category_counts = (
+            schools["Category"]
+            .value_counts()
+            .reset_index()
+        )
+
+        category_counts.columns = [
+            "Category",
+            "Schools"
+        ]
+
+        fig = px.pie(
+            category_counts,
+            names="Category",
+            values="Schools",
+            title="School Distribution"
+        )
+
+        st.plotly_chart(
+            fig,
+            width='stretch'
+        )
+
+    with col2:
+
+        district_counts = (
+            schools
+            .groupby("District")
+            .size()
+            .reset_index(name="Schools")
+            .sort_values(
+                "Schools",
+                ascending=False
+            )
+        )
+
+        fig = px.bar(
+            district_counts,
+            x="District",
+            y="Schools",
+            text_auto=True,
+            title="Schools by District"
+        )
+
+        st.plotly_chart(
+            fig,
+            width='stretch'
+        )
+ 
+
+    district_schools = (
+        schools
+        .groupby("District")
+        .size()
+        .reset_index(name="Schools")
+    )
+
+    district_population = (
+        population_age
+        .groupby("District")
+        [
+            "6-17 \n(School Age Children)"
+        ]
+        .sum()
+        .reset_index()
+    )
+
+    district_population = district_population.rename(
+        columns={
+            "6-17 \n(School Age Children)":
+            "School_Age_Population"
+        }
+    )
+
+    coverage = district_population.merge(
+        district_schools,
+        on="District",
+        how="left"
+    )
+
+    coverage["Schools"] = (
+        coverage["Schools"]
+        .fillna(0)
+    )
+
+    coverage[
+        "Children per School"
+    ] = (
+        coverage["School_Age_Population"]
+        / coverage["Schools"]
+    ).round(0)
+
+    st.subheader(
+        "School Coverage by District"
+    )
+
+    st.dataframe(
+        coverage.sort_values(
+            "Children per School",
+            ascending=False
+        ),
+        width="stretch"
+    )
+
+    barangay_counts = (
+        schools
+        .groupby("barangay")
+        .size()
+        .reset_index(name="Schools")
+        .sort_values(
+            "Schools",
+            ascending=False
+        )
+        .head(10)
+    )
+
+    st.subheader(
+        "Top Barangays by Number of Schools"
+    )
+
+    st.dataframe(
+        barangay_counts,
+        width='stretch'
+    )
+
 elif page == "Health Centers Map":
 
     st.title("Health Centers & Hospitals") 
@@ -1083,6 +1883,80 @@ elif page == "Health Centers Map":
         The map supports the assessment of access to primary healthcare services,
         facility coverage, and the availability of pharmacies across districts.
     """)
+
+    # --------------------------------------------------
+    # HEALTH KPIs
+    # --------------------------------------------------
+
+    health_capacity = pd.read_csv(
+        "processed/health_centers_and_doctors_per_district.csv"
+    )
+
+    total_facilities = len(health_centers)
+
+    total_doctors = (
+        health_capacity["doctors"]
+        .fillna(0)
+        .sum()
+    )
+
+    health_centers_count = (
+        health_centers["Category"]
+        .eq("Health Center")
+        .sum()
+    )
+
+    super_health_centers = (
+        health_centers["Category"]
+        .eq("Super Health")
+        .sum()
+    )
+
+    pharmacies = (
+        health_centers["Category"]
+        .eq("Pharmacy")
+        .sum()
+    )
+
+    hospitals = (
+        health_centers["Category"]
+        .isin(["National", "QC LGU"])
+        .sum()
+    )
+
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
+
+    k1.metric(
+        "Facilities",
+        f"{total_facilities:,}"
+    )
+
+    k2.metric(
+        "Doctors",
+        f"{int(total_doctors):,}"
+    )
+
+    k3.metric(
+        "Health Centers",
+        f"{health_centers_count:,}"
+    )
+
+    k4.metric(
+        "Super Health",
+        f"{super_health_centers:,}"
+    )
+
+    k5.metric(
+        "Hospitals",
+        f"{hospitals:,}"
+    )
+
+    k6.metric(
+        "Pharmacies",
+        f"{pharmacies:,}"
+    )
+
+    st.divider()
     
     # --------------------------------------------------
     # DISTRICT FILTER
@@ -1294,6 +2168,171 @@ elif page == "Health Centers Map":
         width = 'stretch'
     )
 
+    # --------------------------------------------------
+    # HEALTH KPIs
+    # --------------------------------------------------
+    population_sex["Total"] = (
+        population_sex["Total"]
+        .astype(str)
+        .str.replace(",", "")
+        .astype(float)
+    )
+
+    total_population = (
+        population_sex["Total"]
+        .sum()
+    )
+
+    population_per_doctor = (
+        total_population
+        / total_doctors
+    )
+
+    population_per_health_center = (
+        total_population
+        / health_centers_count
+    )
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Population",
+        f"{total_population:,.0f}"
+    )
+
+    c2.metric(
+        "Population / Doctor",
+        f"{population_per_doctor:,.0f}"
+    )
+
+    c3.metric(
+        "Population / Health Center",
+        f"{population_per_health_center:,.0f}"
+    )
+
+    st.divider()
+
+    st.subheader(
+        "Health Capacity by District"
+    )
+
+    district_capacity = (
+        health_capacity.copy()
+    )
+
+    district_capacity = district_capacity[
+        district_capacity["district"]
+        .str.upper()
+        != "TOTAL"
+    ]
+
+    fig = px.bar(
+        district_capacity,
+        x="district",
+        y="health_centers",
+        title="Health Centers by District",
+        text_auto=True
+    )
+
+    st.plotly_chart(
+        fig,
+        width='stretch'
+    )
+
+    fig = px.scatter(
+        district_capacity,
+        x="health_centers",
+        y="doctors",
+        text="district",
+        size="doctors",
+        title="Doctors vs Health Centers"
+    )
+
+    fig.update_traces(
+        textposition="top center"
+    )
+
+    st.plotly_chart(
+        fig,
+        width='stretch'
+    )
+
+    district_population = (
+        population_sex
+        .groupby("District")["Total"]
+        .sum()
+        .reset_index()
+    )
+
+    district_population["District"] = (
+        "District "
+        + district_population["District"]
+        .astype(str)
+    )
+
+    coverage = district_population.merge(
+        health_capacity,
+        left_on="District",
+        right_on="district",
+        how="left"
+    )
+
+    coverage[
+        "Population per Doctor"
+    ] = (
+        coverage["Total"]
+        / coverage["doctors"]
+    ).round(0)
+
+    coverage[
+        "Population per Health Center"
+    ] = (
+        coverage["Total"]
+        / coverage["health_centers"]
+    ).round(0)
+
+    st.subheader(
+        "Health Coverage by District"
+    )
+
+    st.dataframe(
+        coverage[
+            [
+                "District",
+                "Total",
+                "health_centers",
+                "doctors",
+                "Population per Doctor",
+                "Population per Health Center"
+            ]
+        ],
+        width="stretch"
+    )
+
+
+    facility_mix = (
+        health_centers["Category"]
+        .value_counts()
+        .reset_index()
+    )
+
+    facility_mix.columns = [
+        "Facility Type",
+        "Count"
+    ]
+
+    fig = px.pie(
+        facility_mix,
+        names="Facility Type",
+        values="Count",
+        title="Health Facility Composition"
+    )
+
+    st.plotly_chart(
+        fig,
+        width='stretch'
+    )
+
 elif page == "Older Persons Center Map":
 
     st.title("Older Persons & Senior Citizens")
@@ -1303,6 +2342,123 @@ elif page == "Older Persons Center Map":
         Interactive map of facilities supporting older persons in Quezon City,
         including nursing care centers and Bahay Aruga facilities.
         """
+    )
+
+    # --------------------------------------------------
+    # SENIOR CITIZEN KPIs
+    # --------------------------------------------------
+
+    senior_summary = pd.read_csv(
+        "processed/senior_summary.csv"
+    )
+
+    registered_seniors = int(
+        senior_summary.loc[
+            senior_summary["metric"] ==
+            "registered_seniors_2026",
+            "value"
+        ].iloc[0]
+    )
+
+    female_seniors = int(
+        senior_summary.loc[
+            senior_summary["metric"] ==
+            "female",
+            "value"
+        ].iloc[0]
+    )
+
+    male_seniors = int(
+        senior_summary.loc[
+            senior_summary["metric"] ==
+            "male",
+            "value"
+        ].iloc[0]
+    )
+
+    age_60_79 = int(
+        senior_summary.loc[
+            senior_summary["metric"] ==
+            "age_60_79",
+            "value"
+        ].iloc[0]
+    )
+
+    age_80_plus = int(
+        senior_summary.loc[
+            senior_summary["metric"] ==
+            "age_80_plus",
+            "value"
+        ].iloc[0]
+    )
+
+    total_facilities = len(
+        older_person_care
+    )
+
+    nursing_centers = (
+        older_person_care["Category"]
+        .str.contains(
+            "Nursing",
+            case=False,
+            na=False
+        )
+        .sum()
+    )
+
+    bahay_aruga = (
+        older_person_care["Category"]
+        .str.contains(
+            "Bahay",
+            case=False,
+            na=False
+        )
+        .sum()
+    )
+
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
+
+    k1.metric(
+        "Registered Seniors",
+        f"{registered_seniors:,}"
+    )
+
+    k2.metric(
+        "Female",
+        f"{female_seniors:,}"
+    )
+
+    k3.metric(
+        "Male",
+        f"{male_seniors:,}"
+    )
+
+    k4.metric(
+        "Age 60-79",
+        f"{age_60_79:,}"
+    )
+
+    k5.metric(
+        "Age 80+",
+        f"{age_80_plus:,}"
+    )
+
+    k6.metric(
+        "Care Facilities",
+        f"{total_facilities:,}"
+    )
+
+    st.divider()
+
+
+    seniors_per_facility = (
+        registered_seniors
+        / total_facilities
+    )
+
+    st.metric(
+        "Registered Seniors per Care Facility",
+        f"{seniors_per_facility:,.0f}"
     )
 
     # --------------------------------------------------
@@ -1504,6 +2660,208 @@ elif page == "Older Persons Center Map":
         ],
         width = 'stretch'
     )
+    
+    # --------------------------------------------------
+    # KPIS
+    # --------------------------------------------------
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        sex_df = pd.DataFrame(
+            {
+                "Sex": ["Female", "Male"],
+                "Population": [
+                    female_seniors,
+                    male_seniors
+                ]
+            }
+        )
+
+        fig = px.pie(
+            sex_df,
+            names="Sex",
+            values="Population",
+            title="Senior Citizens by Sex"
+        )
+
+        st.plotly_chart(
+            fig,
+            width='stretch'
+        )
+
+    with col2:
+
+        age_df = pd.DataFrame(
+            {
+                "Age Group": [
+                    "60-79",
+                    "80+"
+                ],
+                "Population": [
+                    age_60_79,
+                    age_80_plus
+                ]
+            }
+        )
+
+        fig = px.bar(
+            age_df,
+            x="Age Group",
+            y="Population",
+            title="Senior Citizens by Age Group"
+        )
+
+        st.plotly_chart(
+            fig,
+            width='stretch'
+        )
+
+    seniors_per_year = pd.read_csv(
+        "processed/seniors_per_year.csv"
+    )
+
+    seniors_per_year[
+        "senior_citizens_registered_during_the_year"
+    ] = (
+        seniors_per_year[
+            "senior_citizens_registered_during_the_year"
+        ]
+        .astype(str)
+        .str.replace(",", "")
+        .astype(int)
+    )
+
+    fig = px.line(
+        seniors_per_year,
+        x="year",
+        y="senior_citizens_registered_during_the_year",
+        markers=True,
+        title="Registered Senior Citizens Over Time"
+    )
+
+    st.plotly_chart(
+        fig,
+        width='stretch'
+    )
+
+    seniors_barangay = pd.read_csv(
+        "processed/seniors_per_barangay.csv"
+    )
+
+    top_barangays = (
+        seniors_barangay
+        .sort_values(
+            "Senior Citizens",
+            ascending=False
+        )
+        .head(10)
+    )
+
+    st.subheader(
+        "Top 10 Barangays by Number of Senior Citizens"
+    )
+
+    st.dataframe(
+        top_barangays[
+            [
+                "Barangay",
+                "District",
+                "Senior Citizens"
+            ]
+        ],
+        width="stretch"
+    )
+
+    district_seniors = (
+        seniors_barangay
+        .groupby("District")
+        ["Senior Citizens"]
+        .sum()
+        .reset_index()
+    )
+
+    fig = px.bar(
+        district_seniors,
+        x="District",
+        y="Senior Citizens",
+        text_auto=",",
+        title="Senior Citizens by District"
+    )
+
+    st.plotly_chart(
+        fig,
+        width="stretch"
+    )
+
+    facility_counts = (
+        older_person_care
+        .groupby("District")
+        .size()
+        .reset_index(name="Facilities")
+    )
+
+    facility_counts["District"] = (
+        "District "
+        + facility_counts["District"]
+        .astype(int)
+        .astype(str)
+    )
+
+    coverage = district_seniors.merge(
+        facility_counts,
+        on="District",
+        how="left"
+    )
+
+    coverage["Facilities"] = (
+        coverage["Facilities"]
+        .fillna(0)
+    )
+
+    coverage[
+        "Seniors per Facility"
+    ] = (
+        coverage["Senior Citizens"]
+        / coverage["Facilities"]
+    ).round(0)
+
+    st.subheader(
+        "Senior Care Coverage by District"
+    )
+
+    st.dataframe(
+        coverage.sort_values(
+            "Seniors per Facility",
+            ascending=False
+        ),
+        width="stretch"
+    )
+
+
+    facility_mix = (
+        older_person_care["Category"]
+        .value_counts()
+        .reset_index()
+    )
+
+    facility_mix.columns = [
+        "Facility Type",
+        "Count"
+    ]
+
+    fig = px.pie(
+        facility_mix,
+        names="Facility Type",
+        values="Count",
+        title="Older Persons Care Facility Types"
+    )
+
+    st.plotly_chart(
+        fig,
+        width="stretch"
+    )
 
 elif page == "Long-Term Care & Rehabilitation":
 
@@ -1516,6 +2874,54 @@ elif page == "Long-Term Care & Rehabilitation":
     rehabilitation, therapy, and specialized
     recovery services in Quezon City.
     """)
+
+
+    # --------------------------------------------------
+    # REHABILITATION KPIs
+    # --------------------------------------------------
+
+    total_facilities = len(long_term_care)
+
+    total_categories = (
+        long_term_care["Category"]
+        .nunique()
+    )
+
+    covered_barangays = (
+        long_term_care["barangay"]
+        .nunique()
+    )
+
+    covered_districts = (
+        long_term_care["District"]
+        .nunique()
+    )
+
+    k1, k2, k3, k4 = st.columns(4)
+
+    k1.metric(
+        "Facilities",
+        f"{total_facilities:,}"
+    )
+
+    k2.metric(
+        "Service Types",
+        f"{total_categories:,}"
+    )
+
+    k3.metric(
+        "Barangays Served",
+        f"{covered_barangays:,}"
+    )
+
+    k4.metric(
+        "Districts Served",
+        f"{covered_districts:,}"
+    )
+
+    st.divider()
+
+
 
     # ----------------------------------
     # DISTRICT FILTER
@@ -1717,6 +3123,617 @@ elif page == "Long-Term Care & Rehabilitation":
             ]
         ],
         width = 'stretch'
+    )
+
+    # --------------------------------------------------
+    # REHABILITATION KPIs
+    # --------------------------------------------------
+
+    elderly_population = (
+        population_age[
+            "60+ \n(Elderly)"
+        ]
+        .sum()
+    )
+
+    population_total = (
+        population_sex["Total"]
+        .sum()
+    )
+
+    population_per_rehab = (
+        population_total
+        / total_facilities
+    )
+
+    elderly_per_rehab = (
+        elderly_population
+        / total_facilities
+    )
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Total Population",
+        f"{population_total:,.0f}"
+    )
+
+    c2.metric(
+        "Population per Facility",
+        f"{population_per_rehab:,.0f}"
+    )
+
+    c3.metric(
+        "Older Persons per Facility",
+        f"{elderly_per_rehab:,.0f}"
+    )
+
+    st.divider()
+
+    service_mix = (
+        long_term_care["Category"]
+        .value_counts()
+        .reset_index()
+    )
+
+    service_mix.columns = [
+        "Service Type",
+        "Facilities"
+    ]
+
+    fig = px.bar(
+        service_mix,
+        x="Service Type",
+        y="Facilities",
+        title="Long-Term Care and Rehabilitation Services"
+    )
+
+    st.plotly_chart(
+        fig,
+        width="stretch"
+    )
+
+    district_counts = (
+        long_term_care
+        .groupby("District")
+        .size()
+        .reset_index(name="Facilities")
+    )
+
+    fig = px.bar(
+        district_counts,
+        x="District",
+        y="Facilities",
+        text_auto=True,
+        title="Rehabilitation Facilities by District"
+    )
+
+    st.plotly_chart(
+        fig,
+        width="stretch"
+    )
+
+    district_population = (
+        population_sex
+        .groupby("District")
+        ["Total"]
+        .sum()
+        .reset_index()
+    )
+
+    district_facilities = (
+        long_term_care
+        .groupby("District")
+        .size()
+        .reset_index(name="Facilities")
+    )
+
+    coverage = district_population.merge(
+        district_facilities,
+        on="District",
+        how="left"
+    )
+
+    coverage["Facilities"] = (
+        coverage["Facilities"]
+        .fillna(0)
+    )
+
+    coverage[
+        "Population per Facility"
+    ] = (
+        coverage["Total"]
+        / coverage["Facilities"]
+    ).round(0)
+
+    st.subheader(
+        "Coverage by District"
+    )
+
+    st.dataframe(
+        coverage.sort_values(
+            "Population per Facility",
+            ascending=False
+        ),
+        width="stretch"
+    )
+
+    top_categories = (
+        long_term_care["Category"]
+        .value_counts()
+    )
+
+    st.info(
+        f"""
+        Quezon City currently has
+        {total_facilities:,} rehabilitation and long-term care facilities
+        covering {covered_barangays:,} barangays.
+
+        The most common service type is
+        {top_categories.index[0]}
+        ({top_categories.iloc[0]} facilities).
+        """
+    )
+
+
+    ranking = (
+        coverage[
+            [
+                "District",
+                "Population per Facility"
+            ]
+        ]
+        .sort_values(
+            "Population per Facility",
+            ascending=False
+        )
+    )
+
+    st.subheader(
+        "District Priority Ranking"
+    )
+
+    st.dataframe(
+        ranking,
+        width="stretch"
+    )
+
+elif page == "Persons with Disabilities":
+
+    st.title("Persons with Disabilities (PWD)")
+
+    st.markdown("""
+    Overview of registered persons with disabilities in Quezon City,
+    including disability types, registration trends,
+    district distribution, and rehabilitation service coverage.
+    """)
+
+    # --------------------------------------------------
+    # LOAD DATA
+    # --------------------------------------------------
+
+    pwd_sex = pd.read_csv(
+        "processed/persons_with_disability_by_sex.csv"
+    )
+
+    pwd_district = pd.read_csv(
+        "processed/persons_with_disability_by_age_and_sex.csv"
+    )
+
+    pwd_barangay = pd.read_csv(
+        "processed/persons_with_disability_by_barangay.csv"
+    )
+
+    pwd_type = pd.read_csv(
+        "processed/persons_with_disability_per_type.csv"
+    )
+
+    pwd_year = pd.read_csv(
+        "processed/persons_with_disability_per_year.csv"
+    )
+
+    # --------------------------------------------------
+    # CLEANING
+    # --------------------------------------------------
+
+    def clean_num(series):
+
+        return (
+            series.astype(str)
+            .str.replace(",", "", regex=False)
+            .str.replace("%", "", regex=False)
+            .astype(float)
+        )
+
+    pwd_sex["Male"] = clean_num(
+        pwd_sex["Male"]
+    )
+
+    pwd_sex["Female"] = clean_num(
+        pwd_sex["Female"]
+    )
+
+    pwd_district["Registered PWDs in QC"] = clean_num(
+        pwd_district["Registered PWDs in QC"]
+    )
+
+    pwd_district["Population (2020 Census)"] = clean_num(
+        pwd_district["Population (2020 Census)"]
+    )
+
+    pwd_barangay["PWDs"] = clean_num(
+        pwd_barangay["PWDs"]
+    )
+
+    pwd_barangay["Population (2020 Census)"] = clean_num(
+        pwd_barangay["Population (2020 Census)"]
+    )
+
+    pwd_year[
+        "persons_with_disability_registered_during_the_year"
+    ] = clean_num(
+        pwd_year[
+            "persons_with_disability_registered_during_the_year"
+        ]
+    )
+
+    for col in [
+        "2021",
+        "2022",
+        "2023",
+        "2024",
+        "2025",
+        "2026"
+    ]:
+
+        pwd_type[col] = clean_num(
+            pwd_type[col]
+        )
+
+    # --------------------------------------------------
+    # KPIs
+    # --------------------------------------------------
+
+    total_pwd = (
+        pwd_district[
+            "Registered PWDs in QC"
+        ].sum()
+    )
+
+    total_male = (
+        pwd_sex["Male"]
+        .sum()
+    )
+
+    total_female = (
+        pwd_sex["Female"]
+        .sum()
+    )
+
+    disability_types = (
+        pwd_sex[
+            "Type of Disability"
+        ].nunique()
+    )
+
+    rehab_facilities = len(
+        long_term_care
+    )
+
+    barangays_covered = (
+        pwd_barangay[
+            "Barangay"
+        ].nunique()
+    )
+
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
+
+    k1.metric(
+        "Registered PWDs",
+        f"{total_pwd:,.0f}"
+    )
+
+    k2.metric(
+        "Male",
+        f"{total_male:,.0f}"
+    )
+
+    k3.metric(
+        "Female",
+        f"{total_female:,.0f}"
+    )
+
+    k4.metric(
+        "Disability Types",
+        disability_types
+    )
+
+    k5.metric(
+        "Barangays",
+        barangays_covered
+    )
+
+    k6.metric(
+        "Rehab Facilities",
+        rehab_facilities
+    )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # COVERAGE KPI
+    # --------------------------------------------------
+
+    st.metric(
+        "PWDs per Rehabilitation Facility",
+        f"{(total_pwd / rehab_facilities):,.0f}"
+    )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # SEX DISTRIBUTION
+    # --------------------------------------------------
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        sex_df = pd.DataFrame(
+            {
+                "Sex": [
+                    "Male",
+                    "Female"
+                ],
+                "Count": [
+                    total_male,
+                    total_female
+                ]
+            }
+        )
+
+        fig = px.pie(
+            sex_df,
+            names="Sex",
+            values="Count",
+            title="PWD Population by Sex"
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+    with col2:
+
+        disability_totals = pwd_sex.copy()
+
+        disability_totals["Total"] = (
+            disability_totals["Male"]
+            +
+            disability_totals["Female"]
+        )
+
+        fig = px.bar(
+            disability_totals
+            .sort_values(
+                "Total",
+                ascending=False
+            ),
+            x="Type of Disability",
+            y="Total",
+            title="Disability Types"
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # DISTRICT DISTRIBUTION
+    # --------------------------------------------------
+
+    st.subheader(
+        "PWD Population by District"
+    )
+
+    fig = px.bar(
+        pwd_district,
+        x="District",
+        y="Registered PWDs in QC",
+        text_auto=",",
+        title="Registered PWDs by District"
+    )
+
+    st.plotly_chart(
+        fig,
+        width="stretch"
+    )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # REGISTRATION TREND
+    # --------------------------------------------------
+
+    st.subheader(
+        "PWD Registration Trend"
+    )
+
+    fig = px.line(
+        pwd_year,
+        x="year",
+        y="persons_with_disability_registered_during_the_year",
+        markers=True
+    )
+
+    st.plotly_chart(
+        fig,
+        width="stretch"
+    )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # DISABILITY TYPES OVER TIME
+    # --------------------------------------------------
+
+    st.subheader(
+        "Disability Registration Trends"
+    )
+
+    type_long = pwd_type.melt(
+        id_vars="Type of Disability",
+        var_name="Year",
+        value_name="Count"
+    )
+
+    fig = px.line(
+        type_long,
+        x="Year",
+        y="Count",
+        color="Type of Disability"
+    )
+
+    st.plotly_chart(
+        fig,
+        width="stretch"
+    )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # TOP BARANGAYS
+    # --------------------------------------------------
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.subheader(
+            "Top 10 Barangays by PWD Population"
+        )
+
+        st.dataframe(
+            pwd_barangay
+            .sort_values(
+                "PWDs",
+                ascending=False
+            )
+            .head(10),
+            width="stretch"
+        )
+
+    with col2:
+
+        coverage_df = pwd_barangay.copy()
+
+        coverage_df["Coverage_Num"] = (
+            coverage_df["Coverage"]
+            .astype(str)
+            .str.replace(
+                "%",
+                ""
+            )
+            .astype(float)
+        )
+
+        st.subheader(
+            "Highest Coverage Barangays"
+        )
+
+        st.dataframe(
+            coverage_df
+            .sort_values(
+                "Coverage_Num",
+                ascending=False
+            )
+            .head(10),
+            width="stretch"
+        )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # REHABILITATION COVERAGE
+    # --------------------------------------------------
+
+    st.subheader(
+        "PWD Population vs Rehabilitation Services"
+    )
+
+    rehab_by_district = (
+        long_term_care
+        .groupby("District")
+        .size()
+        .reset_index(
+            name="Facilities"
+        )
+    )
+
+    rehab_by_district["District"] = (
+        rehab_by_district["District"]
+        .astype(int)
+        .astype(str)
+    )
+
+    district_map = {
+        "I": "1",
+        "II": "2",
+        "III": "3",
+        "IV": "4",
+        "V": "5",
+        "VI": "6"
+    }
+
+    district_coverage = (
+        pwd_district.copy()
+    )
+
+    district_coverage["District_Num"] = (
+        district_coverage["District"]
+        .map(district_map)
+    )
+
+    district_coverage = (
+        district_coverage.merge(
+            rehab_by_district,
+            left_on="District_Num",
+            right_on="District",
+            how="left"
+        )
+    )
+
+    district_coverage[
+        "PWDs per Facility"
+    ] = (
+        district_coverage[
+            "Registered PWDs in QC"
+        ]
+        /
+        district_coverage[
+            "Facilities"
+        ]
+    ).round(0)
+
+    st.dataframe(
+        district_coverage[
+            [
+                "District_x",
+                "Registered PWDs in QC",
+                "Facilities",
+                "PWDs per Facility"
+            ]
+        ].rename(
+            columns={
+                "District_x":
+                "District"
+            }
+        ),
+        width="stretch"
     )
 
 elif page == "Satellite Offices":
@@ -2163,7 +4180,6 @@ elif page == "Migration Resource Center":
         mig[display_cols],
         width="stretch"
     )
-
 
 elif page == "Care Services Explorer":
 
