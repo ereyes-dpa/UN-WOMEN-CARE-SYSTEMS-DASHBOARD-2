@@ -48,8 +48,11 @@ fcdo_logo = get_base64("assets/fcdo_logo.webp")
 un_logo   = get_base64("assets/unwomen_logo.png")
 qc_logo   = get_base64("assets/qc_logo.png")
 
-left_col, spacer_col, right_col = st.columns([3, 6, 1])
+LOGO_HEIGHT = 60
 
+left_col, spacer_col, right_col = st.columns([1, 6, 3])
+
+# QC Logo (left)
 with left_col:
 
     st.markdown(
@@ -57,23 +60,18 @@ with left_col:
         <div style="
             display:flex;
             align-items:center;
-            gap:20px;
-            height:70px;
+            height:80px;
         ">
-        <a href="https://www.gov.uk/government/organisations/foreign-commonwealth-development-office"
-               target="_blank">
-                <img src="data:image/webp;base64,{fcdo_logo}" height="75">
-        </a>
-        <a href="https://www.unwomen.org/en"
-               target="_blank">
-                <img src="data:image/png;base64,{un_logo}" height="60">
-        </a>
-
+            <a href="https://quezoncity.gov.ph/" target="_blank">
+                <img src="data:image/png;base64,{qc_logo}"
+                     style="height:{50}px; width:auto;">
+            </a>
         </div>
         """,
         unsafe_allow_html=True
     )
 
+# FCDO + UN Women (right)
 with right_col:
 
     st.markdown(
@@ -82,10 +80,18 @@ with right_col:
             display:flex;
             justify-content:flex-end;
             align-items:center;
-            height:70px;
+            gap:20px;
+            height:80px;
         ">
-            <a href="https://quezoncity.gov.ph/" target="_blank">
-                <img src="data:image/png;base64,{qc_logo}" height="50">
+            <a href="https://www.gov.uk/government/organisations/foreign-commonwealth-development-office"
+               target="_blank">
+                <img src="data:image/webp;base64,{fcdo_logo}"
+                     style="height:{90}px; width:auto;">
+            </a>
+            <a href="https://www.unwomen.org/en"
+               target="_blank">
+                <img src="data:image/png;base64,{un_logo}"
+                     style="height:{60}px; width:auto;">
             </a>
         </div>
         """,
