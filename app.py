@@ -44,13 +44,15 @@ h1, h2, h3, h4 {
 # LOGOS ROW
 # --------------------------------------------------
 
-fcdo_logo = get_base64("assets/fcdo_logo.webp")
+fcdo_logo = get_base64("assets/fcdo_logo.png")
 un_logo   = get_base64("assets/unwomen_logo.png")
 qc_logo   = get_base64("assets/qc_logo.png")
 
-LOGO_HEIGHT = 60
+QC_HEIGHT   = 60
+FCDO_HEIGHT = 60
+UN_HEIGHT   = 40
 
-left_col, spacer_col, right_col = st.columns([1, 6, 3])
+left_col, spacer_col, right_col = st.columns([1, 3, 3])
 
 # QC Logo (left)
 with left_col:
@@ -64,7 +66,9 @@ with left_col:
         ">
             <a href="https://quezoncity.gov.ph/" target="_blank">
                 <img src="data:image/png;base64,{qc_logo}"
-                     style="height:{50}px; width:auto;">
+                     style="height:{QC_HEIGHT}px; width:auto;
+                    transform: translateY(14px);
+        ">
             </a>
         </div>
         """,
@@ -86,12 +90,19 @@ with right_col:
             <a href="https://www.gov.uk/government/organisations/foreign-commonwealth-development-office"
                target="_blank">
                 <img src="data:image/webp;base64,{fcdo_logo}"
-                     style="height:{90}px; width:auto;">
+                     style="
+                        height:{FCDO_HEIGHT}px;
+                        width:auto;
+                        transform: translateY(8px);
+                     ">
             </a>
             <a href="https://www.unwomen.org/en"
                target="_blank">
                 <img src="data:image/png;base64,{un_logo}"
-                     style="height:{60}px; width:auto;">
+                     style="
+                        height:{UN_HEIGHT}px;
+                        width:auto;
+                     ">
             </a>
         </div>
         """,
