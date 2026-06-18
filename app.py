@@ -108,7 +108,6 @@ with right_col:
         """,
         unsafe_allow_html=True
     )
-
 # --------------------------------------------------
 # TITLE
 # --------------------------------------------------
@@ -145,7 +144,6 @@ st.divider()
     satellite_offices,
     migration_centers
 ) = load_data()
-
 
 population_summary, population_sex, population_age = load_data_for_kpis()
 
@@ -187,12 +185,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-page = st.sidebar.selectbox(
+main_page = st.sidebar.selectbox(
     "Available Pages",
     [
         "Population Overview",
         "Childcare Centers",
-        "Schools", 
+        "Schools",
         "Health Centers Map",
         "Older Persons Center Map",
         "Long-Term Care & Rehabilitation",
@@ -201,6 +199,21 @@ page = st.sidebar.selectbox(
         "Migration Resource Center",
         "Care Services Explorer"
     ]
+)
+
+accessibility_page = st.sidebar.selectbox(
+    "Accessibility",
+    [
+        "",
+        "Accessibility Analysis",
+        "Care Planning & Investment Priorities"
+    ]
+)
+
+page = (
+    accessibility_page
+    if accessibility_page
+    else main_page
 )
 
 selected_category = "All"
@@ -4603,3 +4616,1296 @@ elif page == "Care Services Explorer":
             st.info(
                 "Click a facility on the map."
             )
+
+elif page == "Accessibility Analysis":
+    care = pd.read_csv(
+        "processed/care_v2.csv"
+    )
+
+    st.title("Accessibility Analysis")
+
+    tab1, tab2 = st.tabs(
+        [
+            "District Analysis",
+            "Barangay Analysis"
+        ]
+    )
+
+
+    with tab1:
+        st.markdown("""
+        This section examines the spatial distribution of care-related
+        services across Quezon City and identifies districts where
+        population needs may exceed available infrastructure.
+        """)
+
+        # ==================================================
+        # CLEAN POPULATION
+        # ==================================================
+
+        pop = population_age.copy()
+
+        age_cols = [
+            "0-5 \n(Early Childhood)",
+            "6-17 \n(School Age Children)",
+            "18-59 \n(Working Age Adult)",
+            "60+ \n(Elderly)",
+            "Total"
+        ]
+
+        for col in age_cols:
+
+            pop[col] = (
+                pop[col]
+                .astype(str)
+                .str.replace(",", "")
+                .astype(float)
+            )
+
+        district_population = (
+            pop.groupby("District")[age_cols]
+            .sum()
+            .reset_index()
+        )
+
+        district_population["District"] = (
+            district_population["District"]
+            .astype(int)
+        )
+
+        # ==================================================
+        # CARE FACILITIES
+        # ==================================================
+
+        care_clean = care.copy()
+
+        care_clean["district"] = (
+            pd.to_numeric(
+                care_clean["district"],
+                errors="coerce"
+            )
+        )
+
+        care_clean = care_clean.dropna(
+            subset=["district"]
+        )
+
+        care_clean["district"] = (
+            care_clean["district"]
+            .astype(int)
+        )
+
+        facility_counts = (
+            care_clean
+            .groupby("district")
+            .size()
+            .reset_index(name="Facilities")
+            .rename(
+                columns={
+                    "district":"District"
+                }
+            )
+        )
+
+        # ==================================================
+        # MERGE
+        # ==================================================
+
+        access = district_population.merge(
+            facility_counts,
+            on="District",
+            how="left"
+        )
+
+        access["Facilities"] = (
+            access["Facilities"]
+            .fillna(0)
+        )
+
+        # ==================================================
+        # INDICATORS
+        # ==================================================
+
+        access["Facilities per 10k Population"] = (
+            access["Facilities"]
+            /
+            access["Total"]
+            * 10000
+        )
+
+        access["Care Gap Index"] = (
+            access["Total"]
+            /
+            access["Facilities"]
+        )
+
+        access = access.replace(
+            [np.inf, -np.inf],
+            np.nan
+        )
+
+        # ==================================================
+        # ACCESSIBILITY INDEX
+        # ==================================================
+
+        min_score = (
+            access["Facilities per 10k Population"]
+            .min()
+        )
+
+        max_score = (
+            access["Facilities per 10k Population"]
+            .max()
+        )
+
+        access["Accessibility Index"] = (
+            (
+                access["Facilities per 10k Population"]
+                - min_score
+            )
+            /
+            (
+                max_score
+                - min_score
+            )
+        ) * 100
+
+        access = access.round(2)
+
+        # ==================================================
+        # KPI CARDS
+        # ==================================================
+
+        avg_score = round(
+            access["Accessibility Index"].mean(),
+            1
+        )
+
+        best_district = int(
+            access.loc[
+                access["Accessibility Index"].idxmax(),
+                "District"
+            ]
+        )
+
+        worst_district = int(
+            access.loc[
+                access["Accessibility Index"].idxmin(),
+                "District"
+            ]
+        )
+
+        total_facilities = int(
+            access["Facilities"].sum()
+        )
+
+        c1, c2, c3, c4 = st.columns(4)
+
+        c1.metric(
+            "Accessibility Index",
+            avg_score
+        )
+
+        c2.metric(
+            "Total Facilities",
+            f"{total_facilities:,}"
+        )
+
+        c3.metric(
+            "Best Served District",
+            best_district
+        )
+
+        c4.metric(
+            "Priority District",
+            worst_district
+        )
+
+        st.divider()
+
+        # ==================================================
+        # DISTRICT GEOMETRY
+        # ==================================================
+
+        barangay_district = (
+            care_clean[
+                ["barangay", "district"]
+            ]
+            .drop_duplicates()
+            .copy()
+        )
+
+        barangay_district["barangay"] = (
+            barangay_district["barangay"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+        geo_tmp = geo.copy()
+
+        geo_tmp["barangay_name"] = (
+            geo_tmp["barangay_name"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+        district_geo = geo_tmp.merge(
+            barangay_district,
+            left_on="barangay_name",
+            right_on="barangay",
+            how="left"
+        )
+
+        district_geo = district_geo.dropna(
+            subset=["district"]
+        )
+
+        district_geo["district"] = (
+            district_geo["district"]
+            .astype(int)
+        )
+
+        district_geo = (
+            district_geo
+            .dissolve(by="district")
+            .reset_index()
+        )
+
+        district_geo = district_geo.rename(
+            columns={
+                "district":"District"
+            }
+        )
+
+        district_geo = district_geo.merge(
+            access[
+                [
+                    "District",
+                    "Accessibility Index"
+                ]
+            ],
+            on="District",
+            how="left"
+        )
+
+        # ==================================================
+        # MAP
+        # ==================================================
+
+        st.subheader(
+            "District Accessibility Map"
+        )
+
+        m = folium.Map(
+            location=[
+                center_lat,
+                center_lon
+            ],
+            zoom_start=11,
+            tiles="CartoDB positron"
+        )
+
+        folium.Choropleth(
+            geo_data=district_geo,
+            data=district_geo,
+            columns=[
+                "District",
+                "Accessibility Index"
+            ],
+            key_on="feature.properties.District",
+            fill_color="PuRd",
+            fill_opacity=0.85,
+            line_opacity=1,
+            legend_name="Accessibility Index"
+        ).add_to(m)
+
+        folium.GeoJson(
+            district_geo,
+            tooltip=folium.GeoJsonTooltip(
+                fields=[
+                    "District",
+                    "Accessibility Index"
+                ]
+            )
+        ).add_to(m)
+
+        st_folium(
+            m,
+            height=700,
+            width="stretch"
+        )
+
+        st.divider()
+
+        # ==================================================
+        # CHARTS
+        # ==================================================
+
+        left, right = st.columns(2)
+
+        with left:
+
+            fig = px.bar(
+                access.sort_values(
+                    "Accessibility Index",
+                    ascending=False
+                ),
+                x="District",
+                y="Accessibility Index",
+                color="Accessibility Index",
+                color_continuous_scale="Purples",
+                title="Accessibility Index by District"
+            )
+
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
+
+        with right:
+
+            fig = px.bar(
+                access.sort_values(
+                    "Care Gap Index",
+                    ascending=False
+                ),
+                x="District",
+                y="Care Gap Index",
+                color="Care Gap Index",
+                color_continuous_scale="Reds",
+                title="Care Gap Index"
+            )
+
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
+
+        st.divider()
+
+        # ==================================================
+        # POPULATION VS FACILITIES
+        # ==================================================
+
+        fig = px.scatter(
+            access,
+            x="Total",
+            y="Facilities",
+            size="Facilities",
+            text="District",
+            color="Accessibility Index",
+            color_continuous_scale="Purples",
+            title="Population vs Care Facilities"
+        )
+
+        fig.update_traces(
+            textposition="top center"
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+        st.divider()
+
+        # ==================================================
+        # PRIORITY DISTRICTS
+        # ==================================================
+
+        st.subheader(
+            "Priority Districts for Future Investment"
+        )
+
+        priority = (
+            access.sort_values(
+                [
+                    "Accessibility Index",
+                    "Care Gap Index"
+                ],
+                ascending=[
+                    True,
+                    False
+                ]
+            )
+            .head(5)
+        )
+
+        st.dataframe(
+            priority,
+            width="stretch"
+        )
+
+        st.divider()
+
+        # ==================================================
+        # FULL TABLE
+        # ==================================================
+
+        st.subheader(
+            "District Accessibility Indicators"
+        )
+
+        st.dataframe(
+            access,
+            width="stretch"
+        )
+
+    with tab2:
+
+        st.subheader(
+            "Barangay-Level Accessibility"
+        )
+
+        # ==================================================
+        # POPULATION
+        # ==================================================
+
+        barangay_pop = population_age.copy()
+
+        age_cols = [
+            "0-5 \n(Early Childhood)",
+            "6-17 \n(School Age Children)",
+            "18-59 \n(Working Age Adult)",
+            "60+ \n(Elderly)",
+            "Total"
+        ]
+
+        for col in age_cols:
+
+            barangay_pop[col] = (
+                barangay_pop[col]
+                .astype(str)
+                .str.replace(",", "")
+                .astype(float)
+            )
+
+        barangay_pop["Barangay"] = (
+            barangay_pop["Barangay"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+        # ==================================================
+        # CARE FACILITY COUNTS
+        # ==================================================
+
+        barangay_facilities = (
+            care_clean
+            .groupby("barangay")
+            .size()
+            .reset_index(name="Facilities")
+        )
+
+        barangay_facilities["barangay"] = (
+            barangay_facilities["barangay"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+        # ==================================================
+        # MERGE
+        # ==================================================
+
+        barangay_access = barangay_pop.merge(
+            barangay_facilities,
+            left_on="Barangay",
+            right_on="barangay",
+            how="left"
+        )
+
+        barangay_access["Facilities"] = (
+            barangay_access["Facilities"]
+            .fillna(0)
+        )
+
+        # ==================================================
+        # INDICATORS
+        # ==================================================
+
+        barangay_access[
+            "Facilities per 10k Population"
+        ] = (
+            barangay_access["Facilities"]
+            /
+            barangay_access["Total"]
+            * 10000
+        )
+
+        barangay_access[
+            "Care Gap Index"
+        ] = (
+            barangay_access["Total"]
+            /
+            barangay_access["Facilities"]
+        )
+
+        barangay_access = barangay_access.replace(
+            [np.inf, -np.inf],
+            np.nan
+        )
+
+        # ==================================================
+        # ACCESSIBILITY INDEX
+        # ==================================================
+
+        min_score = (
+            barangay_access[
+                "Facilities per 10k Population"
+            ].min()
+        )
+
+        max_score = (
+            barangay_access[
+                "Facilities per 10k Population"
+            ].max()
+        )
+
+        barangay_access[
+            "Accessibility Index"
+        ] = (
+            (
+                barangay_access[
+                    "Facilities per 10k Population"
+                ]
+                - min_score
+            )
+            /
+            (
+                max_score
+                - min_score
+            )
+        ) * 100
+
+        barangay_access = (
+            barangay_access
+            .round(2)
+        ) 
+        # ==================================================
+        # KPI CARDS
+        # ==================================================
+
+        no_facilities = (
+            barangay_access["Facilities"] == 0
+        ).sum()
+
+        avg_access = round(
+            barangay_access[
+                "Accessibility Index"
+            ].mean(),
+            1
+        )
+
+        top_barangay = (
+            barangay_access.loc[
+                barangay_access[
+                    "Accessibility Index"
+                ].idxmax(),
+                "Barangay"
+            ]
+        )
+
+        c1, c2, c3 = st.columns(3)
+
+        c1.metric(
+            "Average Accessibility",
+            avg_access
+        )
+
+        c2.metric(
+            "Barangays Without Facilities",
+            int(no_facilities)
+        )
+
+        c3.metric(
+            "Best Served Barangay",
+            str(top_barangay)
+        )
+
+        st.divider()
+
+        # ==================================================
+        # BARANGAY MAP
+        # ==================================================
+
+        barangay_geo = geo.copy()
+
+        barangay_geo["barangay_name"] = (
+            barangay_geo["barangay_name"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+        barangay_geo = barangay_geo.merge(
+            barangay_access[
+                [
+                    "Barangay",
+                    "Facilities",
+                    "Total",
+                    "Accessibility Index"
+                ]
+            ],
+            left_on="barangay_name",
+            right_on="Barangay",
+            how="left"
+        )
+
+        st.subheader(
+            "Barangay Accessibility Map"
+        )
+
+        m = folium.Map(
+            location=[
+                center_lat,
+                center_lon
+            ],
+            zoom_start=11,
+            tiles="CartoDB positron"
+        )
+
+        folium.Choropleth(
+            geo_data=barangay_geo,
+            data=barangay_geo,
+            columns=[
+                "barangay_name",
+                "Accessibility Index"
+            ],
+            key_on="feature.properties.barangay_name",
+            fill_color="PuRd",
+            fill_opacity=0.85,
+            line_opacity=0.4,
+            legend_name="Accessibility Index"
+        ).add_to(m)
+
+        folium.GeoJson(
+            barangay_geo,
+            tooltip=folium.GeoJsonTooltip(
+                fields=[
+                    "Barangay",
+                    "Facilities",
+                    "Total",
+                    "Accessibility Index"
+                ],
+                aliases=[
+                    "Barangay",
+                    "Facilities",
+                    "Population",
+                    "Accessibility Index"
+                ]
+            )
+        ).add_to(m)
+
+        st_folium(
+            m,
+            height=750,
+            width="stretch"
+        )
+
+        st.divider()
+
+        # ==================================================
+        # MOST UNDERSERVED BARANGAYS
+        # ==================================================
+
+        underserved = (
+            barangay_access
+            .sort_values(
+                "Accessibility Index"
+            )
+            .head(20)
+        )
+
+        fig = px.bar(
+            underserved,
+            x="Accessibility Index",
+            y="Barangay",
+            orientation="h",
+            color="Accessibility Index",
+            color_continuous_scale="Reds",
+            title="Most Underserved Barangays"
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+        # ==================================================
+        # POPULATION VS FACILITIES
+        # ==================================================
+
+        fig = px.scatter(
+            barangay_access,
+            x="Total",
+            y="Facilities",
+            size="Facilities",
+            hover_name="Barangay",
+            color="Accessibility Index",
+            color_continuous_scale="Purples",
+            title="Population vs Facilities"
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+        st.divider()
+
+        # ==================================================
+        # PRIORITY BARANGAYS
+        # ==================================================
+
+        st.subheader(
+            "Priority Barangays"
+        )
+
+        priority_barangays = (
+            barangay_access
+            .sort_values(
+                [
+                    "Accessibility Index",
+                    "Total"
+                ],
+                ascending=[
+                    True,
+                    False
+                ]
+            )
+            .head(25)
+        )
+
+        st.dataframe(
+            priority_barangays[
+                [
+                    "Barangay",
+                    "District",
+                    "Total",
+                    "Facilities",
+                    "Facilities per 10k Population",
+                    "Accessibility Index"
+                ]
+            ],
+            width="stretch"
+        )
+
+        st.divider()
+
+        # ==================================================
+        # FULL TABLE
+        # ==================================================
+
+        st.subheader(
+            "Barangay Accessibility Indicators"
+        )
+
+        st.dataframe(
+            barangay_access,
+            width="stretch"
+        )
+
+
+elif page == "Care Planning & Investment Priorities":
+
+    care = pd.read_csv(
+        "processed/care_v2.csv"
+    )
+
+    st.title(
+        "Care Planning & Investment Priorities"
+    )
+
+    st.markdown("""
+    This section identifies barangays where future
+    care-related investments may have the greatest impact.
+
+    The analysis combines population demand,
+    existing infrastructure, care burden,
+    and service diversity to prioritize
+    areas for intervention.
+    """)
+
+    # ==================================================
+    # CLEAN POPULATION
+    # ==================================================
+
+    pop = population_age.copy()
+
+    age_cols = [
+        "0-5 \n(Early Childhood)",
+        "6-17 \n(School Age Children)",
+        "18-59 \n(Working Age Adult)",
+        "60+ \n(Elderly)",
+        "Total"
+    ]
+
+    for col in age_cols:
+
+        pop[col] = (
+            pop[col]
+            .astype(str)
+            .str.replace(",", "")
+            .astype(float)
+        )
+
+    # ==================================================
+    # CLEAN CARE DATA
+    # ==================================================
+
+    care_clean = care.copy()
+
+    care_clean["barangay"] = (
+        care_clean["barangay"]
+        .astype(str)
+        .str.strip()
+    )
+
+    care_clean = care_clean[
+        care_clean["barangay"].notna()
+    ]
+
+    # ==================================================
+    # FACILITY COUNTS
+    # ==================================================
+
+    facility_counts = (
+        care_clean
+        .groupby("barangay")
+        .size()
+        .reset_index(name="Facilities")
+    )
+
+    # ==================================================
+    # DIVERSITY INDEX
+    # ==================================================
+
+    diversity = (
+        care_clean
+        .groupby("barangay")["major_division"]
+        .nunique()
+        .reset_index(name="Service Diversity")
+    )
+
+    # ==================================================
+    # POPULATION
+    # ==================================================
+
+    barangay_access = (
+        pop.merge(
+            facility_counts,
+            left_on="Barangay",
+            right_on="barangay",
+            how="left"
+        )
+    )
+
+    barangay_access = barangay_access.merge(
+        diversity,
+        left_on="Barangay",
+        right_on="barangay",
+        how="left"
+    )
+
+    barangay_access["Facilities"] = (
+        barangay_access["Facilities"]
+        .fillna(0)
+    )
+
+    barangay_access["Service Diversity"] = (
+        barangay_access["Service Diversity"]
+        .fillna(0)
+    )
+
+    # ==================================================
+    # CARE BURDEN
+    # ==================================================
+
+    barangay_access["Care Burden"] = (
+        barangay_access["0-5 \n(Early Childhood)"]
+        +
+        barangay_access["60+ \n(Elderly)"]
+    )
+
+    barangay_access["Facilities per 10k Population"] = (
+        barangay_access["Facilities"]
+        /
+        barangay_access["Total"]
+        * 10000
+    )
+
+    barangay_access["Care Burden per Facility"] = (
+        barangay_access["Care Burden"]
+        /
+        barangay_access["Facilities"]
+    )
+
+    barangay_access = barangay_access.replace(
+        [np.inf, -np.inf],
+        np.nan
+    )
+
+    # ==================================================
+    # RANKS
+    # ==================================================
+
+    barangay_access["Population Rank"] = (
+        barangay_access["Total"]
+        .rank(
+            ascending=False
+        )
+    )
+
+    barangay_access["Burden Rank"] = (
+        barangay_access["Care Burden"]
+        .rank(
+            ascending=False
+        )
+    )
+
+    barangay_access["Facility Rank"] = (
+        barangay_access["Facilities"]
+        .rank(
+            ascending=True
+        )
+    )
+
+    barangay_access["Diversity Rank"] = (
+        barangay_access["Service Diversity"]
+        .rank(
+            ascending=True
+        )
+    )
+
+    # ==================================================
+    # PRIORITY SCORE
+    # ==================================================
+
+    barangay_access["Priority Score"] = (
+        barangay_access["Population Rank"] * 0.35
+        +
+        barangay_access["Burden Rank"] * 0.35
+        +
+        barangay_access["Facility Rank"] * 0.20
+        +
+        barangay_access["Diversity Rank"] * 0.10
+    )
+
+    max_score = (
+        barangay_access["Priority Score"]
+        .max()
+    )
+
+    barangay_access["Priority Score"] = (
+        barangay_access["Priority Score"]
+        /
+        max_score
+        * 100
+    )
+
+    barangay_access = (
+        barangay_access
+        .sort_values(
+            "Priority Score",
+            ascending=False
+        )
+    )
+
+    # ==================================================
+    # KPI CARDS
+    # ==================================================
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+
+        st.metric(
+            "Total Barangays",
+            len(barangay_access)
+        )
+
+    with col2:
+
+        st.metric(
+            "Care Desert Barangays",
+            int(
+                (
+                    barangay_access["Facilities"] == 0
+                ).sum()
+            )
+        )
+
+    with col3:
+
+        st.metric(
+            "Highest Priority Barangay",
+            barangay_access.iloc[0]["Barangay"]
+        )
+
+    with col4:
+
+        st.metric(
+            "Average Priority Score",
+            round(
+                barangay_access[
+                    "Priority Score"
+                ].mean(),
+                1
+            )
+        )
+
+    st.divider()
+
+    # ==================================================
+    # MAP
+    # ==================================================
+
+    priority_map = geo.merge(
+        barangay_access,
+        left_on="barangay_name",
+        right_on="Barangay",
+        how="left"
+    )
+
+    st.subheader(
+        "Priority Investment Map"
+    )
+
+    m = folium.Map(
+        location=[
+            center_lat,
+            center_lon
+        ],
+        zoom_start=11,
+        tiles="CartoDB positron"
+    )
+
+    folium.Choropleth(
+        geo_data=priority_map,
+        data=priority_map,
+        columns=[
+            "barangay_name",
+            "Priority Score"
+        ],
+        key_on="feature.properties.barangay_name",
+        fill_color="PuRd",
+        fill_opacity=0.8,
+        line_opacity=0.5,
+        legend_name="Priority Score"
+    ).add_to(m)
+
+    folium.GeoJson(
+        priority_map,
+        tooltip=folium.GeoJsonTooltip(
+            fields=[
+                "Barangay",
+                "Facilities",
+                "Care Burden",
+                "Service Diversity",
+                "Priority Score"
+            ]
+        )
+    ).add_to(m)
+
+    st_folium(
+        m,
+        height=750,
+        width="stretch"
+    )
+
+    st.divider()
+
+    # ==================================================
+    # TOP 25 PRIORITY BARANGAYS
+    # ==================================================
+
+    st.subheader(
+        "Top 25 Priority Barangays"
+    )
+
+    st.dataframe(
+        barangay_access[
+            [
+                "Barangay",
+                "District",
+                "Total",
+                "Facilities",
+                "Care Burden",
+                "Service Diversity",
+                "Priority Score"
+            ]
+        ].head(25),
+        width="stretch"
+    )
+
+    # ==================================================
+    # CHART
+    # ==================================================
+
+    fig = px.bar(
+        barangay_access.head(25),
+        x="Priority Score",
+        y="Barangay",
+        orientation="h",
+        color="Priority Score",
+        title="Highest Priority Barangays"
+    )
+
+    fig.update_layout(
+        height=700
+    )
+
+    st.plotly_chart(
+        fig,
+        width="stretch"
+    )
+
+    st.divider()
+
+    # ==================================================
+    # CARE DESERTS
+    # ==================================================
+
+    st.subheader(
+        "Care Desert Barangays"
+    )
+
+    care_deserts = (
+        barangay_access[
+            barangay_access["Facilities"] == 0
+        ]
+        .sort_values(
+            "Care Burden",
+            ascending=False
+        )
+    )
+
+    st.markdown("""
+    Barangays classified as care deserts currently have
+    no registered care facilities in the inventory.
+    These areas may require additional assessment to
+    identify service gaps and potential investment needs.
+    """)
+
+    st.metric(
+        "Care Desert Barangays",
+        len(care_deserts)
+    )
+
+    st.dataframe(
+        care_deserts[
+            [
+                "Barangay",
+                "District",
+                "Total",
+                "Care Burden",
+                "Priority Score"
+            ]
+        ],
+        width="stretch"
+    )
+
+    st.divider()
+
+    # ==================================================
+    # PRIORITY DRIVERS
+    # ==================================================
+
+    st.subheader(
+        "What Drives Priority Scores?"
+    )
+
+    driver_col1, driver_col2 = st.columns(2)
+
+    with driver_col1:
+
+        fig = px.scatter(
+            barangay_access,
+            x="Care Burden",
+            y="Priority Score",
+            hover_name="Barangay",
+            title="Care Burden vs Priority Score",
+            color="Priority Score"
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+    with driver_col2:
+
+        fig = px.scatter(
+            barangay_access,
+            x="Facilities",
+            y="Priority Score",
+            hover_name="Barangay",
+            title="Facilities vs Priority Score",
+            color="Priority Score"
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+    st.divider()
+
+    # ==================================================
+    # SERVICE DIVERSITY
+    # ==================================================
+
+    st.subheader(
+        "Service Diversity by Barangay"
+    )
+
+    diversity_top = (
+        barangay_access
+        .sort_values(
+            "Service Diversity",
+            ascending=False
+        )
+        .head(20)
+    )
+
+    fig = px.bar(
+        diversity_top,
+        x="Service Diversity",
+        y="Barangay",
+        orientation="h",
+        color="Service Diversity",
+        title="Barangays with the Most Diverse Care Services"
+    )
+
+    fig.update_layout(
+        height=700
+    )
+
+    st.plotly_chart(
+        fig,
+        width="stretch"
+    )
+
+    st.divider()
+
+
+    # ==================================================
+    # DOWNLOAD TABLE
+    # ==================================================
+
+    csv = (
+        barangay_access
+        .to_csv(index=False)
+        .encode("utf-8")
+    )
+
+    st.download_button(
+        "Download Priority Planning Table",
+        csv,
+        "priority_barangays.csv",
+        "text/csv"
+    )
