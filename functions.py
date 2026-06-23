@@ -1,8 +1,11 @@
 import base64
+import json
 import streamlit as st
 import pandas as pd
 import geopandas as gpd
+import folium
 
+@st.cache_data
 def get_base64(img_path):
     with open(img_path, "rb") as f:
         return base64.b64encode(f.read()).decode()
@@ -207,14 +210,129 @@ def health_category_mapper(cat):
 
     return "Other"
 
+
+# --------------------------------------------------
+# CLEANNING
+# --------------------------------------------------
+def clean_health_centers(df) :
+    df["Category"] = (
+        df["category"]
+        .apply(health_category_mapper)
+    )
+
+    df = df.rename(
+        columns={
+            "name_original": "Name",
+            "address_clean": "Address",
+            "district": "District"
+        }
+    )
+
+    df["District"] = pd.to_numeric(
+        df["District"],
+        errors="coerce"
+    ).astype("Int64")
+
+    df["Name"] = df["Name"].str.title()
+
+
+    return df
+
+def clean_dataframe(df) :
+    df = df.rename(
+    columns={
+            "name_original": "Name",
+            "district": "District",
+            "address_clean": "Address",
+            "sub_division": "Sector",
+            "category": "Category"
+        }
+    )
+
+    df = df.dropna(
+        subset=[
+            "latitude",
+            "longitude"
+        ]
+    )
+
+    df["Name"] = df["Name"].str.title()
+
+    df["District"] = (
+        pd.to_numeric(df["District"], errors="coerce")
+        .astype("Int64")
+    )
+        
+    return df
+
 @st.cache_data
-def load_data():
-    geo = gpd.read_file(
+def load_geo():
+    gdf = gpd.read_file(
         "processed/qc_barangays.geojson",
         engine="pyogrio"
     )
 
+    bounds = gdf.total_bounds
+
+    return gdf.__geo_interface__, bounds
+
+@st.cache_data
+def load_geo_explorer():
+
+    gdf = gpd.read_file(
+        "processed/qc_barangays.geojson",
+        engine="pyogrio"
+    )
+
+    gdf["geometry"] = (
+        gdf.geometry
+        .simplify(
+            tolerance=0.0001,
+            preserve_topology=True
+        )
+    )
+
+    bounds = gdf.total_bounds
+
+    return gdf.__geo_interface__, bounds
+
+
+@st.cache_resource
+def get_boundary_geojson(geo_json):
+    return folium.GeoJson(
+        geo_json,
+        style_function=lambda x: {
+            "fillColor": "#7fbf7f",
+            "color": "#666666",
+            "weight": 1,
+            "fillOpacity": 0.15,
+        }
+    )
+
+@st.cache_data
+def load_data():
+
     care = pd.read_csv("processed/care_v3.csv")
+
+    category_cols = [
+        "major_division",
+        "sub_division",
+        "category"
+    ]
+
+    for col in category_cols:
+        if col in care.columns:
+            care[col] = care[col].astype("category")
+
+    care["open_hours"] = (
+        care["open_hours"]
+        .fillna("Not available")
+    )
+
+    care["close_hours"] = (
+        care["close_hours"]
+        .fillna("Not available")
+    )        
 
     # Clean coordinates
     care["latitude"] = pd.to_numeric(
@@ -261,8 +379,20 @@ def load_data():
         care["major_division"] == "Trainings"
     ].copy()
 
+    # --------------------------------------------------
+    # CLEANING
+    # --------------------------------------------------
+
+    health_centers            = clean_health_centers(health_centers)
+    childcare_centers         = clean_dataframe(childcare_centers)
+    schools                   = clean_dataframe(schools)
+    older_person_care         = clean_dataframe(older_person_care)
+    long_term_care            = clean_dataframe(long_term_care)
+    satellite_offices         = clean_dataframe(satellite_offices)
+    satellite_offices["Name"] = "District " + satellite_offices["District"].astype(int).astype(str)
+    migration_centers         = clean_dataframe(migration_centers)
+
     return (
-        geo,
         childcare_centers,
         schools,
         health_centers,
@@ -313,11 +443,6 @@ def load_data_for_kpis():
         )
 
 
-
-
-
-
-
     return (
         population_summary, 
         population_sex,
@@ -325,54 +450,12 @@ def load_data_for_kpis():
     )
     
 
+def hex_to_rgb(hex_color):
 
-# --------------------------------------------------
-# CLEANNING
-# --------------------------------------------------
-def clean_health_centers(df) :
-    df["Category"] = (
-        df["category"]
-        .apply(health_category_mapper)
-    )
+    hex_color = hex_color.lstrip("#")
 
-    df = df.rename(
-        columns={
-            "name_original": "Name of Facility",
-            "address_clean": "Address",
-            "district": "District"
-        }
-    )
-
-    df["District"] = (
-        df["District"]
-        .astype(int)
-        .astype(str)
-    )
-
-    df["Name of Facility"] = df["Name of Facility"].str.title()
-
-
-    return df
-
-def clean_dataframe(df) :
-    df = df.rename(
-    columns={
-            "name_original": "Name",
-            "district": "District",
-            "address_clean": "Address",
-            "sub_division": "Sector",
-            "category": "Category"
-        }
-    )
-
-    df = df.dropna(
-        subset=[
-            "latitude",
-            "longitude"
-        ]
-    )
-
-    df["Name"] = df["Name"].str.title()
-    
-
-    return df
+    return [
+        int(hex_color[0:2], 16),
+        int(hex_color[2:4], 16),
+        int(hex_color[4:6], 16)
+    ]
