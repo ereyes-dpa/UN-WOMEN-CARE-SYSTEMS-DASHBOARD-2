@@ -214,7 +214,22 @@ def load_data():
         engine="pyogrio"
     )
 
-    care = pd.read_csv("processed/care.csv")
+    care = pd.read_csv("processed/care_v3.csv")
+
+    # Clean coordinates
+    care["latitude"] = pd.to_numeric(
+        care["latitude"],
+        errors="coerce"
+    )
+
+    care["longitude"] = pd.to_numeric(
+        care["longitude"],
+        errors="coerce"
+    )
+
+    care = care.dropna(
+        subset=["latitude", "longitude"]
+    )
 
     childcare_centers = care[
         care["major_division"] == "Childcare"
@@ -224,44 +239,92 @@ def load_data():
         care["major_division"] == "Schools"
     ].copy()
 
-    health_centers = (
-        care[
-            care["major_division"] == "Health centers"
-        ]
-        .copy()
-    )   
+    health_centers = care[
+        care["major_division"] == "Health centers"
+    ].copy()
 
-    older_person_care = (
-            care[
-                care["major_division"] == "Older persons care"
-            ]
-            .copy()
-        ) 
-    
+    older_person_care = care[
+        care["major_division"] == "Older persons care"
+    ].copy()
+
     long_term_care = care[
         care["major_division"]
         == "Long-term care and rehabilitation services"
-        ].copy()
-    
+    ].copy()
+
     satellite_offices = care[
         care["major_division"]
         == "Quezon City satellite offices for services"
-        ].copy()
-    
+    ].copy()
+
     migration_centers = care[
         care["major_division"] == "Trainings"
     ].copy()
 
     return (
-        geo, 
+        geo,
         childcare_centers,
         schools,
         health_centers,
-        older_person_care, 
+        older_person_care,
         long_term_care,
         satellite_offices,
         migration_centers
     )
+
+
+@st.cache_data
+def load_data_for_kpis():
+    population_summary = pd.read_csv(
+    "processed/population_summary.csv"
+    )
+
+    population_sex = pd.read_csv(
+        "processed/population_2024_by_sex.csv"
+    )
+
+    population_age = pd.read_csv(
+        "processed/population_2024_by_age_group.csv"
+    )
+
+
+    for col in ["Male", "Female", "Total"]:
+        population_sex[col] = (
+            population_sex[col]
+            .astype(str)
+            .str.replace(",", "")
+            .astype(int)
+        )
+
+    age_cols = [
+        "0-5 \n(Early Childhood)",
+        "6-17 \n(School Age Children)",
+        "18-59 \n(Working Age Adult)",
+        "60+ \n(Elderly)",
+        "Total"
+    ]
+
+    for col in age_cols:
+        population_age[col] = (
+            population_age[col]
+            .astype(str)
+            .str.replace(",", "")
+            .astype(int)
+        )
+
+
+
+
+
+
+
+    return (
+        population_summary, 
+        population_sex,
+        population_age
+    )
+    
+
 
 # --------------------------------------------------
 # CLEANNING
