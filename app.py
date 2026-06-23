@@ -118,13 +118,13 @@ st.markdown(
     <h1 style="
         text-align:center;
         color:#7F47ED;
-        font-size:3.0rem;
+        font-size:2.6rem;
         margin-top:5px;
-        margin-bottom:15px;
+        margin-bottom:0px;
         line-height:1.1;
     ">
         Quezon Caring City Dashboard
-    </h1>
+    <
     """,
     unsafe_allow_html=True
 )
@@ -150,14 +150,14 @@ st.divider()
 # CLEANING
 # --------------------------------------------------
 
-health_centers    = clean_health_centers(health_centers)
-childcare_centers = clean_dataframe(childcare_centers)
-schools           = clean_dataframe(schools)
-older_person_care    = clean_dataframe(older_person_care)
-long_term_care    = clean_dataframe(long_term_care)
-satellite_offices = clean_dataframe(satellite_offices)
+health_centers            = clean_health_centers(health_centers)
+childcare_centers         = clean_dataframe(childcare_centers)
+schools                   = clean_dataframe(schools)
+older_person_care         = clean_dataframe(older_person_care)
+long_term_care            = clean_dataframe(long_term_care)
+satellite_offices         = clean_dataframe(satellite_offices)
 satellite_offices["Name"] = "District " + satellite_offices["District"].astype(int).astype(str)
-migration_centers = clean_dataframe(migration_centers)
+migration_centers         = clean_dataframe(migration_centers)
 
 # --------------------------------------------------
 # QC CENTER
@@ -168,11 +168,6 @@ minx, miny, maxx, maxy = geo.total_bounds
 center_lon = (minx + maxx) / 2
 center_lat = (miny + maxy) / 2
 
-# --------------------------------------------------
-# SIDEBAR
-# --------------------------------------------------
-
-st.sidebar.title("Navigation")
 
 st.markdown("""
 <style>
@@ -184,21 +179,120 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-page = st.sidebar.selectbox(
-    "Available Care Maps",
-    [
-        "Childcare Centers",
-        "Schools", 
-        "Health Centers Map",
-        "Older Persons Center Map",
-        "Long-Term Care & Rehabilitation",
-        "Satellite Offices",
-        "Migration Resource Center",
-        "Care Services Explorer"
-    ]
-)
+# --------------------------------------------------
+# SIDEBAR STYLE
+# --------------------------------------------------
 
-selected_category = "All"
+st.markdown("""
+<style>
+
+/* Sidebar titles */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color: #7F47ED !important;
+}
+
+/* Reduce top padding */
+[data-testid="stSidebarContent"] {
+    padding-top: -15rem;
+}
+
+/* Compact buttons */
+[data-testid="stSidebar"] .stButton > button {
+    min-height: 0px;
+    padding: 0rem 0rem;
+    font-size: 0.85rem;
+    border-radius: 5px;
+}
+
+/* Reduce spacing between widgets */
+[data-testid="stSidebar"] .element-container {
+    margin-bottom: 0.0001rem;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# --------------------------------------------------
+# PAGE STATE
+# --------------------------------------------------
+
+if "page" not in st.session_state:
+    st.session_state.page = "Childcare Centers"
+
+# --------------------------------------------------
+# SIDEBAR
+# --------------------------------------------------
+
+st.sidebar.title("Navigation")
+
+# --------------------------------------------------
+# CARE MAPS
+# --------------------------------------------------
+
+st.sidebar.subheader("Care Maps")
+
+if st.sidebar.button(
+    "Childcare Centers",
+    use_container_width=True
+):
+    st.session_state.page = "Childcare Centers"
+
+if st.sidebar.button(
+    "Schools",
+    use_container_width=True
+):
+    st.session_state.page = "Schools"
+
+if st.sidebar.button(
+    "Health Centers Map",
+    use_container_width=True
+):
+    st.session_state.page = "Health Centers Map"
+
+if st.sidebar.button(
+    "Older Persons Center Map",
+    use_container_width=True
+):
+    st.session_state.page = "Older Persons Center Map"
+
+if st.sidebar.button(
+    "Long-Term Care & Rehabilitation",
+    use_container_width=True
+):
+    st.session_state.page = "Long-Term Care & Rehabilitation"
+
+if st.sidebar.button(
+    "Satellite Offices",
+    use_container_width=True
+):
+    st.session_state.page = "Satellite Offices"
+
+if st.sidebar.button(
+    "Migration Resource Center",
+    use_container_width=True
+):
+    st.session_state.page = "Migration Resource Center"
+
+# --------------------------------------------------
+# TOOLS
+# --------------------------------------------------
+
+st.sidebar.subheader("Additional Tools")
+
+if st.sidebar.button(
+    "Care Services Explorer",
+    use_container_width=True
+):
+    st.session_state.page = "Care Services Explorer"
+
+# --------------------------------------------------
+# ACTIVE PAGE
+# --------------------------------------------------
+
+page = st.session_state.page
+
 
 if page == "Childcare Centers":
 
@@ -591,7 +685,20 @@ if page == "Care Services Explorer":
 
 if page == "Childcare Centers":
 
-    st.title("Child Care Facilities")
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Childcare Facilities
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
 
     st.markdown("""
     Explore the spatial distribution of childcare facilities in Quezon City,
@@ -612,9 +719,11 @@ if page == "Childcare Centers":
     )
 
     selected_district = st.selectbox(
-        "District",
-        ["All"] + list(districts)
+        "Select the district",
+        ["All"] + [f"District {d}" for d in districts]
     )
+
+    st.info("Click a facility on the map.")
 
     # --------------------------------------------------
     # DATA FILTERING
@@ -624,9 +733,13 @@ if page == "Childcare Centers":
 
     if selected_district != "All":
 
+        district_number = int(
+            selected_district.replace("District ", "")
+        )
+
         cc = cc[
             cc["District"].astype(int)
-            == selected_district
+            == district_number
         ]
 
     if selected_childcare_sector != "All":
@@ -652,26 +765,15 @@ if page == "Childcare Centers":
         ]
 
     # --------------------------------------------------
-    # SESSION STATE
-    # --------------------------------------------------
-
-    if "selected_childcare_facility" not in st.session_state:
-
-        st.session_state.selected_childcare_facility = None
-
-    # --------------------------------------------------
-    # LAYOUT
-    # --------------------------------------------------
-
-    map_col, info_col = st.columns([2, 1])
-
-    # --------------------------------------------------
     # MAP
     # --------------------------------------------------
 
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=12,
+        min_zoom=11,
+        max_zoom=17,
+        max_bounds=True,
         tiles="CartoDB positron"
     )
 
@@ -699,6 +801,18 @@ if page == "Childcare Centers":
         Address: {row['Address']}
         """
 
+        if (
+            "open_hours" in row.index
+            and pd.notna(row["open_hours"])
+        ):
+            popup_html += f"<br>Open: {row['open_hours']}"
+
+        if (
+            "close_hours" in row.index
+            and pd.notna(row["close_hours"])
+        ):
+            popup_html += f"<br>Close: {row['close_hours']}"
+
         folium.CircleMarker(
             location=[
                 row["latitude"],
@@ -710,7 +824,10 @@ if page == "Childcare Centers":
             fill_color=childcare_color(row["Category"]),
             fill_opacity=0.9,
             weight=2,
-            popup=folium.Popup(popup_html, max_width=350),
+            popup=folium.Popup(
+                popup_html,
+                max_width=350
+            ),
             tooltip=row["Name"]
         ).add_to(m)
 
@@ -718,130 +835,28 @@ if page == "Childcare Centers":
     # MAP DISPLAY
     # --------------------------------------------------
 
-    with map_col:
-
-        map_data = st_folium(
-            m,
-            height=700,
-            returned_objects=["last_object_clicked"]
-        )
-
-    # --------------------------------------------------
-    # CLICK DETECTION
-    # --------------------------------------------------
-
-    if (
-        map_data
-        and map_data.get("last_object_clicked")
-    ):
-
-        clicked_lat = map_data["last_object_clicked"]["lat"]
-        clicked_lon = map_data["last_object_clicked"]["lng"]
-
-        tmp = cc.copy()
-
-        tmp["distance"] = (
-            (tmp["latitude"] - clicked_lat) ** 2 +
-            (tmp["longitude"] - clicked_lon) ** 2
-        )
-
-        st.session_state.selected_childcare_facility = (
-            tmp.loc[
-                tmp["distance"].idxmin()
-            ]
-        )
-
-    # --------------------------------------------------
-    # INFO PANEL
-    # --------------------------------------------------
-
-    with info_col:
-
-        st.subheader("Facility Details")
-
-        if st.session_state.selected_childcare_facility is not None:
-
-            facility = (
-                st.session_state.selected_childcare_facility
-            )
-
-            st.markdown(
-                f"### {facility['Name']}"
-            )
-
-            st.write(
-                f"**Sector:** {facility['Sector']}"
-            )
-
-            st.write(
-                f"**Category:** {facility['Category']}"
-            )
-
-            st.write(
-                f"**District:** {int(facility['District'])}"
-            )
-            
-            st.write(
-                f"**Address:** {facility['Address']}"
-            )
-
-            if (
-                "open_hours" in facility.index
-                and "close_hours" in facility.index
-                and pd.notna(facility["open_hours"])
-                and pd.notna(facility["close_hours"])
-            ):
-
-                st.write(
-                    f"**Hours:** {facility['open_hours']} – {facility['close_hours']}"
-                )
-
-            elif (
-                "open_hours" in facility.index
-                and pd.notna(facility["open_hours"])
-            ):
-
-                st.write(
-                    f"**Opens:** {facility['open_hours']}"
-                )
-
-            elif (
-                "close_hours" in facility.index
-                and pd.notna(facility["close_hours"])
-            ):
-
-                st.write(
-                    f"**Closes:** {facility['close_hours']}"
-                )
-
-        else:
-
-            st.info(
-                "Click a facility on the map."
-            )
-
-    # --------------------------------------------------
-    # TABLE
-    # --------------------------------------------------
-
-    st.subheader("Facilities")
-
-    st.dataframe(
-        cc[
-            [
-                "Name",
-                "Sector",
-                "Category",
-                "District",
-                "Address"
-            ]
-        ],
-        width = 'stretch'
+    st_folium(
+        m,
+        height=800,
+        width=None
     )
 
 elif page == "Schools":
 
-    st.title("Schools")
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Schools
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
 
     st.markdown("""
     Explore the spatial distribution of schools across Quezon City,
@@ -860,9 +875,11 @@ elif page == "Schools":
     )
 
     selected_district = st.selectbox(
-        "District",
-        ["All"] + list(districts)
+        "Select the district",
+        ["All"] + [f"District {d}" for d in districts]
     )
+
+    st.info("Click a school on the map.")
 
     # --------------------------------------------------
     # FILTERING
@@ -872,9 +889,13 @@ elif page == "Schools":
 
     if selected_district != "All":
 
+        district_number = int(
+            selected_district.replace("District ", "")
+        )
+
         sch = sch[
             sch["District"].astype(int)
-            == selected_district
+            == district_number
         ]
 
     if selected_school_sector != "All":
@@ -919,26 +940,15 @@ elif page == "Schools":
     )
 
     # --------------------------------------------------
-    # SESSION STATE
-    # --------------------------------------------------
-
-    if "selected_school" not in st.session_state:
-
-        st.session_state.selected_school = None
-
-    # --------------------------------------------------
-    # LAYOUT
-    # --------------------------------------------------
-
-    map_col, info_col = st.columns([2, 1])
-
-    # --------------------------------------------------
     # MAP
     # --------------------------------------------------
 
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=12,
+        min_zoom=11,
+        max_zoom=17,
+        max_bounds=True,
         tiles="CartoDB positron"
     )
 
@@ -951,6 +961,12 @@ elif page == "Schools":
             "fillOpacity": 0.15,
         }
     ).add_to(m)
+
+    bounds = geo.total_bounds
+    southwest = [bounds[1], bounds[0]]
+    northeast = [bounds[3], bounds[2]]
+
+    m.fit_bounds([southwest, northeast])
 
     # --------------------------------------------------
     # MARKERS
@@ -983,7 +999,10 @@ elif page == "Schools":
             fill_color=school_color(row["Category"]),
             fill_opacity=0.9,
             weight=2,
-            popup=folium.Popup(popup_html, max_width=350),
+            popup=folium.Popup(
+                popup_html,
+                max_width=350
+            ),
             tooltip=row["Name"]
         ).add_to(m)
 
@@ -991,116 +1010,35 @@ elif page == "Schools":
     # MAP DISPLAY
     # --------------------------------------------------
 
-    with map_col:
-
-        map_data = st_folium(
-            m,
-            height=700,
-            returned_objects=["last_object_clicked"]
-        )
-
-    # --------------------------------------------------
-    # CLICK DETECTION
-    # --------------------------------------------------
-
-    if (
-        map_data
-        and map_data.get("last_object_clicked")
-    ):
-
-        clicked_lat = map_data["last_object_clicked"]["lat"]
-        clicked_lon = map_data["last_object_clicked"]["lng"]
-
-        tmp = sch_map.copy()
-
-        tmp["distance"] = (
-            (tmp["latitude"] - clicked_lat) ** 2 +
-            (tmp["longitude"] - clicked_lon) ** 2
-        )
-
-        st.session_state.selected_school = (
-            tmp.loc[
-                tmp["distance"].idxmin()
-            ]
-        )
-
-    # --------------------------------------------------
-    # INFO PANEL
-    # --------------------------------------------------
-
-    with info_col:
-
-        st.subheader("School Details")
-
-        if st.session_state.selected_school is not None:
-
-            facility = st.session_state.selected_school
-
-            st.markdown(
-                f"### {facility['Name']}"
-            )
-
-            st.write(
-                f"**Sector:** {facility['Sector']}"
-            )
-
-            st.write(
-                f"**Category:** {facility['Category']}"
-            )
-
-            st.write(
-                f"**District:** {int(facility['District'])}"
-            )
-
-            st.write(
-                f"**Address:** {facility['Address']}"
-            )
-
-            if pd.notna(facility.get("open_hours")):
-                st.write(
-                    f"**Open:** {facility['open_hours']}"
-                )
-
-            if pd.notna(facility.get("close_hours")):
-                st.write(
-                    f"**Close:** {facility['close_hours']}"
-                )
-
-        else:
-
-            st.info(
-                "Click a school on the map."
-            )
-
-    # --------------------------------------------------
-    # TABLE
-    # --------------------------------------------------
-
-    st.subheader("Schools")
-
-    st.dataframe(
-        sch[
-            [
-                "Name",
-                "Sector",
-                "Category",
-                "District",
-                "Address"
-            ]
-        ],
-        width = 'stretch'
+    st_folium(
+        m,
+        height=800,
+        width=None
     )
 
 elif page == "Health Centers Map":
 
-    st.title("Health Centers & Hospitals") 
-    
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:0px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Health Centers & Hospitals
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
+
     st.markdown("""
-        Explore the spatial distribution of healthcare facilities in Quezon City.
-        The map supports the assessment of access to primary healthcare services,
-        facility coverage, and the availability of pharmacies across districts.
+    Explore the spatial distribution of healthcare facilities in Quezon City.
+    The map supports the assessment of access to primary healthcare services,
+    facility coverage, and the availability of pharmacies across districts.
     """)
-    
+
     # --------------------------------------------------
     # DISTRICT FILTER
     # --------------------------------------------------
@@ -1108,74 +1046,68 @@ elif page == "Health Centers Map":
     districts = sorted(
         health_centers["District"]
         .dropna()
+        .astype(int)
         .unique()
     )
 
     selected_district = st.selectbox(
-        "District",
-        ["All"] + list(districts)
+        "Select the district",
+        ["All"] + [f"District {d}" for d in districts]
     )
 
-    # --------------------------------------------------
-    # CATEGORY FILTER
-    # --------------------------------------------------
+    st.info("Click a facility on the map.")
 
-    category_options = [
-        "All",
-        "QC LGU",
-        "National",
-        "Health Center",
-        "Super Health",
-        "Pharmacy"
-    ]
+    # --------------------------------------------------
+    # FILTERING
+    # --------------------------------------------------
 
     hc = health_centers.copy()
 
-    # District filter
     if selected_district != "All":
+
+        district_number = int(
+            selected_district.replace("District ", "")
+        )
+
         hc = hc[
-            hc["District"] == selected_district
+            hc["District"].astype(int)
+            == district_number
         ]
 
-    # Category filter
     if selected_category != "All":
 
         hc = hc[
-                hc["Category"]
-                .str.contains(
-                    selected_category,
-                    case=False,
-                    na=False
-                )
-            ]
+            hc["Category"]
+            .str.contains(
+                selected_category,
+                case=False,
+                na=False
+            )
+        ]
 
     hc["color"] = hc["Category"].apply(category_color)
 
     # --------------------------------------------------
-    # SESSION STATE
-    # --------------------------------------------------
-
-    if "selected_facility" not in st.session_state:
-        st.session_state.selected_facility = None
-
-    # --------------------------------------------------
-    # LAYOUT
-    # --------------------------------------------------
-
-    map_col, info_col = st.columns([2, 1])
-
-    # --------------------------------------------------
-    # FOLIUM MAP
+    # MAP
     # --------------------------------------------------
 
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=12,
+        min_zoom=11,
+        max_zoom=17,
+        max_bounds=True,
         tiles="CartoDB positron"
     )
 
+    # Optional: always focus on QC
+    bounds = geo.total_bounds
+    southwest = [bounds[1], bounds[0]]
+    northeast = [bounds[3], bounds[2]]
+    m.fit_bounds([southwest, northeast])
+
     # --------------------------------------------------
-    # BARANGAYS
+    # BARANGAY BOUNDARIES
     # --------------------------------------------------
 
     folium.GeoJson(
@@ -1201,6 +1133,12 @@ elif page == "Health Centers Map":
         Address: {row['Address']}
         """
 
+        if (
+            "barangay" in row.index
+            and pd.notna(row["barangay"])
+        ):
+            popup_html += f"<br>Barangay: {row['barangay']}"
+
         folium.CircleMarker(
             location=[
                 row["latitude"],
@@ -1212,118 +1150,47 @@ elif page == "Health Centers Map":
             fill_color=marker_color(row["Category"]),
             fill_opacity=0.9,
             weight=2,
-            popup=folium.Popup(popup_html, max_width=350),
+            popup=folium.Popup(
+                popup_html,
+                max_width=350
+            ),
             tooltip=row["Name of Facility"]
         ).add_to(m)
 
     # --------------------------------------------------
-    # MAP RENDER
+    # MAP DISPLAY
     # --------------------------------------------------
 
-    with map_col:
-
-        map_data = st_folium(
-            m,
-            height=700,
-            width=None,
-            returned_objects=[
-                "last_object_clicked"
-            ]
-        )
-
-    # --------------------------------------------------
-    # DETECT CLICK
-    # --------------------------------------------------
-
-    if (
-        map_data
-        and map_data.get("last_object_clicked")
-    ):
-
-        clicked_lat = map_data["last_object_clicked"]["lat"]
-        clicked_lon = map_data["last_object_clicked"]["lng"]
-
-        hc_temp = hc.copy()
-
-        hc_temp["distance"] = (
-            (hc_temp["latitude"] - clicked_lat) ** 2 +
-            (hc_temp["longitude"] - clicked_lon) ** 2
-        )
-
-        st.session_state.selected_facility = (
-            hc_temp.loc[
-                hc_temp["distance"].idxmin()
-            ]
-        )
-
-    # --------------------------------------------------
-    # INFO PANEL
-    # --------------------------------------------------
-
-    with info_col:
-
-        st.subheader("Facility Details")
-
-        if st.session_state.selected_facility is not None:
-
-            facility = st.session_state.selected_facility
-
-            st.markdown(
-                f"### {facility['Name of Facility']}"
-            )
-
-            st.write(
-                f"**Category:** {facility['Category']}"
-            )
-
-            st.write(
-                f"**District:** {int(facility['District'])}"
-            )
-
-            if "barangay" in facility.index:
-                st.write(
-                    f"**Barangay:** {facility['barangay']}"
-                )
-
-            st.write(
-                f"**Address:** {facility['Address']}"
-            )
-        else:
-
-            st.info(
-                "Click a facility marker on the map."
-            )
-    # --------------------------------------------------
-    # TABLE
-    # --------------------------------------------------
-
-    st.subheader("Facilities")
-
-    st.dataframe(
-        hc[
-            [
-                "Name of Facility",
-                "District",
-                "Category",
-                "Address"
-            ]
-        ],
-        width = 'stretch'
+    st_folium(
+        m,
+        height=800,
+        width=None
     )
 
 elif page == "Older Persons Center Map":
 
-    st.title("Older Persons & Senior Citizens")
-
-    st.caption(
+    st.markdown(
         """
-        Interactive map of facilities supporting older persons in Quezon City,
-        including nursing care centers and Bahay Aruga facilities.
-        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Older Persons & Senior Citizens
+        </h2>
+        """,
+        unsafe_allow_html=True
     )
 
+    st.markdown("""
+    Explore facilities supporting older persons in Quezon City,
+    including nursing care centers and Bahay Aruga facilities.
+    """)
+
     # --------------------------------------------------
-    # FILTERS
+    # DISTRICT FILTER
     # --------------------------------------------------
 
     district_options = sorted(
@@ -1337,21 +1204,30 @@ elif page == "Older Persons Center Map":
             ]
         ).unique()
     )
- 
 
     selected_district = st.selectbox(
-        "District",
-        ["All"] + district_options,
+        "Select the district",
+        ["All"] + [f"District {d}" for d in district_options],
         key="opc_district"
     )
+
+    st.info("Click a facility on the map.")
+
+    # --------------------------------------------------
+    # FILTERING
+    # --------------------------------------------------
 
     opc = older_person_care.copy()
 
     if selected_district != "All":
 
+        district_number = int(
+            selected_district.replace("District ", "")
+        )
+
         opc = opc[
             opc["District"].astype(int)
-            == selected_district
+            == district_number
         ]
 
     if selected_opc_category != "All":
@@ -1366,14 +1242,23 @@ elif page == "Older Persons Center Map":
         ]
 
     # --------------------------------------------------
-    # SESSION STATE
+    # REMOVE MISSING COORDINATES
     # --------------------------------------------------
 
-    if "selected_senior_facility" not in st.session_state:
+    missing_locations = (
+        opc["latitude"].isna() |
+        opc["longitude"].isna()
+    ).sum()
 
-        st.session_state.selected_senior_facility = None
+    if missing_locations > 0:
 
-    map_col, info_col = st.columns([2, 1])
+        st.warning(
+            f"{missing_locations} facilities do not have coordinates and are not shown on the map."
+        )
+
+    opc_map = opc.dropna(
+        subset=["latitude", "longitude"]
+    )
 
     # --------------------------------------------------
     # MAP
@@ -1382,8 +1267,17 @@ elif page == "Older Persons Center Map":
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=12,
+        min_zoom=11,
+        max_zoom=17,
+        max_bounds=True,
         tiles="CartoDB positron"
     )
+
+    bounds = geo.total_bounds
+    southwest = [bounds[1], bounds[0]]
+    northeast = [bounds[3], bounds[2]]
+
+    m.fit_bounds([southwest, northeast])
 
     folium.GeoJson(
         geo,
@@ -1399,7 +1293,7 @@ elif page == "Older Persons Center Map":
     # FACILITY MARKERS
     # --------------------------------------------------
 
-    for _, row in opc.iterrows():
+    for _, row in opc_map.iterrows():
 
         popup_html = f"""
         <b>{row['Name']}</b><br>
@@ -1419,8 +1313,11 @@ elif page == "Older Persons Center Map":
             fill=True,
             fill_color=opc_color(row["Category"]),
             fill_opacity=0.9,
-            weight=5,
-            popup=folium.Popup(popup_html, max_width=350),
+            weight=2,
+            popup=folium.Popup(
+                popup_html,
+                max_width=350
+            ),
             tooltip=row["Name"]
         ).add_to(m)
 
@@ -1428,104 +1325,27 @@ elif page == "Older Persons Center Map":
     # MAP DISPLAY
     # --------------------------------------------------
 
-    with map_col:
-
-        map_data = st_folium(
-            m,
-            height=700,
-            width=None,
-            returned_objects=["last_object_clicked"]
-        )
-
-    # --------------------------------------------------
-    # CLICK DETECTION
-    # --------------------------------------------------
-
-    if (
-        map_data
-        and map_data.get("last_object_clicked")
-    ):
-
-        clicked_lat = map_data["last_object_clicked"]["lat"]
-        clicked_lon = map_data["last_object_clicked"]["lng"]
-
-        tmp = opc.copy()
-
-        tmp["distance"] = (
-            (tmp["latitude"] - clicked_lat) ** 2 +
-            (tmp["longitude"] - clicked_lon) ** 2
-        )
-
-        st.session_state.selected_senior_facility = (
-            tmp.loc[
-                tmp["distance"].idxmin()
-            ]
-        )
-
-    # --------------------------------------------------
-    # INFO PANEL
-    # --------------------------------------------------
-
-    with info_col:
-
-        st.subheader("Facility Details")
-
-        if st.session_state.selected_senior_facility is not None:
-
-            facility = st.session_state.selected_senior_facility
-
-            st.markdown(
-                f"### {facility['Name']}"
-            )
-
-            st.write(
-                f"**Category:** {facility['Category']}"
-            )
-
-            st.write(
-                f"**District:** {int(facility['District'])}"
-            )
-
-            st.write(
-                f"**Barangay:** {facility['barangay']}"
-            )
-
-            st.write(
-                f"**Address:** {facility['Address']}"
-            )
-
-        else:
-
-            st.info(
-                "Click a facility on the map."
-            )
-
-    # --------------------------------------------------
-    # TABLE
-    # --------------------------------------------------
-
-    st.divider()
-
-    st.subheader(
-        "Older Persons Care Facilities"
-    )
-
-    st.dataframe(
-        opc[
-            [
-                "Name",
-                "District",
-                "Category",
-                "Address"
-            ]
-        ],
-        width = 'stretch'
+    st_folium(
+        m,
+        height=800,
+        width=None
     )
 
 elif page == "Long-Term Care & Rehabilitation":
 
-    st.title(
-        "Long-Term Care & Rehabilitation Services"
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:0px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Long-Term Care & Rehabilitation Services
+        </h2>
+        """,
+        unsafe_allow_html=True
     )
 
     st.markdown("""
@@ -1534,9 +1354,9 @@ elif page == "Long-Term Care & Rehabilitation":
     recovery services in Quezon City.
     """)
 
-    # ----------------------------------
+    # --------------------------------------------------
     # DISTRICT FILTER
-    # ----------------------------------
+    # --------------------------------------------------
 
     districts = sorted(
         long_term_care["District"]
@@ -1546,21 +1366,27 @@ elif page == "Long-Term Care & Rehabilitation":
     )
 
     selected_district = st.selectbox(
-        "District",
-        ["All"] + list(districts)
+        "Select the district",
+        ["All"] + [f"District {d}" for d in districts]
     )
 
-    # ----------------------------------
+    st.info("Click a facility on the map.")
+
+    # --------------------------------------------------
     # FILTERING
-    # ----------------------------------
+    # --------------------------------------------------
 
     ltc = long_term_care.copy()
 
     if selected_district != "All":
 
+        district_number = int(
+            selected_district.replace("District ", "")
+        )
+
         ltc = ltc[
             ltc["District"].astype(int)
-            == selected_district
+            == district_number
         ]
 
     if selected_ltc_category != "All":
@@ -1574,9 +1400,9 @@ elif page == "Long-Term Care & Rehabilitation":
             )
         ]
 
-    # ----------------------------------
-    # COORDINATES
-    # ----------------------------------
+    # --------------------------------------------------
+    # MISSING COORDINATES
+    # --------------------------------------------------
 
     missing_locations = (
         ltc["latitude"].isna() |
@@ -1593,25 +1419,24 @@ elif page == "Long-Term Care & Rehabilitation":
         subset=["latitude", "longitude"]
     )
 
-    # ----------------------------------
-    # SESSION STATE
-    # ----------------------------------
-
-    if "selected_ltc" not in st.session_state:
-
-        st.session_state.selected_ltc = None
-
-    map_col, info_col = st.columns([2, 1])
-
-    # ----------------------------------
+    # --------------------------------------------------
     # MAP
-    # ----------------------------------
+    # --------------------------------------------------
 
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=12,
+        min_zoom=11,
+        max_zoom=17,
+        max_bounds=True,
         tiles="CartoDB positron"
     )
+
+    bounds = geo.total_bounds
+    southwest = [bounds[1], bounds[0]]
+    northeast = [bounds[3], bounds[2]]
+
+    m.fit_bounds([southwest, northeast])
 
     folium.GeoJson(
         geo,
@@ -1623,9 +1448,9 @@ elif page == "Long-Term Care & Rehabilitation":
         }
     ).add_to(m)
 
-    # ----------------------------------
+    # --------------------------------------------------
     # MARKERS
-    # ----------------------------------
+    # --------------------------------------------------
 
     for _, row in ltc_map.iterrows():
 
@@ -1647,141 +1472,84 @@ elif page == "Long-Term Care & Rehabilitation":
             fill_color=ltc_color(row["Category"]),
             fill_opacity=0.9,
             weight=2,
-            popup=folium.Popup(popup_html, max_width=350),
+            popup=folium.Popup(
+                popup_html,
+                max_width=350
+            ),
             tooltip=row["Name"]
         ).add_to(m)
 
-    with map_col:
+    # --------------------------------------------------
+    # MAP DISPLAY
+    # --------------------------------------------------
 
-        map_data = st_folium(
-            m,
-            height=700,
-            returned_objects=["last_object_clicked"]
-        )
-
-    # ----------------------------------
-    # CLICK DETECTION
-    # ----------------------------------
-
-    if (
-        map_data
-        and map_data.get("last_object_clicked")
-    ):
-
-        clicked_lat = map_data["last_object_clicked"]["lat"]
-        clicked_lon = map_data["last_object_clicked"]["lng"]
-
-        tmp = ltc_map.copy()
-
-        tmp["distance"] = (
-            (tmp["latitude"] - clicked_lat) ** 2 +
-            (tmp["longitude"] - clicked_lon) ** 2
-        )
-
-        st.session_state.selected_ltc = (
-            tmp.loc[
-                tmp["distance"].idxmin()
-            ]
-        )
-
-    # ----------------------------------
-    # INFO PANEL
-    # ----------------------------------
-
-    with info_col:
-
-        st.subheader("Facility Details")
-
-        if st.session_state.selected_ltc is not None:
-
-            facility = st.session_state.selected_ltc
-
-            st.markdown(
-                f"### {facility['Name']}"
-            )
-
-            st.write(
-                f"**Category:** {facility['Category']}"
-            )
-
-            st.write(
-                f"**District:** {int(facility['District'])}"
-            )
-
-            st.write(
-                f"**Address:** {facility['Address']}"
-            )
-
-        else:
-
-            st.info(
-                "Click a facility on the map."
-            )
-
-    # ----------------------------------
-    # TABLE
-    # ----------------------------------
-
-    st.subheader("Facilities")
-
-    st.dataframe(
-        ltc[
-            [
-                "Name",
-                "Category",
-                "District",
-                "Address"
-            ]
-        ],
-        width = 'stretch'
+    st_folium(
+        m,
+        height=800,
+        width=None
     )
 
 elif page == "Satellite Offices":
 
-    st.title(
-        "Quezon City Satellite Offices"
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Quezon City Satellite Offices
+        </h2>
+        """,
+        unsafe_allow_html=True
     )
 
-    st.caption(
-        """
-        Explore the distribution of Quezon City
-        satellite offices providing local access
-        to government services.
-        """
-    )
+    st.markdown("""
+    Explore the distribution of Quezon City
+    satellite offices providing local access
+    to government services.
+    """)
 
-    # ----------------------------------
+    # --------------------------------------------------
     # DISTRICT FILTER
-    # ----------------------------------
+    # --------------------------------------------------
 
     districts = sorted(
         satellite_offices["District"]
-        .astype(int)
         .dropna()
+        .astype(int)
         .unique()
     )
 
     selected_district = st.selectbox(
-        "District",
-        ["All"] + list(districts)
+        "Select the district",
+        ["All"] + [f"District {d}" for d in districts]
     )
 
-    # ----------------------------------
+    st.info("Click an office on the map.")
+
+    # --------------------------------------------------
     # FILTERING
-    # ----------------------------------
+    # --------------------------------------------------
 
     sat = satellite_offices.copy()
 
     if selected_district != "All":
 
+        district_number = int(
+            selected_district.replace("District ", "")
+        )
+
         sat = sat[
-            sat["District"]
-            == selected_district
+            sat["District"].astype(int)
+            == district_number
         ]
 
-    # ----------------------------------
-    # COORDINATES
-    # ----------------------------------
+    # --------------------------------------------------
+    # MISSING COORDINATES
+    # --------------------------------------------------
 
     missing_locations = (
         sat["latitude"].isna() |
@@ -1798,25 +1566,24 @@ elif page == "Satellite Offices":
         subset=["latitude", "longitude"]
     )
 
-    # ----------------------------------
-    # SESSION STATE
-    # ----------------------------------
-
-    if "selected_satellite_office" not in st.session_state:
-
-        st.session_state.selected_satellite_office = None
-
-    map_col, info_col = st.columns([2, 1])
-
-    # ----------------------------------
+    # --------------------------------------------------
     # MAP
-    # ----------------------------------
+    # --------------------------------------------------
 
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=12,
+        min_zoom=11,
+        max_zoom=17,
+        max_bounds=True,
         tiles="CartoDB positron"
     )
+
+    bounds = geo.total_bounds
+    southwest = [bounds[1], bounds[0]]
+    northeast = [bounds[3], bounds[2]]
+
+    m.fit_bounds([southwest, northeast])
 
     folium.GeoJson(
         geo,
@@ -1828,14 +1595,15 @@ elif page == "Satellite Offices":
         }
     ).add_to(m)
 
-    # ----------------------------------
+    # --------------------------------------------------
     # MARKERS
-    # ----------------------------------
+    # --------------------------------------------------
 
     for _, row in sat_map.iterrows():
 
         popup_html = f"""
-        {row['Category']}<br>
+        <b>{row['Category']}</b><br>
+        District: {int(row['District'])}<br>
         Address: {row['Address']}
         """
 
@@ -1850,93 +1618,39 @@ elif page == "Satellite Offices":
             fill_color=district_color(row["District"]),
             fill_opacity=0.9,
             weight=2,
-            popup=folium.Popup(popup_html, max_width=350),
+            popup=folium.Popup(
+                popup_html,
+                max_width=350
+            ),
             tooltip=row["Category"]
         ).add_to(m)
 
-    with map_col:
+    # --------------------------------------------------
+    # MAP DISPLAY
+    # --------------------------------------------------
 
-        map_data = st_folium(
-            m,
-            height=700,
-            returned_objects=["last_object_clicked"]
-        )
-
-    # ----------------------------------
-    # CLICK DETECTION
-    # ----------------------------------
-
-    if (
-        map_data
-        and map_data.get("last_object_clicked")
-    ):
-
-        clicked_lat = map_data["last_object_clicked"]["lat"]
-        clicked_lon = map_data["last_object_clicked"]["lng"]
-
-        tmp = sat_map.copy()
-
-        tmp["distance"] = (
-            (tmp["latitude"] - clicked_lat) ** 2 +
-            (tmp["longitude"] - clicked_lon) ** 2
-        )
-
-        st.session_state.selected_satellite_office = (
-            tmp.loc[
-                tmp["distance"].idxmin()
-            ]
-        )
-
-    # ----------------------------------
-    # INFO PANEL
-    # ----------------------------------
-
-    with info_col:
-
-        st.subheader("Office Details")
-
-        if (
-            st.session_state.selected_satellite_office
-            is not None
-        ):
-
-            office = (
-                st.session_state.selected_satellite_office
-            )
-
-            st.write(
-                f"**District:** {int(office['District'])}"
-            )
-
-            st.write(
-                f"**Address:** {office['Address']}"
-            )
-
-        else:
-
-            st.info(
-                "Click an office on the map."
-            )
-
-    # ----------------------------------
-    # TABLE
-    # ----------------------------------
-
-    st.subheader("Satellite Offices")
-
-    st.dataframe(
-        sat[
-            [
-                "District",
-                "Address"
-            ]
-        ],
-        width = 'stretch'
+    st_folium(
+        m,
+        height=800,
+        width=None
     )
 
 elif page == "Migration Resource Center":
 
-    st.title("Migration Resource Center")
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Migration Resource Center
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
 
     st.markdown("""
     Explore facilities providing information, training,
@@ -1944,9 +1658,9 @@ elif page == "Migration Resource Center":
     and their families in Quezon City.
     """)
 
-    # ----------------------------------
+    # --------------------------------------------------
     # DISTRICT FILTER
-    # ----------------------------------
+    # --------------------------------------------------
 
     districts = sorted(
         migration_centers["District"]
@@ -1956,48 +1670,66 @@ elif page == "Migration Resource Center":
     )
 
     selected_district = st.selectbox(
-        "District",
-        ["All"] + list(districts)
+        "Select the district",
+        ["All"] + [f"District {d}" for d in districts]
     )
 
-    # ----------------------------------
+    st.info("Click a facility on the map.")
+
+    # --------------------------------------------------
     # FILTERING
-    # ----------------------------------
+    # --------------------------------------------------
 
     mig = migration_centers.copy()
 
     if selected_district != "All":
 
+        district_number = int(
+            selected_district.replace("District ", "")
+        )
+
         mig = mig[
             mig["District"].astype(int)
-            == selected_district
+            == district_number
         ]
 
-    st.divider()
+    # --------------------------------------------------
+    # MISSING COORDINATES
+    # --------------------------------------------------
 
-    # ----------------------------------
-    # SESSION STATE
-    # ----------------------------------
+    missing_locations = (
+        mig["latitude"].isna() |
+        mig["longitude"].isna()
+    ).sum()
 
-    if "selected_migration_center" not in st.session_state:
+    if missing_locations > 0:
 
-        st.session_state.selected_migration_center = None
+        st.warning(
+            f"{missing_locations} facilities do not have coordinates and are not shown on the map."
+        )
 
-    # ----------------------------------
-    # LAYOUT
-    # ----------------------------------
+    mig_map = mig.dropna(
+        subset=["latitude", "longitude"]
+    )
 
-    map_col, info_col = st.columns([2, 1])
-
-    # ----------------------------------
+    # --------------------------------------------------
     # MAP
-    # ----------------------------------
+    # --------------------------------------------------
 
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=12,
+        min_zoom=11,
+        max_zoom=17,
+        max_bounds=True,
         tiles="CartoDB positron"
     )
+
+    bounds = geo.total_bounds
+    southwest = [bounds[1], bounds[0]]
+    northeast = [bounds[3], bounds[2]]
+
+    m.fit_bounds([southwest, northeast])
 
     folium.GeoJson(
         geo,
@@ -2009,11 +1741,11 @@ elif page == "Migration Resource Center":
         }
     ).add_to(m)
 
-    # ----------------------------------
+    # --------------------------------------------------
     # MARKERS
-    # ----------------------------------
+    # --------------------------------------------------
 
-    for _, row in mig.iterrows():
+    for _, row in mig_map.iterrows():
 
         popup_html = f"""
         <b>{row['Name']}</b><br>
@@ -2021,6 +1753,24 @@ elif page == "Migration Resource Center":
         District: {int(row['District'])}<br>
         Address: {row['Address']}
         """
+
+        if (
+            "barangay" in row.index
+            and pd.notna(row["barangay"])
+        ):
+            popup_html += f"<br>Barangay: {row['barangay']}"
+
+        if (
+            "open_hours" in row.index
+            and pd.notna(row["open_hours"])
+        ):
+            popup_html += f"<br>Open: {row['open_hours']}"
+
+        if (
+            "close_hours" in row.index
+            and pd.notna(row["close_hours"])
+        ):
+            popup_html += f"<br>Close: {row['close_hours']}"
 
         folium.CircleMarker(
             location=[
@@ -2040,147 +1790,15 @@ elif page == "Migration Resource Center":
             tooltip=row["Name"]
         ).add_to(m)
 
-    # ----------------------------------
+    # --------------------------------------------------
     # MAP DISPLAY
-    # ----------------------------------
+    # --------------------------------------------------
 
-    with map_col:
-
-        map_data = st_folium(
-            m,
-            height=700,
-            returned_objects=[
-                "last_object_clicked"
-            ]
-        )
-
-    # ----------------------------------
-    # CLICK DETECTION
-    # ----------------------------------
-
-    if (
-        map_data
-        and map_data.get(
-            "last_object_clicked"
-        )
-    ):
-
-        clicked_lat = (
-            map_data["last_object_clicked"]["lat"]
-        )
-
-        clicked_lon = (
-            map_data["last_object_clicked"]["lng"]
-        )
-
-        tmp = mig.copy()
-
-        tmp["distance"] = (
-            (tmp["latitude"] - clicked_lat) ** 2 +
-            (tmp["longitude"] - clicked_lon) ** 2
-        )
-
-        st.session_state.selected_migration_center = (
-            tmp.loc[
-                tmp["distance"].idxmin()
-            ]
-        )
-
-    # ----------------------------------
-    # INFO PANEL
-    # ----------------------------------
-
-    with info_col:
-
-        st.subheader("Facility Details")
-
-        if (
-            st.session_state.selected_migration_center
-            is not None
-        ):
-
-            facility = (
-                st.session_state.selected_migration_center
-            )
-
-            st.markdown(
-                f"### {facility['Name']}"
-            )
-
-            st.write(
-                f"**Category:** {facility['Category']}"
-            )
-
-            st.write(
-                f"**District:** {int(facility['District'])}"
-            )
-
-            if (
-                "barangay" in facility.index
-                and pd.notna(
-                    facility["barangay"]
-                )
-            ):
-
-                st.write(
-                    f"**Barangay:** {facility['barangay']}"
-                )
-
-            st.write(
-                f"**Address:** {facility['Address']}"
-            )
-
-            if (
-                "open_hours" in facility.index
-                and pd.notna(
-                    facility["open_hours"]
-                )
-            ):
-
-                st.write(
-                    f"**Open:** {facility['open_hours']}"
-                )
-
-            if (
-                "close_hours" in facility.index
-                and pd.notna(
-                    facility["close_hours"]
-                )
-            ):
-
-                st.write(
-                    f"**Close:** {facility['close_hours']}"
-                )
-
-        else:
-
-            st.info(
-                "Click the facility on the map."
-            )
-
-    # ----------------------------------
-    # TABLE
-    # ----------------------------------
-
-    st.subheader(
-        "Migration Service Facilities"
+    st_folium(
+        m,
+        height=800,
+        width=None
     )
-
-    display_cols = [
-        c for c in [
-            "Name",
-            "Category",
-            "District",
-            "Address"
-        ]
-        if c in mig.columns
-    ]
-
-    st.dataframe(
-        mig[display_cols],
-        width="stretch"
-    )
-
 
 elif page == "Care Services Explorer":
 
@@ -2272,6 +1890,7 @@ elif page == "Care Services Explorer":
             "lat_col": "latitude",
             "lon_col": "longitude"
         },
+
         "Migration Resource Centers": {
             "df": migration_centers,
             "color": "#C084FC",
@@ -2328,30 +1947,32 @@ elif page == "Care Services Explorer":
 
     with col2:
 
-        districts = sorted(
+        district_values = sorted(
             health_centers["District"]
             .dropna()
             .astype(int)
             .unique()
         )
 
-        selected_district = st.selectbox(
-            "District",
-            ["All"] + list(districts)
+        district_options = {
+            "All": "All"
+        }
+
+        district_options.update(
+            {
+                f"District {d}": d
+                for d in district_values
+            }
         )
 
-    # --------------------------------------------------
-    # SESSION STATE
-    # --------------------------------------------------
+        selected_district_label = st.selectbox(
+            "District",
+            list(district_options.keys())
+        )
 
-    if "selected_explorer_item" not in st.session_state:
-        st.session_state.selected_explorer_item = None
-
-    # --------------------------------------------------
-    # LAYOUT
-    # --------------------------------------------------
-
-    map_col, info_col = st.columns([2, 1])
+        selected_district = district_options[
+            selected_district_label
+        ]
 
     # --------------------------------------------------
     # MAP
@@ -2373,8 +1994,6 @@ elif page == "Care Services Explorer":
         }
     ).add_to(m)
 
-    filtered_layers = {}
-
     # --------------------------------------------------
     # ADD MARKERS
     # --------------------------------------------------
@@ -2393,17 +2012,79 @@ elif page == "Care Services Explorer":
                 == selected_district
             ]
 
-        filtered_layers[layer_name] = df
+        df = df.dropna(
+            subset=[
+                layer["lat_col"],
+                layer["lon_col"]
+            ]
+        )
 
         for _, row in df.iterrows():
-
             popup_html = f"""
             <b>{row[layer['name_col']]}</b><br>
-            Type: {layer['source']}<br>
-            District: {int(row[layer['district_col']])}
+            Type: {layer['source']}
             """
 
-            # determine color based on the same rules used in each page
+            # Sector
+            if (
+                "Sector" in row.index
+                and pd.notna(row["Sector"])
+            ):
+                popup_html += f"<br>Sector: {row['Sector']}"
+
+            # Category
+            if (
+                "Category" in row.index
+                and pd.notna(row["Category"])
+            ):
+                popup_html += f"<br>Category: {row['Category']}"
+
+            # District
+            if (
+                layer["district_col"] in row.index
+                and pd.notna(row[layer["district_col"]])
+            ):
+                popup_html += (
+                    f"<br>District: "
+                    f"{int(row[layer['district_col']])}"
+                )
+
+            # Barangay
+            if (
+                "barangay" in row.index
+                and pd.notna(row["barangay"])
+                and str(row["barangay"]).strip() != ""
+            ):
+                popup_html += f"<br>Barangay: {row['barangay']}"
+
+            # Address
+            if (
+                layer["address_col"] in row.index
+                and pd.notna(row[layer["address_col"]])
+            ):
+                popup_html += (
+                    f"<br>Address: "
+                    f"{row[layer['address_col']]}"
+                )
+
+            # Opening hours
+            if (
+                "open_hours" in row.index
+                and pd.notna(row["open_hours"])
+            ):
+                popup_html += (
+                    f"<br>Open: {row['open_hours']}"
+                )
+
+            # Closing hours
+            if (
+                "close_hours" in row.index
+                and pd.notna(row["close_hours"])
+            ):
+                popup_html += (
+                    f"<br>Close: {row['close_hours']}"
+                )
+
             if layer_name == "Childcare Centers":
                 marker_color_value = childcare_color(row["Category"])
 
@@ -2421,6 +2102,7 @@ elif page == "Care Services Explorer":
 
             elif layer_name == "Satellite Offices":
                 marker_color_value = district_color(row["District"])
+
             elif layer_name == "Migration Resource Centers":
                 marker_color_value = "#C084FC"
 
@@ -2444,146 +2126,21 @@ elif page == "Care Services Explorer":
                     </div>
                     """
                 ),
-                popup=folium.Popup(popup_html, max_width=350),
-                tooltip=str(row[layer["name_col"]])
+                popup=folium.Popup(
+                    popup_html,
+                    max_width=350
+                ),
+                tooltip=str(
+                    row[layer["name_col"]]
+                )
             ).add_to(m)
 
     # --------------------------------------------------
     # MAP DISPLAY
     # --------------------------------------------------
 
-    with map_col:
-
-        map_data = st_folium(
-            m,
-            height=700,
-            returned_objects=["last_object_clicked"]
-        )
-
-    # --------------------------------------------------
-    # CLICK DETECTION
-    # --------------------------------------------------
-
-    if map_data and map_data.get("last_object_clicked"):
-
-        clicked_lat = map_data["last_object_clicked"]["lat"]
-        clicked_lon = map_data["last_object_clicked"]["lng"]
-
-        candidates = []
-
-        for layer_name in selected_layers:
-
-            layer = service_layers[layer_name]
-
-            df = filtered_layers[layer_name].copy()
-
-            if len(df) == 0:
-                continue
-
-            df["source"] = layer["source"]
-            df["name_field"] = layer["name_col"]
-            df["address_field"] = layer["address_col"]
-            df["district_field"] = layer["district_col"]
-
-            df["distance"] = (
-                (df[layer["lat_col"]] - clicked_lat) ** 2 +
-                (df[layer["lon_col"]] - clicked_lon) ** 2
-            )
-
-            candidates.append(df)
-
-        if len(candidates):
-
-            all_points = pd.concat(
-                candidates,
-                ignore_index=True
-            )
-
-            st.session_state.selected_explorer_item = (
-                all_points.loc[
-                    all_points["distance"].idxmin()
-                ]
-            )
-
-    # --------------------------------------------------
-    # DETAILS PANEL
-    # --------------------------------------------------
-    with info_col:
-
-        st.subheader("Details")
-
-        item = st.session_state.selected_explorer_item
-
-        if item is not None:
-
-            st.markdown(
-                f"### {item[item['name_field']]}"
-            )
-
-            st.write(
-                f"**Type:** {item['source']}"
-            )
-
-            # --------------------------
-            # DISTRICT
-            # --------------------------
-
-            district_value = item[item["district_field"]]
-
-            if pd.notna(district_value):
-
-                try:
-                    st.write(
-                        f"**District:** {int(district_value)}"
-                    )
-
-                except:
-                    st.write(
-                        f"**District:** {district_value}"
-                    )
-
-            # --------------------------
-            # ADDRESS
-            # --------------------------
-
-            if (
-                item["address_field"] in item.index
-                and pd.notna(item[item["address_field"]])
-            ):
-
-                st.write(
-                    f"**Address:** {item[item['address_field']]}"
-                )
-
-            # --------------------------
-            # BARANGAY
-            # --------------------------
-
-            if (
-                "barangay" in item.index
-                and pd.notna(item["barangay"])
-                and str(item["barangay"]).strip() != ""
-            ):
-
-                st.write(
-                    f"**Barangay:** {item['barangay']}"
-                )
-
-            # --------------------------
-            # CATEGORY
-            # --------------------------
-
-            if (
-                "Category" in item.index
-                and pd.notna(item["Category"])
-            ):
-
-                st.write(
-                    f"**Category:** {item['Category']}"
-                )
-
-        else:
-
-            st.info(
-                "Click a facility on the map."
-            )
+    st_folium(
+        m,
+        height=850,
+        width="stretch"
+    )
