@@ -5,7 +5,7 @@ import folium
 from streamlit_folium import st_folium
 import numpy as np
 from functions import *
-
+import pydeck as pdk
 # --------------------------------------------------
 # PAGE CONFIG
 # --------------------------------------------------
@@ -136,7 +136,6 @@ st.divider()
 # --------------------------------------------------
 
 (
-    geo, 
     childcare_centers,
     schools,
     health_centers,
@@ -146,28 +145,18 @@ st.divider()
     migration_centers
 ) = load_data()
 
-# --------------------------------------------------
-# CLEANING
-# --------------------------------------------------
-
-health_centers            = clean_health_centers(health_centers)
-childcare_centers         = clean_dataframe(childcare_centers)
-schools                   = clean_dataframe(schools)
-older_person_care         = clean_dataframe(older_person_care)
-long_term_care            = clean_dataframe(long_term_care)
-satellite_offices         = clean_dataframe(satellite_offices)
-satellite_offices["Name"] = "District " + satellite_offices["District"].astype(int).astype(str)
-migration_centers         = clean_dataframe(migration_centers)
+geo, bounds = load_geo()
 
 # --------------------------------------------------
 # QC CENTER
 # --------------------------------------------------
-
-minx, miny, maxx, maxy = geo.total_bounds
+minx, miny, maxx, maxy = bounds
 
 center_lon = (minx + maxx) / 2
 center_lat = (miny + maxy) / 2
 
+southwest = [miny, minx]
+northeast = [maxy, maxx]
 
 st.markdown("""
 <style>
@@ -221,80 +210,40 @@ st.markdown("""
 if "page" not in st.session_state:
     st.session_state.page = "Childcare Centers"
 
+# Default values so variables always exist
+selected_category = "All"
+
+selected_childcare_sector = "All"
+selected_childcare_category = "All"
+
+selected_school_sector = "All"
+selected_school_category = "All"
+
+selected_opc_category = "All"
+
+selected_ltc_category = "All"
+
 # --------------------------------------------------
 # SIDEBAR
 # --------------------------------------------------
 
 st.sidebar.title("Navigation")
-
-# --------------------------------------------------
-# CARE MAPS
-# --------------------------------------------------
-
 st.sidebar.subheader("Care Maps")
+
+# --------------------------------------------------
+# CHILDCARE
+# --------------------------------------------------
 
 if st.sidebar.button(
     "Childcare Centers",
-    use_container_width=True
+    width='stretch'
 ):
     st.session_state.page = "Childcare Centers"
+    st.rerun()
 
-if st.sidebar.button(
-    "Schools",
-    use_container_width=True
-):
-    st.session_state.page = "Schools"
+if st.session_state.page == "Childcare Centers":
 
-if st.sidebar.button(
-    "Health Centers Map",
-    use_container_width=True
-):
-    st.session_state.page = "Health Centers Map"
-
-if st.sidebar.button(
-    "Older Persons Center Map",
-    use_container_width=True
-):
-    st.session_state.page = "Older Persons Center Map"
-
-if st.sidebar.button(
-    "Long-Term Care & Rehabilitation",
-    use_container_width=True
-):
-    st.session_state.page = "Long-Term Care & Rehabilitation"
-
-if st.sidebar.button(
-    "Satellite Offices",
-    use_container_width=True
-):
-    st.session_state.page = "Satellite Offices"
-
-if st.sidebar.button(
-    "Migration Resource Center",
-    use_container_width=True
-):
-    st.session_state.page = "Migration Resource Center"
-
-# --------------------------------------------------
-# TOOLS
-# --------------------------------------------------
-
-st.sidebar.subheader("Additional Tools")
-
-if st.sidebar.button(
-    "Care Services Explorer",
-    use_container_width=True
-):
-    st.session_state.page = "Care Services Explorer"
-
-# --------------------------------------------------
-# ACTIVE PAGE
-# --------------------------------------------------
-
-page = st.session_state.page
-
-
-if page == "Childcare Centers":
+    st.sidebar.markdown("##### Filters")
 
     selected_childcare_sector = st.sidebar.radio(
         "Provider Type",
@@ -302,7 +251,8 @@ if page == "Childcare Centers":
             "All",
             "Public",
             "Private"
-        ]
+        ],
+        key="childcare_sector"
     )
 
     if selected_childcare_sector == "Public":
@@ -331,41 +281,24 @@ if page == "Childcare Centers":
 
     selected_childcare_category = st.sidebar.radio(
         "Facility Category",
-        category_options
+        category_options,
+        key="childcare_category"
     )
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Facility Categories")
+# --------------------------------------------------
+# SCHOOLS
+# --------------------------------------------------
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#5B21B6;font-size:22px;">●</span>
-        <b>Child Development Center</b><br>
-        <small>For children aged 3 to 4 years. The program focuses on providing children with early childhood education to support their growth and readiness for more formal education. 
-        </small>
-        """,
-        unsafe_allow_html=True
-    )
+if st.sidebar.button(
+    "Schools",
+    width='stretch'
+):
+    st.session_state.page = "Schools"
+    st.rerun()
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#7F47ED;font-size:22px;">●</span>
-        <b>Child Learning Center</b><br>
-        <small>Private childcare and early learning services.</small>
-        """,
-        unsafe_allow_html=True
-    )
+if st.session_state.page == "Schools":
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#A78BFA;font-size:22px;">●</span>
-        <b>Day Care Center</b><br>
-        <small>Private day care and supervision services.</small>
-        """,
-        unsafe_allow_html=True
-    )
-
-if page == "Schools":
+    st.sidebar.markdown("##### Filters")
 
     selected_school_sector = st.sidebar.radio(
         "Provider Type",
@@ -373,7 +306,8 @@ if page == "Schools":
             "All",
             "Public",
             "Private"
-        ]
+        ],
+        key="school_sector"
     )
 
     if selected_school_sector == "Public":
@@ -400,31 +334,24 @@ if page == "Schools":
 
     selected_school_category = st.sidebar.radio(
         "School Category",
-        category_options
+        category_options,
+        key="school_category"
     )
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### School Categories")
+# --------------------------------------------------
+# HEALTH CENTERS
+# --------------------------------------------------
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#5B21B6;font-size:22px;">●</span>
-        <b>Public School</b><br>
-        <small>Government-operated educational institutions.</small>
-        """,
-        unsafe_allow_html=True
-    )
+if st.sidebar.button(
+    "Health Centers Map",
+    width='stretch'
+):
+    st.session_state.page = "Health Centers Map"
+    st.rerun()
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#A78BFA;font-size:22px;">●</span>
-        <b>Private School</b><br>
-        <small>Privately operated educational institutions.</small>
-        """,
-        unsafe_allow_html=True
-    )
+if st.session_state.page == "Health Centers Map":
 
-if page == "Health Centers Map":
+    st.sidebar.markdown("##### Filters")
 
     selected_category = st.sidebar.radio(
         "Facility Type",
@@ -436,56 +363,24 @@ if page == "Health Centers Map":
             "Health Center",
             "Pharmacy",
             "Milk Bank"
-        ]
+        ],
+        key="health_category"
     )
 
-    category_descriptions = {
-        "QC LGU":
-            "Lying–in Clinics are maternity clinics for healthy pregnant women as an option for an affordable, if not free, cost of pregnancy and childbirth. If a pregnant woman is at high risk, however, she will be referred to deliver the child at a hospital.",
+# --------------------------------------------------
+# OLDER PERSONS
+# --------------------------------------------------
 
-        "National":
-            "National government-owned hospitals located in Quezon City.",
+if st.sidebar.button(
+    "Older Persons Center Map",
+    width='stretch'
+):
+    st.session_state.page = "Older Persons Center Map"
+    st.rerun()
 
-        "Super Health":
-            "These facilities serve both as a Health Center and a 24-hour operating Lying–in clinic and also provide basic health services.  Super Health Centers possess the necessary equipment for medical needs such as laboratory, dental services, breastfeeding services, lying-in clinic, and an ambulance.",
+if st.session_state.page == "Older Persons Center Map":
 
-        "Health Center":
-            "Health Centers are community patient-directed establishments that deliver comprehensive culturally competent, high-quality, primary healthcare services to the nation’s most vulnerable individuals and families, including people experiencing homelessness, agricultural workers, and residents of public housing and veterans.",
-
-        "Pharmacy":
-            "Health center pharmacy facilities.",
-
-        "Milk Bank":
-            "provides safe, pasteurized human milk to infants in need, especially premature babies and those whose mothers struggle with lactation or medical issues. Under the program, QCitizens may donate and receive milk at designated milk depots in the city."
-    }
-
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Facility Categories")
-
-    ordered_categories = [
-        "QC LGU",
-        "National",
-        "Super Health",
-        "Health Center",
-        "Pharmacy",
-        "Milk Bank"
-    ]
-
-    for cat in ordered_categories:
-
-        st.sidebar.markdown(
-            f"""
-            <span style="
-                color:{category_hex(cat)};
-                font-size:22px;
-            ">●</span>
-            <b>{cat}</b><br>
-            <small>{category_descriptions[cat]}</small>
-            """,
-            unsafe_allow_html=True
-        )
-
-if page == "Older Persons Center Map":
+    st.sidebar.markdown("##### Filters")
 
     selected_opc_category = st.sidebar.radio(
         "Facility Type",
@@ -493,31 +388,24 @@ if page == "Older Persons Center Map":
             "All",
             "Nursing Care Center",
             "Bahay Aruga for Abandoned Elderly"
-        ]
+        ],
+        key="opc_category"
     )
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Facility Categories")
+# --------------------------------------------------
+# LONG TERM CARE
+# --------------------------------------------------
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#4C1D95;font-size:22px;">●</span>
-        <b>Nursing Care Center</b><br>
-        <small>Residential facilities providing long-term nursing and care services.</small>
-        """,
-        unsafe_allow_html=True
-    )
+if st.sidebar.button(
+    "Long-Term Care & Rehabilitation",
+    width='stretch'
+):
+    st.session_state.page = "Long-Term Care & Rehabilitation"
+    st.rerun()
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#A78BFA;font-size:22px;">●</span>
-        <b>Bahay Aruga</b><br>
-        <small>Temporary residential facility for abandoned, neglected, abused, and indigent QC senior citizens aged 60 years and above. </small>
-        """,
-        unsafe_allow_html=True
-    )
+if st.session_state.page == "Long-Term Care & Rehabilitation":
 
-if page == "Long-Term Care & Rehabilitation":
+    st.sidebar.markdown("##### Filters")
 
     ltc_categories = sorted(
         long_term_care["Category"]
@@ -527,50 +415,50 @@ if page == "Long-Term Care & Rehabilitation":
 
     selected_ltc_category = st.sidebar.radio(
         "Facility Category",
-        ["All"] + list(ltc_categories)
+        ["All"] + list(ltc_categories),
+        key="ltc_category"
     )
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Facility Categories")
+# --------------------------------------------------
+# SATELLITE OFFICES
+# --------------------------------------------------
 
-    for cat in ltc_categories:
+if st.sidebar.button(
+    "Action Offices",
+    width='stretch'
+):
+    st.session_state.page = "Action Offices"
+    st.rerun()
 
-        st.sidebar.markdown(
-            f"""
-            <span style="
-                color:{ltc_color(cat)};
-                font-size:22px;
-            ">●</span>
-            <b>{cat}</b>
-            """,
-            unsafe_allow_html=True
-        )
+# --------------------------------------------------
+# MIGRATION
+# --------------------------------------------------
 
-if page == "Satellite Offices":
+if st.sidebar.button(
+    "Migration Resource Center",
+    width='stretch'
+):
+    st.session_state.page = "Migration Resource Center"
+    st.rerun()
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(
-        """
-        Satellite offices provide decentralized access
-        to city government services across Quezon City.
-        """
-    )
+# --------------------------------------------------
+# TOOLS
+# --------------------------------------------------
 
-if page == "Migration Resource Center":
+st.sidebar.subheader("Additional Tools")
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Facility Type")
+if st.sidebar.button(
+    "Care Services Explorer",
+    width='stretch'
+):
+    st.session_state.page = "Care Services Explorer"
+    st.rerun()
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#7F47ED;font-size:22px;">●</span>
-        <b>QC Migrants Resource Center</b><br>
-        <small>
-        Provides support, information, training, and services for migrant workers and their families.
-        </small>
-        """,
-        unsafe_allow_html=True
-    )
+# --------------------------------------------------
+# ACTIVE PAGE
+# --------------------------------------------------
+
+page = st.session_state.page
 
 if page == "Care Services Explorer":
 
@@ -679,6 +567,12 @@ if page == "Care Services Explorer":
         unsafe_allow_html=True
     )    
 
+
+
+
+
+
+
 # --------------------------------------------------
 # PAGES
 # --------------------------------------------------
@@ -703,9 +597,21 @@ if page == "Childcare Centers":
     st.markdown("""
     Explore the spatial distribution of childcare facilities in Quezon City,
     including public Child Development Centers and private childcare providers.
-                
-                
     """)
+
+    st.markdown(
+        """
+        <span style="color:#5B21B6;font-size:18px;">●</span>
+        <b>Child Development Center</b> — For children aged 3–4 years and supports school readiness.<br>
+
+        <span style="color:#7F47ED;font-size:18px;">●</span>
+        <b>Child Learning Center</b> — Private childcare and early learning services.<br>
+
+        <span style="color:#A78BFA;font-size:18px;">●</span>
+        <b>Day Care Center</b> — Private day care and supervision services.
+        """,
+        unsafe_allow_html=True
+    )
 
     # --------------------------------------------------
     # DISTRICT FILTER
@@ -723,10 +629,10 @@ if page == "Childcare Centers":
         ["All"] + [f"District {d}" for d in districts]
     )
 
-    st.info("Click a facility on the map.")
+    st.info("Hover over a facility to view details.")
 
     # --------------------------------------------------
-    # DATA FILTERING
+    # FILTERING
     # --------------------------------------------------
 
     cc = childcare_centers.copy()
@@ -734,12 +640,14 @@ if page == "Childcare Centers":
     if selected_district != "All":
 
         district_number = int(
-            selected_district.replace("District ", "")
+            selected_district.replace(
+                "District ",
+                ""
+            )
         )
 
         cc = cc[
-            cc["District"].astype(int)
-            == district_number
+            cc["District"] == district_number
         ]
 
     if selected_childcare_sector != "All":
@@ -765,80 +673,117 @@ if page == "Childcare Centers":
         ]
 
     # --------------------------------------------------
+    # COLOR CONVERSION
+    # --------------------------------------------------
+
+    def hex_to_rgb(hex_color):
+        hex_color = hex_color.lstrip("#")
+
+        return [
+            int(hex_color[0:2], 16),
+            int(hex_color[2:4], 16),
+            int(hex_color[4:6], 16)
+        ]
+
+    colors = [
+        hex_to_rgb(
+            childcare_color(cat)
+        )
+        for cat in cc["Category"].astype(str)
+    ]
+
+    cc["r"] = [c[0] for c in colors]
+    cc["g"] = [c[1] for c in colors]
+    cc["b"] = [c[2] for c in colors]
+
+    # --------------------------------------------------
+    # VIEW STATE
+    # --------------------------------------------------
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,   
+        max_zoom=17, 
+    )
+
+    # --------------------------------------------------
+    # BARANGAY BOUNDARIES
+    # --------------------------------------------------
+
+    polygon_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geo,
+        stroked=True,
+        filled=True,
+        get_fill_color=[127, 191, 127, 38],
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=1,
+        pickable=False
+    )
+
+    # --------------------------------------------------
+    # CHILDCARE POINTS
+    # --------------------------------------------------
+
+    childcare_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=cc,
+        get_position="[longitude, latitude]",
+        get_fill_color="[r, g, b]",
+        get_line_color="[r, g, b]",
+        stroked=True,
+        filled=True,
+        opacity=0.9,
+        line_width_min_pixels=2,
+        get_radius=40,
+        radius_min_pixels=4,
+        radius_max_pixels=4,
+        pickable=True
+    )
+
+    # --------------------------------------------------
+    # TOOLTIP
+    # --------------------------------------------------
+
+    tooltip = {
+        "html": """
+        <b>{Name}</b><br/>
+        Sector: {Sector}<br/>
+        Category: {Category}<br/>
+        District: {District}<br/>
+        Address: {Address}<br/>
+        Open: {open_hours}<br/>
+        Close: {close_hours}
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
+        }
+    }
+
+    # --------------------------------------------------
     # MAP
     # --------------------------------------------------
 
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        min_zoom=11,
-        max_zoom=17,
-        max_bounds=True,
-        tiles="CartoDB positron"
+    deck = pdk.Deck(
+        layers=[
+            polygon_layer,
+            childcare_layer
+        ],
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="light"
+
     )
 
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.15,
-        }
-    ).add_to(m)
-
-    # --------------------------------------------------
-    # MARKERS
-    # --------------------------------------------------
-
-    for _, row in cc.iterrows():
-
-        popup_html = f"""
-        <b>{row['Name']}</b><br>
-        Sector: {row['Sector']}<br>
-        Category: {row['Category']}<br>
-        District: {int(row['District'])}<br>
-        Address: {row['Address']}
-        """
-
-        if (
-            "open_hours" in row.index
-            and pd.notna(row["open_hours"])
-        ):
-            popup_html += f"<br>Open: {row['open_hours']}"
-
-        if (
-            "close_hours" in row.index
-            and pd.notna(row["close_hours"])
-        ):
-            popup_html += f"<br>Close: {row['close_hours']}"
-
-        folium.CircleMarker(
-            location=[
-                row["latitude"],
-                row["longitude"]
-            ],
-            radius=4,
-            color=childcare_color(row["Category"]),
-            fill=True,
-            fill_color=childcare_color(row["Category"]),
-            fill_opacity=0.9,
-            weight=2,
-            popup=folium.Popup(
-                popup_html,
-                max_width=350
-            ),
-            tooltip=row["Name"]
-        ).add_to(m)
-
-    # --------------------------------------------------
-    # MAP DISPLAY
-    # --------------------------------------------------
-
-    st_folium(
-        m,
-        height=800,
-        width=None
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width='stretch'
     )
 
 elif page == "Schools":
@@ -863,6 +808,16 @@ elif page == "Schools":
     including both public and private educational institutions.
     """)
 
+    st.markdown(
+        """
+        <span style="color:#5B21B6;">●</span>
+        <b>Public School</b> — Government-operated educational institutions.<br>
+        <span style="color:#A78BFA;">●</span>
+        <b>Private School</b> — Privately operated educational institutions.
+        """,
+        unsafe_allow_html=True
+    )
+
     # --------------------------------------------------
     # DISTRICT FILTER
     # --------------------------------------------------
@@ -879,7 +834,7 @@ elif page == "Schools":
         ["All"] + [f"District {d}" for d in districts]
     )
 
-    st.info("Click a school on the map.")
+    st.info("Hover over a school to view details.")
 
     # --------------------------------------------------
     # FILTERING
@@ -890,7 +845,10 @@ elif page == "Schools":
     if selected_district != "All":
 
         district_number = int(
-            selected_district.replace("District ", "")
+            selected_district.replace(
+                "District ",
+                ""
+            )
         )
 
         sch = sch[
@@ -935,85 +893,126 @@ elif page == "Schools":
             f"{missing_locations} schools do not have coordinates and are not shown on the map."
         )
 
-    sch_map = sch.dropna(
+    sch = sch.dropna(
         subset=["latitude", "longitude"]
     )
+
+    # --------------------------------------------------
+    # COLOR CONVERSION
+    # --------------------------------------------------
+
+    def hex_to_rgb(hex_color):
+
+        hex_color = hex_color.lstrip("#")
+
+        return [
+            int(hex_color[0:2], 16),
+            int(hex_color[2:4], 16),
+            int(hex_color[4:6], 16)
+        ]
+
+    colors = [
+        hex_to_rgb(
+            school_color(cat)
+        )
+        for cat in sch["Category"].astype(str)
+    ]
+
+    sch["r"] = [c[0] for c in colors]
+    sch["g"] = [c[1] for c in colors]
+    sch["b"] = [c[2] for c in colors]
+
+    # --------------------------------------------------
+    # VIEW STATE
+    # --------------------------------------------------
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,   
+        max_zoom=17, 
+    )
+
+    # --------------------------------------------------
+    # BARANGAY POLYGONS
+    # --------------------------------------------------
+
+    polygon_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geo,
+        stroked=True,
+        filled=True,
+        get_fill_color=[127, 191, 127, 38],
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=1,
+        pickable=False
+
+    )
+
+    # --------------------------------------------------
+    # SCHOOL POINTS
+    # --------------------------------------------------
+
+    school_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=sch,
+        get_position="[longitude, latitude]",
+        get_fill_color="[r, g, b]",
+        get_line_color="[r, g, b]",
+        stroked=True,
+        filled=True,
+        opacity=0.9,
+        line_width_min_pixels=2,
+        get_radius=40,
+        radius_min_pixels=4,
+        radius_max_pixels=4,
+        pickable=True,
+    )
+
+    # --------------------------------------------------
+    # TOOLTIP
+    # --------------------------------------------------
+
+    
+
+    tooltip = {
+        "html": """
+        <b>{Name}</b><br/>
+        Sector: {Sector}<br/>
+        Category: {Category}<br/>
+        District: {District}<br/>
+        Address: {Address}<br/>
+        Open: {open_hours}<br/>
+        Close: {close_hours}
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
+        }
+    }
 
     # --------------------------------------------------
     # MAP
     # --------------------------------------------------
 
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        min_zoom=11,
-        max_zoom=17,
-        max_bounds=True,
-        tiles="CartoDB positron"
+    deck = pdk.Deck(
+        layers=[
+            polygon_layer,
+            school_layer
+        ],
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="light"
+
     )
 
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.15,
-        }
-    ).add_to(m)
-
-    bounds = geo.total_bounds
-    southwest = [bounds[1], bounds[0]]
-    northeast = [bounds[3], bounds[2]]
-
-    m.fit_bounds([southwest, northeast])
-
-    # --------------------------------------------------
-    # MARKERS
-    # --------------------------------------------------
-
-    for _, row in sch_map.iterrows():
-
-        popup_html = f"""
-        <b>{row['Name']}</b><br>
-        Sector: {row['Sector']}<br>
-        Category: {row['Category']}<br>
-        District: {int(row['District'])}<br>
-        Address: {row['Address']}
-        """
-
-        if pd.notna(row.get("open_hours")):
-            popup_html += f"<br>Open: {row['open_hours']}"
-
-        if pd.notna(row.get("close_hours")):
-            popup_html += f"<br>Close: {row['close_hours']}"
-
-        folium.CircleMarker(
-            location=[
-                row["latitude"],
-                row["longitude"]
-            ],
-            radius=4,
-            color=school_color(row["Category"]),
-            fill=True,
-            fill_color=school_color(row["Category"]),
-            fill_opacity=0.9,
-            weight=2,
-            popup=folium.Popup(
-                popup_html,
-                max_width=350
-            ),
-            tooltip=row["Name"]
-        ).add_to(m)
-
-    # --------------------------------------------------
-    # MAP DISPLAY
-    # --------------------------------------------------
-
-    st_folium(
-        m,
-        height=800,
-        width=None
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width='stretch'
     )
 
 elif page == "Health Centers Map":
@@ -1039,6 +1038,28 @@ elif page == "Health Centers Map":
     facility coverage, and the availability of pharmacies across districts.
     """)
 
+    st.markdown(
+        f"""
+        <span style="color:{category_hex('QC LGU')};">●</span>
+        <b>QC LGU</b> — Maternity and lying-in clinics for healthy pregnancies.<br>
+
+        <span style="color:{category_hex('National')};">●</span>
+        <b>National</b> — National government-owned hospitals.<br>
+
+        <span style="color:{category_hex('Super Health')};">●</span>
+        <b>Super Health</b> — Enhanced health centers with laboratory, dental, ambulance, breastfeeding, and lying-in services.<br>
+
+        <span style="color:{category_hex('Health Center')};">●</span>
+        <b>Health Center</b> — Community-based primary healthcare facilities.<br>
+
+        <span style="color:{category_hex('Pharmacy')};">●</span>
+        <b>Pharmacy</b> — Pharmacy services within health facilities.<br>
+
+        <span style="color:{category_hex('Milk Bank')};">●</span>
+        <b>Milk Bank</b> — Safe pasteurized human milk services for infants in need.
+        """,
+        unsafe_allow_html=True
+    )
     # --------------------------------------------------
     # DISTRICT FILTER
     # --------------------------------------------------
@@ -1055,7 +1076,7 @@ elif page == "Health Centers Map":
         ["All"] + [f"District {d}" for d in districts]
     )
 
-    st.info("Click a facility on the map.")
+    st.info("Hover over a facility to view details.")
 
     # --------------------------------------------------
     # FILTERING
@@ -1066,7 +1087,10 @@ elif page == "Health Centers Map":
     if selected_district != "All":
 
         district_number = int(
-            selected_district.replace("District ", "")
+            selected_district.replace(
+                "District ",
+                ""
+            )
         )
 
         hc = hc[
@@ -1085,88 +1109,160 @@ elif page == "Health Centers Map":
             )
         ]
 
-    hc["color"] = hc["Category"].apply(category_color)
+    # --------------------------------------------------
+    # REMOVE MISSING COORDINATES
+    # --------------------------------------------------
+
+    hc = hc.dropna(
+        subset=["latitude", "longitude"]
+    )
+
+    # --------------------------------------------------
+    # HOURS DISPLAY
+    # --------------------------------------------------
+
+    if "open_hours" in hc.columns:
+        hc["open_display"] = (
+            hc["open_hours"]
+            .fillna("Not available")
+        )
+    else:
+        hc["open_display"] = "Not available"
+
+    if "close_hours" in hc.columns:
+        hc["close_display"] = (
+            hc["close_hours"]
+            .fillna("Not available")
+        )
+    else:
+        hc["close_display"] = "Not available"
+
+    # --------------------------------------------------
+    # BARANGAY DISPLAY
+    # --------------------------------------------------
+
+    if "barangay" in hc.columns:
+        hc["barangay_display"] = (
+            hc["barangay"]
+            .fillna("Not available")
+        )
+    else:
+        hc["barangay_display"] = "Not available"
+
+    # --------------------------------------------------
+    # COLOR CONVERSION
+    # --------------------------------------------------
+
+    def hex_to_rgb(hex_color):
+
+        hex_color = hex_color.lstrip("#")
+
+        return [
+            int(hex_color[0:2], 16),
+            int(hex_color[2:4], 16),
+            int(hex_color[4:6], 16)
+        ]
+
+    colors = [
+        hex_to_rgb(
+            marker_color(cat)
+        )
+        for cat in hc["Category"].astype(str)
+    ]
+
+    hc["r"] = [c[0] for c in colors]
+    hc["g"] = [c[1] for c in colors]
+    hc["b"] = [c[2] for c in colors]
+
+    # --------------------------------------------------
+    # VIEW STATE
+    # --------------------------------------------------
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,   
+        max_zoom=17, 
+    )
+
+    # --------------------------------------------------
+    # BARANGAY POLYGONS
+    # --------------------------------------------------
+
+    polygon_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geo,
+        stroked=True,
+        filled=True,
+        get_fill_color=[127, 191, 127, 38],
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=1,
+        pickable=False
+    )
+
+    # --------------------------------------------------
+    # HEALTH FACILITIES
+    # --------------------------------------------------
+
+    health_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=hc,
+        get_position="[longitude, latitude]",
+        get_fill_color="[r, g, b]",
+        get_line_color="[r, g, b]",
+        stroked=True,
+        filled=True,
+        opacity=0.9,
+        line_width_min_pixels=2,
+        get_radius=40,
+        radius_min_pixels=4,
+        radius_max_pixels=4,
+        pickable=True
+    )
+
+    # --------------------------------------------------
+    # TOOLTIP
+    # --------------------------------------------------
+
+    tooltip = {
+        "html": """
+        <b>{Name}</b><br/>
+        Category: {Category}<br/>
+        District: {District}<br/>
+        Barangay: {barangay_display}<br/>
+        Address: {Address}<br/>
+        Open: {open_display}<br/>
+        Close: {close_display}
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
+        }
+    }
 
     # --------------------------------------------------
     # MAP
     # --------------------------------------------------
 
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        min_zoom=11,
-        max_zoom=17,
-        max_bounds=True,
-        tiles="CartoDB positron"
+    deck = pdk.Deck(
+        layers=[
+            polygon_layer,
+            health_layer
+        ],
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
     )
 
-    # Optional: always focus on QC
-    bounds = geo.total_bounds
-    southwest = [bounds[1], bounds[0]]
-    northeast = [bounds[3], bounds[2]]
-    m.fit_bounds([southwest, northeast])
-
-    # --------------------------------------------------
-    # BARANGAY BOUNDARIES
-    # --------------------------------------------------
-
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.15,
-        }
-    ).add_to(m)
-
-    # --------------------------------------------------
-    # MARKERS
-    # --------------------------------------------------
-
-    for _, row in hc.iterrows():
-
-        popup_html = f"""
-        <b>{row['Name of Facility']}</b><br>
-        Category: {row['Category']}<br>
-        District: {int(row['District'])}<br>
-        Address: {row['Address']}
-        """
-
-        if (
-            "barangay" in row.index
-            and pd.notna(row["barangay"])
-        ):
-            popup_html += f"<br>Barangay: {row['barangay']}"
-
-        folium.CircleMarker(
-            location=[
-                row["latitude"],
-                row["longitude"]
-            ],
-            radius=4,
-            color=marker_color(row["Category"]),
-            fill=True,
-            fill_color=marker_color(row["Category"]),
-            fill_opacity=0.9,
-            weight=2,
-            popup=folium.Popup(
-                popup_html,
-                max_width=350
-            ),
-            tooltip=row["Name of Facility"]
-        ).add_to(m)
-
-    # --------------------------------------------------
-    # MAP DISPLAY
-    # --------------------------------------------------
-
-    st_folium(
-        m,
-        height=800,
-        width=None
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width='stretch'
     )
-
+    
 elif page == "Older Persons Center Map":
 
     st.markdown(
@@ -1189,6 +1285,18 @@ elif page == "Older Persons Center Map":
     including nursing care centers and Bahay Aruga facilities.
     """)
 
+    st.markdown(
+        """
+        <span style="color:#4C1D95;">●</span>
+        <b>Nursing Care Center</b> — Residential facilities providing long-term nursing and care services.<br>
+
+        <span style="color:#A78BFA;">●</span>
+        <b>Bahay Aruga</b> — Temporary residential facility for abandoned, neglected, abused, and indigent QC senior citizens aged 60 years and above.
+        """,
+        unsafe_allow_html=True
+    )
+
+
     # --------------------------------------------------
     # DISTRICT FILTER
     # --------------------------------------------------
@@ -1199,7 +1307,6 @@ elif page == "Older Persons Center Map":
                 older_person_care["District"]
                 .dropna()
                 .astype(int),
-
                 pd.Series([3, 6])
             ]
         ).unique()
@@ -1211,7 +1318,7 @@ elif page == "Older Persons Center Map":
         key="opc_district"
     )
 
-    st.info("Click a facility on the map.")
+    st.info("Hover over a facility to view details.")
 
     # --------------------------------------------------
     # FILTERING
@@ -1222,7 +1329,10 @@ elif page == "Older Persons Center Map":
     if selected_district != "All":
 
         district_number = int(
-            selected_district.replace("District ", "")
+            selected_district.replace(
+                "District ",
+                ""
+            )
         )
 
         opc = opc[
@@ -1242,7 +1352,7 @@ elif page == "Older Persons Center Map":
         ]
 
     # --------------------------------------------------
-    # REMOVE MISSING COORDINATES
+    # MISSING COORDINATES
     # --------------------------------------------------
 
     missing_locations = (
@@ -1256,79 +1366,155 @@ elif page == "Older Persons Center Map":
             f"{missing_locations} facilities do not have coordinates and are not shown on the map."
         )
 
-    opc_map = opc.dropna(
+    opc = opc.dropna(
         subset=["latitude", "longitude"]
     )
 
     # --------------------------------------------------
-    # MAP
+    # DISPLAY COLUMNS
     # --------------------------------------------------
 
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        min_zoom=11,
-        max_zoom=17,
-        max_bounds=True,
-        tiles="CartoDB positron"
+    if "barangay" in opc.columns:
+
+        opc["barangay_display"] = (
+            opc["barangay"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        opc["barangay_display"] = (
+            "Not available"
+        )
+
+    if "open_hours" in opc.columns:
+
+        opc["open_display"] = (
+            opc["open_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        opc["open_display"] = (
+            "Not available"
+        )
+
+    if "close_hours" in opc.columns:
+
+        opc["close_display"] = (
+            opc["close_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        opc["close_display"] = (
+            "Not available"
+        )
+
+    # --------------------------------------------------
+    # COLORS
+    # --------------------------------------------------
+
+    colors = [
+        hex_to_rgb(
+            opc_color(cat)
+        )
+        for cat in opc["Category"].astype(str)
+    ]
+
+    opc["r"] = [c[0] for c in colors]
+    opc["g"] = [c[1] for c in colors]
+    opc["b"] = [c[2] for c in colors]
+
+    # --------------------------------------------------
+    # VIEW STATE
+    # --------------------------------------------------
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,   
+        max_zoom=17, 
     )
 
-    bounds = geo.total_bounds
-    southwest = [bounds[1], bounds[0]]
-    northeast = [bounds[3], bounds[2]]
+    # --------------------------------------------------
+    # POLYGONS
+    # --------------------------------------------------
 
-    m.fit_bounds([southwest, northeast])
+    polygon_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geo,
+        stroked=True,
+        filled=True,
+        get_fill_color=[127, 191, 127, 38],
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=1,
+        pickable=False
+    )
 
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.15,
+    # --------------------------------------------------
+    # FACILITIES
+    # --------------------------------------------------
+
+    facility_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=opc,
+        get_position="[longitude, latitude]",
+        get_fill_color="[r, g, b]",
+        get_line_color="[r, g, b]",
+        stroked=True,
+        filled=True,
+        opacity=0.9,
+        line_width_min_pixels=2,
+        get_radius=40,
+        radius_min_pixels=4,
+        radius_max_pixels=4,
+        pickable=True
+    )
+
+    # --------------------------------------------------
+    # TOOLTIP
+    # --------------------------------------------------
+
+    tooltip = {
+        "html": """
+        <b>{Name}</b><br/>
+        Category: {Category}<br/>
+        District: {District}<br/>
+        Barangay: {barangay_display}<br/>
+        Address: {Address}<br/>
+        Open: {open_display}<br/>
+        Close: {close_display}
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
         }
-    ).add_to(m)
+    }
 
     # --------------------------------------------------
-    # FACILITY MARKERS
+    # DECK
     # --------------------------------------------------
 
-    for _, row in opc_map.iterrows():
+    deck = pdk.Deck(
+        layers=[
+            polygon_layer,
+            facility_layer
+        ],
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+    )
 
-        popup_html = f"""
-        <b>{row['Name']}</b><br>
-        Category: {row['Category']}<br>
-        District: {int(row['District'])}<br>
-        Barangay: {row['barangay']}<br>
-        Address: {row['Address']}
-        """
-
-        folium.CircleMarker(
-            location=[
-                row["latitude"],
-                row["longitude"]
-            ],
-            radius=5,
-            color=opc_color(row["Category"]),
-            fill=True,
-            fill_color=opc_color(row["Category"]),
-            fill_opacity=0.9,
-            weight=2,
-            popup=folium.Popup(
-                popup_html,
-                max_width=350
-            ),
-            tooltip=row["Name"]
-        ).add_to(m)
-
-    # --------------------------------------------------
-    # MAP DISPLAY
-    # --------------------------------------------------
-
-    st_folium(
-        m,
-        height=800,
-        width=None
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width='stretch'
     )
 
 elif page == "Long-Term Care & Rehabilitation":
@@ -1354,6 +1540,19 @@ elif page == "Long-Term Care & Rehabilitation":
     recovery services in Quezon City.
     """)
 
+    legend_html = ""
+
+    for cat in ltc_categories:
+        legend_html += (
+            f'<span style="color:{ltc_color(cat)};">●</span> '
+            f'<b>{cat}</b><br>'
+        )
+
+    st.markdown(
+        legend_html,
+        unsafe_allow_html=True
+    )
+
     # --------------------------------------------------
     # DISTRICT FILTER
     # --------------------------------------------------
@@ -1370,7 +1569,7 @@ elif page == "Long-Term Care & Rehabilitation":
         ["All"] + [f"District {d}" for d in districts]
     )
 
-    st.info("Click a facility on the map.")
+    st.info("Hover over a facility to view details.")
 
     # --------------------------------------------------
     # FILTERING
@@ -1381,7 +1580,10 @@ elif page == "Long-Term Care & Rehabilitation":
     if selected_district != "All":
 
         district_number = int(
-            selected_district.replace("District ", "")
+            selected_district.replace(
+                "District ",
+                ""
+            )
         )
 
         ltc = ltc[
@@ -1415,81 +1617,158 @@ elif page == "Long-Term Care & Rehabilitation":
             f"{missing_locations} facilities do not have coordinates and are not shown on the map."
         )
 
-    ltc_map = ltc.dropna(
+    ltc = ltc.dropna(
         subset=["latitude", "longitude"]
     )
 
     # --------------------------------------------------
-    # MAP
+    # DISPLAY COLUMNS
     # --------------------------------------------------
 
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        min_zoom=11,
-        max_zoom=17,
-        max_bounds=True,
-        tiles="CartoDB positron"
+    if "barangay" in ltc.columns:
+
+        ltc["barangay_display"] = (
+            ltc["barangay"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        ltc["barangay_display"] = (
+            "Not available"
+        )
+
+    if "open_hours" in ltc.columns:
+
+        ltc["open_display"] = (
+            ltc["open_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        ltc["open_display"] = (
+            "Not available"
+        )
+
+    if "close_hours" in ltc.columns:
+
+        ltc["close_display"] = (
+            ltc["close_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        ltc["close_display"] = (
+            "Not available"
+        )
+
+    # --------------------------------------------------
+    # COLORS
+    # --------------------------------------------------
+
+    colors = [
+        hex_to_rgb(
+            ltc_color(cat)
+        )
+        for cat in ltc["Category"].astype(str)
+    ]
+
+    ltc["r"] = [c[0] for c in colors]
+    ltc["g"] = [c[1] for c in colors]
+    ltc["b"] = [c[2] for c in colors]
+
+    # --------------------------------------------------
+    # VIEW STATE
+    # --------------------------------------------------
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,   
+        max_zoom=17, 
     )
 
-    bounds = geo.total_bounds
-    southwest = [bounds[1], bounds[0]]
-    northeast = [bounds[3], bounds[2]]
+    # --------------------------------------------------
+    # POLYGONS
+    # --------------------------------------------------
 
-    m.fit_bounds([southwest, northeast])
+    polygon_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geo,
+        stroked=True,
+        filled=True,
+        get_fill_color=[127, 191, 127, 38],
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=1,
+        pickable=False
+    )
 
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.15,
+    # --------------------------------------------------
+    # FACILITIES
+    # --------------------------------------------------
+
+    facility_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=ltc,
+        get_position="[longitude, latitude]",
+        get_fill_color="[r, g, b]",
+        get_line_color="[r, g, b]",
+        stroked=True,
+        filled=True,
+        opacity=0.9,
+        line_width_min_pixels=2,
+        get_radius=40,
+        radius_min_pixels=4,
+        radius_max_pixels=4,
+        pickable=True
+    )
+
+    # --------------------------------------------------
+    # TOOLTIP
+    # --------------------------------------------------
+
+    tooltip = {
+        "html": """
+        <b>{Name}</b><br/>
+        Category: {Category}<br/>
+        District: {District}<br/>
+        Barangay: {barangay_display}<br/>
+        Address: {Address}<br/>
+        Open: {open_display}<br/>
+        Close: {close_display}
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
         }
-    ).add_to(m)
+    }
 
     # --------------------------------------------------
-    # MARKERS
+    # DECK
     # --------------------------------------------------
 
-    for _, row in ltc_map.iterrows():
-
-        popup_html = f"""
-        <b>{row['Name']}</b><br>
-        Category: {row['Category']}<br>
-        District: {int(row['District'])}<br>
-        Address: {row['Address']}
-        """
-
-        folium.CircleMarker(
-            location=[
-                row["latitude"],
-                row["longitude"]
-            ],
-            radius=4,
-            color=ltc_color(row["Category"]),
-            fill=True,
-            fill_color=ltc_color(row["Category"]),
-            fill_opacity=0.9,
-            weight=2,
-            popup=folium.Popup(
-                popup_html,
-                max_width=350
-            ),
-            tooltip=row["Name"]
-        ).add_to(m)
-
-    # --------------------------------------------------
-    # MAP DISPLAY
-    # --------------------------------------------------
-
-    st_folium(
-        m,
-        height=800,
-        width=None
+    deck = pdk.Deck(
+        layers=[
+            polygon_layer,
+            facility_layer
+        ],
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
     )
 
-elif page == "Satellite Offices":
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width='stretch' 
+    )
+
+elif page == "Action Offices":
 
     st.markdown(
         """
@@ -1500,7 +1779,7 @@ elif page == "Satellite Offices":
             margin-bottom:10px;
             padding-top:0px;
         ">
-            Quezon City Satellite Offices
+            Quezon City Action Offices
         </h2>
         """,
         unsafe_allow_html=True
@@ -1511,6 +1790,15 @@ elif page == "Satellite Offices":
     satellite offices providing local access
     to government services.
     """)
+
+
+    st.markdown(
+        """
+        <span style="color:#7F47ED;">●</span>
+        <b>Action Offices</b> — Decentralized access points that provide city government services across Quezon City.
+        """,
+        unsafe_allow_html=True
+    )
 
     # --------------------------------------------------
     # DISTRICT FILTER
@@ -1528,7 +1816,7 @@ elif page == "Satellite Offices":
         ["All"] + [f"District {d}" for d in districts]
     )
 
-    st.info("Click an office on the map.")
+    st.info("Hover over an office to view details.")
 
     # --------------------------------------------------
     # FILTERING
@@ -1539,7 +1827,10 @@ elif page == "Satellite Offices":
     if selected_district != "All":
 
         district_number = int(
-            selected_district.replace("District ", "")
+            selected_district.replace(
+                "District ",
+                ""
+            )
         )
 
         sat = sat[
@@ -1562,77 +1853,154 @@ elif page == "Satellite Offices":
             f"{missing_locations} offices do not have coordinates and are not shown on the map."
         )
 
-    sat_map = sat.dropna(
+    sat = sat.dropna(
         subset=["latitude", "longitude"]
     )
 
     # --------------------------------------------------
-    # MAP
+    # DISPLAY COLUMNS
     # --------------------------------------------------
 
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        min_zoom=11,
-        max_zoom=17,
-        max_bounds=True,
-        tiles="CartoDB positron"
+    if "barangay" in sat.columns:
+
+        sat["barangay_display"] = (
+            sat["barangay"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        sat["barangay_display"] = (
+            "Not available"
+        )
+
+    if "open_hours" in sat.columns:
+
+        sat["open_display"] = (
+            sat["open_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        sat["open_display"] = (
+            "Not available"
+        )
+
+    if "close_hours" in sat.columns:
+
+        sat["close_display"] = (
+            sat["close_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        sat["close_display"] = (
+            "Not available"
+        )
+
+    # --------------------------------------------------
+    # COLORS BY DISTRICT
+    # --------------------------------------------------
+
+    colors = [
+        hex_to_rgb(
+            district_color(d)
+        )
+        for d in sat["District"]
+    ]
+
+    sat["r"] = [c[0] for c in colors]
+    sat["g"] = [c[1] for c in colors]
+    sat["b"] = [c[2] for c in colors]
+
+    # --------------------------------------------------
+    # VIEW STATE
+    # --------------------------------------------------
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,   
+        max_zoom=17, 
     )
 
-    bounds = geo.total_bounds
-    southwest = [bounds[1], bounds[0]]
-    northeast = [bounds[3], bounds[2]]
+    # --------------------------------------------------
+    # POLYGONS
+    # --------------------------------------------------
 
-    m.fit_bounds([southwest, northeast])
+    polygon_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geo,
+        stroked=True,
+        filled=True,
+        get_fill_color=[127, 191, 127, 38],
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=1,
+        pickable=False
+    )
 
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.15,
+    # --------------------------------------------------
+    # OFFICES
+    # --------------------------------------------------
+
+    office_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=sat,
+        get_position="[longitude, latitude]",
+        get_fill_color="[r, g, b]",
+        get_line_color="[r, g, b]",
+        stroked=True,
+        filled=True,
+        opacity=0.9,
+        line_width_min_pixels=2,
+        get_radius=40,
+        radius_min_pixels=4,
+        radius_max_pixels=4,
+        pickable=True
+    )
+
+    # --------------------------------------------------
+    # TOOLTIP
+    # --------------------------------------------------
+
+    tooltip = {
+        "html": """
+        <b>{Category}</b><br/>
+        District: {District}<br/>
+        Barangay: {barangay_display}<br/>
+        Address: {Address}<br/>
+        Open: {open_display}<br/>
+        Close: {close_display}
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
         }
-    ).add_to(m)
+    }
 
     # --------------------------------------------------
-    # MARKERS
+    # DECK
     # --------------------------------------------------
 
-    for _, row in sat_map.iterrows():
+    deck = pdk.Deck(
+        layers=[
+            polygon_layer,
+            office_layer
+        ],
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+    )
 
-        popup_html = f"""
-        <b>{row['Category']}</b><br>
-        District: {int(row['District'])}<br>
-        Address: {row['Address']}
-        """
-
-        folium.CircleMarker(
-            location=[
-                row["latitude"],
-                row["longitude"]
-            ],
-            radius=5,
-            color=district_color(row["District"]),
-            fill=True,
-            fill_color=district_color(row["District"]),
-            fill_opacity=0.9,
-            weight=2,
-            popup=folium.Popup(
-                popup_html,
-                max_width=350
-            ),
-            tooltip=row["Category"]
-        ).add_to(m)
-
-    # --------------------------------------------------
-    # MAP DISPLAY
-    # --------------------------------------------------
-
-    st_folium(
-        m,
-        height=800,
-        width=None
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width='stretch'
     )
 
 elif page == "Migration Resource Center":
@@ -1658,6 +2026,14 @@ elif page == "Migration Resource Center":
     and their families in Quezon City.
     """)
 
+    st.markdown(
+        """
+        <span style="color:#7F47ED;">●</span>
+        <b>QC Migrants Resource Center</b> — Provides support, information, training, and services for migrant workers and their families.
+        """,
+        unsafe_allow_html=True
+    )
+
     # --------------------------------------------------
     # DISTRICT FILTER
     # --------------------------------------------------
@@ -1674,7 +2050,7 @@ elif page == "Migration Resource Center":
         ["All"] + [f"District {d}" for d in districts]
     )
 
-    st.info("Click a facility on the map.")
+    st.info("Hover over a facility to view details.")
 
     # --------------------------------------------------
     # FILTERING
@@ -1685,7 +2061,10 @@ elif page == "Migration Resource Center":
     if selected_district != "All":
 
         district_number = int(
-            selected_district.replace("District ", "")
+            selected_district.replace(
+                "District ",
+                ""
+            )
         )
 
         mig = mig[
@@ -1708,96 +2087,154 @@ elif page == "Migration Resource Center":
             f"{missing_locations} facilities do not have coordinates and are not shown on the map."
         )
 
-    mig_map = mig.dropna(
+    mig = mig.dropna(
         subset=["latitude", "longitude"]
     )
 
     # --------------------------------------------------
-    # MAP
+    # DISPLAY COLUMNS
     # --------------------------------------------------
 
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        min_zoom=11,
-        max_zoom=17,
-        max_bounds=True,
-        tiles="CartoDB positron"
+    if "barangay" in mig.columns:
+
+        mig["barangay_display"] = (
+            mig["barangay"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        mig["barangay_display"] = (
+            "Not available"
+        )
+
+    if "open_hours" in mig.columns:
+
+        mig["open_display"] = (
+            mig["open_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        mig["open_display"] = (
+            "Not available"
+        )
+
+    if "close_hours" in mig.columns:
+
+        mig["close_display"] = (
+            mig["close_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        mig["close_display"] = (
+            "Not available"
+        )
+
+    # --------------------------------------------------
+    # COLORS
+    # --------------------------------------------------
+
+    mig["r"] = 127
+    mig["g"] = 71
+    mig["b"] = 237
+
+    # --------------------------------------------------
+    # VIEW STATE
+    # --------------------------------------------------
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,   
+        max_zoom=17, 
     )
 
-    bounds = geo.total_bounds
-    southwest = [bounds[1], bounds[0]]
-    northeast = [bounds[3], bounds[2]]
+    # --------------------------------------------------
+    # POLYGONS
+    # --------------------------------------------------
 
-    m.fit_bounds([southwest, northeast])
+    polygon_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geo,
+        stroked=True,
+        filled=True,
+        get_fill_color=[127, 191, 127, 38],
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=1,
+        pickable=False
+    )
 
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.15,
+    # --------------------------------------------------
+    # FACILITIES
+    # --------------------------------------------------
+
+    facility_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=mig,
+        get_position="[longitude, latitude]",
+        get_fill_color="[r, g, b]",
+        get_line_color="[r, g, b]",
+        stroked=True,
+        filled=True,
+        opacity=0.9,
+        line_width_min_pixels=2,
+        get_radius=40,
+        radius_min_pixels=4,
+        radius_max_pixels=4,
+        pickable=True
+    )
+
+    # --------------------------------------------------
+    # TOOLTIP
+    # --------------------------------------------------
+
+    tooltip = {
+        "html": """
+        <b>{Name}</b><br/>
+        Category: {Category}<br/>
+        District: {District}<br/>
+        Barangay: {barangay_display}<br/>
+        Address: {Address}<br/>
+        Open: {open_display}<br/>
+        Close: {close_display}<br/>
+        <br/>
+        <b>Services:</b><br/>
+        1. Pre-Migration and Pre-Employment Trainings<br/>
+        2. Pre-Departure Trainings<br/>
+        3. On-Site Support and Learning Sessions<br/>
+        4. Reintegration Trainings for OFW Returnees
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
         }
-    ).add_to(m)
+    }
 
     # --------------------------------------------------
-    # MARKERS
+    # DECK
     # --------------------------------------------------
 
-    for _, row in mig_map.iterrows():
+    deck = pdk.Deck(
+        layers=[
+            polygon_layer,
+            facility_layer
+        ],
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+    )
 
-        popup_html = f"""
-        <b>{row['Name']}</b><br>
-        Category: {row['Category']}<br>
-        District: {int(row['District'])}<br>
-        Address: {row['Address']}
-        """
-
-        if (
-            "barangay" in row.index
-            and pd.notna(row["barangay"])
-        ):
-            popup_html += f"<br>Barangay: {row['barangay']}"
-
-        if (
-            "open_hours" in row.index
-            and pd.notna(row["open_hours"])
-        ):
-            popup_html += f"<br>Open: {row['open_hours']}"
-
-        if (
-            "close_hours" in row.index
-            and pd.notna(row["close_hours"])
-        ):
-            popup_html += f"<br>Close: {row['close_hours']}"
-
-        folium.CircleMarker(
-            location=[
-                row["latitude"],
-                row["longitude"]
-            ],
-            radius=6,
-            color="#7F47ED",
-            fill=True,
-            fill_color="#7F47ED",
-            fill_opacity=0.9,
-            weight=2,
-            popup=folium.Popup(
-                popup_html,
-                max_width=350
-            ),
-            tooltip=row["Name"]
-        ).add_to(m)
-
-    # --------------------------------------------------
-    # MAP DISPLAY
-    # --------------------------------------------------
-
-    st_folium(
-        m,
-        height=800,
-        width=None
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width='stretch'
     )
 
 elif page == "Care Services Explorer":
@@ -1848,7 +2285,7 @@ elif page == "Care Services Explorer":
             "color": "#7F47ED",
             "symbol": "★",
             "source": "Health Facility",
-            "name_col": "Name of Facility",
+            "name_col": "Name",
             "district_col": "District",
             "address_col": "Address",
             "lat_col": "latitude",
@@ -1879,7 +2316,7 @@ elif page == "Care Services Explorer":
             "lon_col": "longitude"
         },
 
-        "Satellite Offices": {
+        "Action Offices": {
             "df": satellite_offices,
             "color": "#DDD6FE",
             "symbol": "⬢",
@@ -1981,18 +2418,21 @@ elif page == "Care Services Explorer":
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=12,
-        tiles="CartoDB positron"
+        tiles="CartoDB positron",
+        prefer_canvas=True
     )
 
+    geo_json, _= load_geo_explorer()
+
     folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.10,
-        }
-    ).add_to(m)
+    geo_json,
+    style_function=lambda x: {
+        "fillColor": "#7fbf7f",
+        "color": "#666666",
+        "weight": 1,
+        "fillOpacity": 0.10,
+    }
+).add_to(m)
 
     # --------------------------------------------------
     # ADD MARKERS
@@ -2002,7 +2442,7 @@ elif page == "Care Services Explorer":
 
         layer = service_layers[layer_name]
 
-        df = layer["df"].copy()
+        df = layer["df"]
 
         if selected_district != "All":
 
@@ -2019,89 +2459,81 @@ elif page == "Care Services Explorer":
             ]
         )
 
-        for _, row in df.iterrows():
+        has_sector = "Sector" in df.columns
+        has_category = "Category" in df.columns
+        has_barangay = "barangay" in df.columns
+        has_open = "open_hours" in df.columns
+        has_close = "close_hours" in df.columns
+        has_district = layer["district_col"] in df.columns
+        has_address = layer["address_col"] in df.columns
+
+        records = df.to_dict("records")
+
+        for row_dict in records:
             popup_html = f"""
-            <b>{row[layer['name_col']]}</b><br>
+            <b>{row_dict[layer['name_col']]}</b><br>
             Type: {layer['source']}
             """
 
             # Sector
-            if (
-                "Sector" in row.index
-                and pd.notna(row["Sector"])
-            ):
-                popup_html += f"<br>Sector: {row['Sector']}"
+            if has_sector and pd.notna(row_dict["Sector"]):
+                popup_html += f"<br>Sector: {row_dict['Sector']}"
 
             # Category
-            if (
-                "Category" in row.index
-                and pd.notna(row["Category"])
-            ):
-                popup_html += f"<br>Category: {row['Category']}"
+            if has_category and pd.notna(row_dict["Category"]):
+                popup_html += f"<br>Category: {row_dict['Category']}"
 
             # District
-            if (
-                layer["district_col"] in row.index
-                and pd.notna(row[layer["district_col"]])
-            ):
+            if has_district and pd.notna(row_dict[layer["district_col"]]):
                 popup_html += (
                     f"<br>District: "
-                    f"{int(row[layer['district_col']])}"
+                    f"{int(row_dict[layer['district_col']])}"
                 )
 
             # Barangay
             if (
-                "barangay" in row.index
-                and pd.notna(row["barangay"])
-                and str(row["barangay"]).strip() != ""
+                has_barangay
+                and pd.notna(row_dict["barangay"])
+                and str(row_dict["barangay"]).strip() != ""
             ):
-                popup_html += f"<br>Barangay: {row['barangay']}"
+                popup_html += f"<br>Barangay: {row_dict['barangay']}"
 
             # Address
-            if (
-                layer["address_col"] in row.index
-                and pd.notna(row[layer["address_col"]])
-            ):
+            if has_address and pd.notna(row_dict[layer["address_col"]]):
                 popup_html += (
                     f"<br>Address: "
-                    f"{row[layer['address_col']]}"
+                    f"{row_dict[layer['address_col']]}"
                 )
 
             # Opening hours
-            if (
-                "open_hours" in row.index
-                and pd.notna(row["open_hours"])
-            ):
-                popup_html += (
-                    f"<br>Open: {row['open_hours']}"
-                )
+            if has_open and pd.notna(row_dict["open_hours"]):
+                popup_html += f"<br>Open: {row_dict['open_hours']}"
 
             # Closing hours
-            if (
-                "close_hours" in row.index
-                and pd.notna(row["close_hours"])
-            ):
-                popup_html += (
-                    f"<br>Close: {row['close_hours']}"
-                )
+            if has_close and pd.notna(row_dict["close_hours"]):
+                popup_html += f"<br>Close: {row_dict['close_hours']}"
+
+            # Marker color
+            category = row_dict.get("Category")
+            district = row_dict.get("District")
 
             if layer_name == "Childcare Centers":
-                marker_color_value = childcare_color(row["Category"])
+                marker_color_value = childcare_color(category)
 
             elif layer_name == "Schools":
-                marker_color_value = school_color(row["Category"])
+                marker_color_value = school_color(category)
 
             elif layer_name == "Health Centers":
-                marker_color_value = marker_color(row["Category"])
+                marker_color_value = marker_color(category)
 
             elif layer_name == "Older Persons Facilities":
-                marker_color_value = opc_color(row["Category"])
+                marker_color_value = opc_color(category)
 
             elif layer_name == "Long-Term Care & Rehabilitation":
-                marker_color_value = ltc_color(row["Category"])
+                marker_color_value = ltc_color(category)
 
-            elif layer_name == "Satellite Offices":
-                marker_color_value = district_color(row["District"])
+            elif layer_name == "Action Offices":
+                marker_color_value = district_color(district)
 
             elif layer_name == "Migration Resource Centers":
                 marker_color_value = "#C084FC"
@@ -2111,27 +2543,33 @@ elif page == "Care Services Explorer":
 
             folium.Marker(
                 location=[
-                    row[layer["lat_col"]],
-                    row[layer["lon_col"]]
+                    row_dict[layer["lat_col"]],
+                    row_dict[layer["lon_col"]]
                 ],
                 icon=folium.DivIcon(
                     html=f"""
                     <div style="
                         color:{marker_color_value};
-                        font-size:18px;
+                        font-size:16px;
                         font-weight:bold;
                         text-align:center;
+                        text-shadow:
+                            -1px -1px 0 white,
+                            1px -1px 0 white,
+                            -1px  1px 0 white,
+                            1px  1px 0 white;
                     ">
                         {layer['symbol']}
                     </div>
                     """
                 ),
+                tooltip=str(
+                    row_dict[layer["name_col"]]
+                ),
                 popup=folium.Popup(
                     popup_html,
-                    max_width=350
-                ),
-                tooltip=str(
-                    row[layer["name_col"]]
+                    max_width=350,
+                    lazy=True
                 )
             ).add_to(m)
 
