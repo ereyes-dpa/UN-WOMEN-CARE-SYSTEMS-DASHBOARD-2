@@ -2418,10 +2418,9 @@ elif page == "Care Services Explorer":
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=12,
-        min_zoom=4,          # maximum zoom out level
-        max_zoom=12,         # maximum zoom in level
-        tiles="CartoDB positron",
-        prefer_canvas=True
+        min_zoom=1,
+        max_zoom=18,
+        tiles="CartoDB positron"
     )
 
     geo_json, _= load_geo_explorer()
