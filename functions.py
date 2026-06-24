@@ -973,8 +973,46 @@ COLORMAPS = {
         (0.00, (247, 251, 255)),
         (0.50, (107, 174, 214)),
         (1.00, (8, 48, 107))
+    ],
+    # Purples — used for barangay/district choropleths
+    # on the Population Overview and District pages
+    "Purples": [
+        (0.00, (252, 251, 253)),
+        (0.25, (218, 218, 235)),
+        (0.50, (158, 154, 200)),
+        (0.75, (106, 81, 163)),
+        (1.00, (63, 0, 125))
     ]
 }
+
+
+def value_to_rgba(
+    value,
+    vmin,
+    vmax,
+    colormap="Purples",
+    alpha=190
+):
+    """
+    Maps a single numeric value to an [r, g, b, a] list using
+    one of the COLORMAPS ramps, given a (vmin, vmax) range.
+
+    Used for pydeck GeoJsonLayer choropleths (e.g. the
+    Population Overview barangay map and District map), as a
+    polygon-fill equivalent of Plotly's color_continuous_scale
+    + cmin/cmax — vmin/vmax are expected to already be clipped
+    (e.g. to the 5th-95th percentile) by the caller, the same
+    way the Plotly version clips via update_coloraxes.
+    """
+
+    if vmax <= vmin or pd.isna(value):
+        t = 0.0
+    else:
+        t = (value - vmin) / (vmax - vmin)
+
+    r, g, b = _lerp_color(COLORMAPS[colormap], t)
+
+    return [r, g, b, alpha]
 
 
 def _render_raster_rgba(
