@@ -749,8 +749,8 @@ def build_cluster_features(
 
     barangay_df is expected to already carry, per
     barangay: Total, population_density, children_pct,
-    elderly_pct, dependency_ratio (as produced on the
-    Population Overview page).
+    elderly_pct (as produced on the Population Overview
+    page).
 
     care_clean must contain "barangay" and "major_division"
     so a facility-mix share can be added per barangay
@@ -837,8 +837,7 @@ def build_cluster_features(
         feature_cols = [
             "population_density",
             "children_pct",
-            "elderly_pct",
-            "dependency_ratio"
+            "elderly_pct"
         ] + share_cols
 
     feature_cols = [
