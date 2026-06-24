@@ -1122,8 +1122,7 @@ elif page == "Population Overview":
         "📍 **Land Use layer pending.** A land use/zoning indicator "
         "(e.g., % residential, % open space per barangay) is planned "
         "for this page once Quezon City government shares the data, "
-        "or a public Geoportal Philippines alternative is confirmed. "
-        "See Notebooks 1–2 for status.",
+        "or a public Geoportal Philippines alternative is confirmed. ",
         icon="ℹ️"
     )
 
