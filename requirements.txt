@@ -6,4 +6,4 @@ folium
 streamlit-folium
 pyogrio
 rasterio
-sklearn
+scikit-learn
