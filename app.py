@@ -2,10 +2,12 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import folium
-from streamlit_folium import st_folium
 import numpy as np
 from functions import *
 import pydeck as pdk
+
+# PUBLIC VERSION
+
 # --------------------------------------------------
 # PAGE CONFIG
 # --------------------------------------------------
@@ -209,6 +211,283 @@ st.markdown("""
 
 if "page" not in st.session_state:
     st.session_state.page = "Childcare Centers"
+
+
+@st.cache_data(show_spinner="Building map...")
+def build_explorer_map(
+    selected_layers,
+    selected_district
+):
+    """
+    Builds the full Care Services Explorer folium map and
+    returns its rendered HTML string.
+
+    Cached on (selected_layers, selected_district) only — the
+    only two things that actually change what's drawn. Streamlit
+    reruns this whole script on every widget interaction, which
+    would otherwise rebuild every marker on the map from scratch
+    each time even when nothing relevant changed. Caching the
+    finished map means a rerun that doesn't change either
+    argument returns the previously-built HTML immediately
+    instead of reconstructing and re-serializing the whole map.
+
+    Returns HTML (via m._repr_html_()) rather than the live
+    folium.Map object so the cached value is a plain, easily
+    hashable/picklable string. Render with st.iframe(...), not
+    st_folium (st_folium's return value isn't used on this page,
+    so the iframe-based render avoids that component's extra
+    per-rerun overhead).
+    """
+
+    service_layers = {
+
+        "Childcare Centers": {
+            "df": childcare_centers,
+            "color": "#4C1D95",
+            "symbol": "●",
+            "source": "Childcare Center",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Schools": {
+            "df": schools,
+            "color": "#5B21B6",
+            "symbol": "■",
+            "source": "School",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Health Centers": {
+            "df": health_centers,
+            "color": "#7F47ED",
+            "symbol": "★",
+            "source": "Health Facility",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Older Persons Facilities": {
+            "df": older_person_care,
+            "color": "#8B5CF6",
+            "symbol": "◆",
+            "source": "Older Persons Facility",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Long-Term Care & Rehabilitation": {
+            "df": long_term_care,
+            "color": "#A78BFA",
+            "symbol": "▲",
+            "source": "Rehabilitation Facility",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Action Offices": {
+            "df": satellite_offices,
+            "color": "#DDD6FE",
+            "symbol": "⬢",
+            "source": "Satellite Office",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Migration Resource Centers": {
+            "df": migration_centers,
+            "color": "#C084FC",
+            "symbol": "✦",
+            "source": "Migration Resource Center",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+    }
+
+    # A small padding around the QC extent (in degrees) so the
+    # city boundary doesn't sit flush against the edge of the
+    # area the user can pan/zoom into.
+    bounds_padding = 0.03
+
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=12,
+        min_zoom=12,
+        max_zoom=18,
+        tiles="CartoDB positron",
+        max_bounds=True,
+        min_lat=miny - bounds_padding,
+        max_lat=maxy + bounds_padding,
+        min_lon=minx - bounds_padding,
+        max_lon=maxx + bounds_padding
+    )
+
+    geo_json, _ = load_geo_explorer()
+
+    folium.GeoJson(
+        geo_json,
+        style_function=lambda x: {
+            "fillColor": "#7fbf7f",
+            "color": "#666666",
+            "weight": 1,
+            "fillOpacity": 0.10,
+        }
+    ).add_to(m)
+
+    # ------------------------------------------
+    # ADD MARKERS
+    # ------------------------------------------
+
+    for layer_name in selected_layers:
+
+        layer = service_layers[layer_name]
+
+        df = layer["df"]
+
+        if selected_district != "All":
+
+            df = df[
+                df[layer["district_col"]]
+                .astype(int)
+                == selected_district
+            ]
+
+        df = df.dropna(
+            subset=[
+                layer["lat_col"],
+                layer["lon_col"]
+            ]
+        )
+
+        has_sector = "Sector" in df.columns
+        has_category = "Category" in df.columns
+        has_barangay = "barangay" in df.columns
+        has_open = "open_hours" in df.columns
+        has_close = "close_hours" in df.columns
+        has_district = layer["district_col"] in df.columns
+        has_address = layer["address_col"] in df.columns
+
+        records = df.to_dict("records")
+
+        for row_dict in records:
+            popup_html = f"""
+            <b>{row_dict[layer['name_col']]}</b><br>
+            Type: {layer['source']}
+            """
+
+            if has_sector and pd.notna(row_dict["Sector"]):
+                popup_html += f"<br>Sector: {row_dict['Sector']}"
+
+            if has_category and pd.notna(row_dict["Category"]):
+                popup_html += f"<br>Category: {row_dict['Category']}"
+
+            if has_district and pd.notna(row_dict[layer["district_col"]]):
+                popup_html += (
+                    f"<br>District: "
+                    f"{int(row_dict[layer['district_col']])}"
+                )
+
+            if (
+                has_barangay
+                and pd.notna(row_dict["barangay"])
+                and str(row_dict["barangay"]).strip() != ""
+            ):
+                popup_html += f"<br>Barangay: {row_dict['barangay']}"
+
+            if has_address and pd.notna(row_dict[layer["address_col"]]):
+                popup_html += (
+                    f"<br>Address: "
+                    f"{row_dict[layer['address_col']]}"
+                )
+
+            if has_open and pd.notna(row_dict["open_hours"]):
+                popup_html += f"<br>Open: {row_dict['open_hours']}"
+
+            if has_close and pd.notna(row_dict["close_hours"]):
+                popup_html += f"<br>Close: {row_dict['close_hours']}"
+
+            category = row_dict.get("Category")
+            district = row_dict.get("District")
+
+            if layer_name == "Childcare Centers":
+                marker_color_value = childcare_color(category)
+
+            elif layer_name == "Schools":
+                marker_color_value = school_color(category)
+
+            elif layer_name == "Health Centers":
+                marker_color_value = marker_color(category)
+
+            elif layer_name == "Older Persons Facilities":
+                marker_color_value = opc_color(category)
+
+            elif layer_name == "Long-Term Care & Rehabilitation":
+                marker_color_value = ltc_color(category)
+
+            elif layer_name == "Action Offices":
+                marker_color_value = district_color(district)
+
+            elif layer_name == "Migration Resource Centers":
+                marker_color_value = "#C084FC"
+
+            else:
+                marker_color_value = "#7F47ED"
+
+            folium.Marker(
+                location=[
+                    row_dict[layer["lat_col"]],
+                    row_dict[layer["lon_col"]]
+                ],
+                icon=folium.DivIcon(
+                    html=f"""
+                    <div style="
+                        color:{marker_color_value};
+                        font-size:16px;
+                        font-weight:bold;
+                        text-align:center;
+                        text-shadow:
+                            -1px -1px 0 white,
+                            1px -1px 0 white,
+                            -1px  1px 0 white,
+                            1px  1px 0 white;
+                    ">
+                        {layer['symbol']}
+                    </div>
+                    """
+                ),
+                tooltip=str(
+                    row_dict[layer["name_col"]]
+                ),
+                popup=folium.Popup(
+                    popup_html,
+                    max_width=350,
+                    lazy=True
+                )
+            ).add_to(m)
+
+    return m._repr_html_()
 
 # Default values so variables always exist
 selected_category = "All"
@@ -566,12 +845,6 @@ if page == "Care Services Explorer":
         """,
         unsafe_allow_html=True
     )    
-
-
-
-
-
-
 
 # --------------------------------------------------
 # PAGES
@@ -2239,7 +2512,20 @@ elif page == "Migration Resource Center":
 
 elif page == "Care Services Explorer":
 
-    st.title("Care Services Explorer")
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Care Services Explorer
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
 
     st.caption(
         """
@@ -2355,7 +2641,7 @@ elif page == "Care Services Explorer":
             f"""
             <span style="
                 color:{layer['color']};
-                font-size:22px;
+                font-size:25px;
             ">
             {layer['symbol']}
             </span>
@@ -2412,174 +2698,16 @@ elif page == "Care Services Explorer":
         ]
 
     # --------------------------------------------------
-    # MAP
-    # --------------------------------------------------
-
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        min_zoom=1,
-        max_zoom=18,
-        tiles="CartoDB positron"
-    )
-
-    geo_json, _= load_geo_explorer()
-
-    folium.GeoJson(
-    geo_json,
-    style_function=lambda x: {
-        "fillColor": "#7fbf7f",
-        "color": "#666666",
-        "weight": 1,
-        "fillOpacity": 0.10,
-    }
-).add_to(m)
-
-    # --------------------------------------------------
-    # ADD MARKERS
-    # --------------------------------------------------
-
-    for layer_name in selected_layers:
-
-        layer = service_layers[layer_name]
-
-        df = layer["df"]
-
-        if selected_district != "All":
-
-            df = df[
-                df[layer["district_col"]]
-                .astype(int)
-                == selected_district
-            ]
-
-        df = df.dropna(
-            subset=[
-                layer["lat_col"],
-                layer["lon_col"]
-            ]
-        )
-
-        has_sector = "Sector" in df.columns
-        has_category = "Category" in df.columns
-        has_barangay = "barangay" in df.columns
-        has_open = "open_hours" in df.columns
-        has_close = "close_hours" in df.columns
-        has_district = layer["district_col"] in df.columns
-        has_address = layer["address_col"] in df.columns
-
-        records = df.to_dict("records")
-
-        for row_dict in records:
-            popup_html = f"""
-            <b>{row_dict[layer['name_col']]}</b><br>
-            Type: {layer['source']}
-            """
-
-            # Sector
-            if has_sector and pd.notna(row_dict["Sector"]):
-                popup_html += f"<br>Sector: {row_dict['Sector']}"
-
-            # Category
-            if has_category and pd.notna(row_dict["Category"]):
-                popup_html += f"<br>Category: {row_dict['Category']}"
-
-            # District
-            if has_district and pd.notna(row_dict[layer["district_col"]]):
-                popup_html += (
-                    f"<br>District: "
-                    f"{int(row_dict[layer['district_col']])}"
-                )
-
-            # Barangay
-            if (
-                has_barangay
-                and pd.notna(row_dict["barangay"])
-                and str(row_dict["barangay"]).strip() != ""
-            ):
-                popup_html += f"<br>Barangay: {row_dict['barangay']}"
-
-            # Address
-            if has_address and pd.notna(row_dict[layer["address_col"]]):
-                popup_html += (
-                    f"<br>Address: "
-                    f"{row_dict[layer['address_col']]}"
-                )
-
-            # Opening hours
-            if has_open and pd.notna(row_dict["open_hours"]):
-                popup_html += f"<br>Open: {row_dict['open_hours']}"
-
-            # Closing hours
-            if has_close and pd.notna(row_dict["close_hours"]):
-                popup_html += f"<br>Close: {row_dict['close_hours']}"
-
-            # Marker color
-            category = row_dict.get("Category")
-            district = row_dict.get("District")
-
-            if layer_name == "Childcare Centers":
-                marker_color_value = childcare_color(category)
-
-            elif layer_name == "Schools":
-                marker_color_value = school_color(category)
-
-            elif layer_name == "Health Centers":
-                marker_color_value = marker_color(category)
-
-            elif layer_name == "Older Persons Facilities":
-                marker_color_value = opc_color(category)
-
-            elif layer_name == "Long-Term Care & Rehabilitation":
-                marker_color_value = ltc_color(category)
-
-            elif layer_name == "Action Offices":
-                marker_color_value = district_color(district)
-
-            elif layer_name == "Migration Resource Centers":
-                marker_color_value = "#C084FC"
-
-            else:
-                marker_color_value = "#7F47ED"
-
-            folium.Marker(
-                location=[
-                    row_dict[layer["lat_col"]],
-                    row_dict[layer["lon_col"]]
-                ],
-                icon=folium.DivIcon(
-                    html=f"""
-                    <div style="
-                        color:{marker_color_value};
-                        font-size:16px;
-                        font-weight:bold;
-                        text-align:center;
-                        text-shadow:
-                            -1px -1px 0 white,
-                            1px -1px 0 white,
-                            -1px  1px 0 white,
-                            1px  1px 0 white;
-                    ">
-                        {layer['symbol']}
-                    </div>
-                    """
-                ),
-                tooltip=str(
-                    row_dict[layer["name_col"]]
-                ),
-                popup=folium.Popup(
-                    popup_html,
-                    max_width=350,
-                    lazy=True
-                )
-            ).add_to(m)
-
-    # --------------------------------------------------
     # MAP DISPLAY
     # --------------------------------------------------
 
-    st_folium(
-        m,
+    map_html = build_explorer_map(
+        tuple(selected_layers),
+        selected_district
+    )
+
+    st.iframe(
+        map_html,
         height=850,
         width="stretch"
     )
