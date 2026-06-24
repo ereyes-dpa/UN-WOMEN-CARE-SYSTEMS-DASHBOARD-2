@@ -1066,23 +1066,13 @@ elif page == "Population Overview":
         age_group_definition["elderly_60_plus"]
     ].sum().sum()
 
-    dependency_ratio = (
-        (
-            early_childhood
-            + school_age
-            + elderly
-        )
-        / working_age
-        * 100
-    )
-
     sex_ratio_overall = (
         total_male
         / total_female
         * 100
     )
 
-    c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
 
     c1.metric(
         "Population",
@@ -1110,11 +1100,6 @@ elif page == "Population Overview":
     )
 
     c6.metric(
-        "Dependency Ratio",
-        f"{dependency_ratio:.1f}"
-    )
-
-    c7.metric(
         "Sex Ratio (M/F)",
         f"{sex_ratio_overall:.1f}"
     )
@@ -1227,17 +1212,6 @@ elif page == "Population Overview":
             * 100
         )
 
-        barangay_df["dependency_ratio"] = (
-            (
-                barangay_df["children_0_17"]
-                +
-                barangay_df["elderly"]
-            )
-            /
-            barangay_df["working_age"]
-            * 100
-        )
-
         barangay_df["sex_ratio"] = (
             barangay_df["Male"]
             /
@@ -1263,9 +1237,9 @@ elif page == "Population Overview":
 
         # ---------------------------------------------------
         # MAP — only the indicators that are genuinely useful
-        # to visualize spatially (dropped care_demand_index,
-        # dependency_ratio and sex_ratio from the MAP since
-        # they read better as ranked bar charts below)
+        # to visualize spatially (dropped care_demand_index
+        # and sex_ratio from the MAP since they read better
+        # as ranked bar charts below)
         # ---------------------------------------------------
 
         indicator = st.selectbox(
@@ -1369,62 +1343,6 @@ elif page == "Population Overview":
             fig,
             width="stretch"
         )
-
-        st.divider()
-
-        # ---------------------------------------------------
-        # TOP / BOTTOM BARANGAYS — DEPENDENCY RATIO
-        # ---------------------------------------------------
-
-        st.subheader("Dependency Ratio by Barangay")
-
-        col_dep1, col_dep2 = st.columns(2)
-
-        top_dep = (
-            barangay_df[["Barangay", "District", "dependency_ratio"]]
-            .dropna()
-            .sort_values("dependency_ratio", ascending=False)
-            .head(10)
-        )
-
-        bottom_dep = (
-            barangay_df[["Barangay", "District", "dependency_ratio"]]
-            .dropna()
-            .sort_values("dependency_ratio", ascending=True)
-            .head(10)
-        )
-
-        with col_dep1:
-            fig_top_dep = px.bar(
-                top_dep.sort_values("dependency_ratio"),
-                x="dependency_ratio",
-                y="Barangay",
-                orientation="h",
-                title="Top 10 — Highest Dependency Ratio",
-                color_discrete_sequence=["#6A0DAD"]
-            )
-            fig_top_dep.update_layout(
-                height=400,
-                margin=dict(l=0, r=0, t=40, b=0),
-                xaxis_title="Dependency Ratio"
-            )
-            st.plotly_chart(fig_top_dep, width="stretch")
-
-        with col_dep2:
-            fig_bottom_dep = px.bar(
-                bottom_dep.sort_values("dependency_ratio", ascending=False),
-                x="dependency_ratio",
-                y="Barangay",
-                orientation="h",
-                title="Top 10 — Lowest Dependency Ratio",
-                color_discrete_sequence=["#B399D4"]
-            )
-            fig_bottom_dep.update_layout(
-                height=400,
-                margin=dict(l=0, r=0, t=40, b=0),
-                xaxis_title="Dependency Ratio"
-            )
-            st.plotly_chart(fig_bottom_dep, width="stretch")
 
         st.divider()
 
@@ -1536,16 +1454,6 @@ elif page == "Population Overview":
             how="left"
         )
 
-        district_pop["Dependency Ratio"] = (
-            (
-                district_pop[age_group_definition["children_0_17"]].sum(axis=1)
-                + district_pop[age_group_definition["elderly_60_plus"]].sum(axis=1)
-            )
-            /
-            district_pop[age_group_definition["working_age_18_59"]].sum(axis=1)
-            * 100
-        )
-
         district_pop["Sex Ratio"] = (
             district_pop["Male"]
             /
@@ -1590,8 +1498,7 @@ elif page == "Population Overview":
                 "Early Childhood (0-5)",
                 "School Age (6-17)",
                 "Working Age (18-59)",
-                "Older Persons (60+)",
-                "Dependency Ratio"
+                "Older Persons (60+)"
             ],
             key="district_indicator"
         )
@@ -1605,9 +1512,7 @@ elif page == "Population Overview":
             "Working Age (18-59)":
                 "18-59 (Working Age Adult)",
             "Older Persons (60+)":
-                "60+ (Elderly)",
-            "Dependency Ratio":
-                "Dependency Ratio"
+                "60+ (Elderly)"
         }
 
         district_col = district_col_map[
@@ -1628,11 +1533,7 @@ elif page == "Population Overview":
                 "supports the local economy and tax base.",
             "Older Persons (60+)":
                 "Residents aged 60 and above — a key group for "
-                "senior care planning and health services.",
-            "Dependency Ratio":
-                "Children and older persons combined, divided by "
-                "the working-age population (×100). Higher values "
-                "mean more dependents per working-age resident."
+                "senior care planning and health services."
         }
 
         st.caption(
@@ -7357,12 +7258,12 @@ elif page == "Barangay Clusters":
 
     **Features used:** population density, share of
     children (0-17), share of older persons (60+),
-    dependency ratio, and the mix of care services
-    present locally (e.g. share of facilities that are
-    Childcare, Schools, Health centers, Older Persons
-    Care, etc.) — standing in for the land-use mix used
-    in the original notebooks, since Quezon City's data
-    is facility-based rather than raster-based.
+    and the mix of care services present locally (e.g.
+    share of facilities that are Childcare, Schools,
+    Health centers, Older Persons Care, etc.) — standing
+    in for the land-use mix used in the original
+    notebooks, since Quezon City's data is facility-based
+    rather than raster-based.
     """)
 
     # ==================================================
@@ -7425,12 +7326,6 @@ elif page == "Barangay Clusters":
         pop["elderly"] / pop["Total"] * 100
     )
 
-    pop["dependency_ratio"] = (
-        (pop["children_0_17"] + pop["elderly"])
-        / pop["working_age"]
-        * 100
-    )
-
     # ==================================================
     # POPULATION DENSITY (needs barangay geometry)
     # ==================================================
@@ -7479,7 +7374,6 @@ elif page == "Barangay Clusters":
         "elderly",
         "children_pct",
         "elderly_pct",
-        "dependency_ratio",
         "population_density"
     ]
 
@@ -7633,8 +7527,7 @@ elif page == "Barangay Clusters":
         Population: {Total}<br/>
         Density (per km²): {population_density}<br/>
         Children Share (%): {children_pct}<br/>
-        Older Persons Share (%): {elderly_pct}<br/>
-        Dependency Ratio: {dependency_ratio}
+        Older Persons Share (%): {elderly_pct}
         """,
         "style": {
             "backgroundColor": "white",
@@ -7750,8 +7643,7 @@ elif page == "Barangay Clusters":
         "Total",
         "population_density",
         "children_pct",
-        "elderly_pct",
-        "dependency_ratio"
+        "elderly_pct"
     ]
 
     cluster_summary = (
@@ -7772,8 +7664,7 @@ elif page == "Barangay Clusters":
             "Total": "Avg. Population",
             "population_density": "Avg. Density (per km²)",
             "children_pct": "Avg. Children Share (%)",
-            "elderly_pct": "Avg. Elderly Share (%)",
-            "dependency_ratio": "Avg. Dependency Ratio"
+            "elderly_pct": "Avg. Elderly Share (%)"
         }
     )
 
@@ -7807,8 +7698,7 @@ elif page == "Barangay Clusters":
                 "Total",
                 "population_density",
                 "children_pct",
-                "elderly_pct",
-                "dependency_ratio"
+                "elderly_pct"
             ]
         ].rename(columns={"barangay_name": "Barangay"})
         .sort_values("Total", ascending=False),
