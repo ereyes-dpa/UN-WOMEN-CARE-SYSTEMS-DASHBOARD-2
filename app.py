@@ -5,6 +5,12 @@ import folium
 from streamlit_folium import st_folium
 import numpy as np
 from functions import *
+import pydeck as pdk
+from pydeck.types import String
+import numpy as np
+import json
+
+# PRIVATE VERSION
 
 # --------------------------------------------------
 # PAGE CONFIG
@@ -108,6 +114,7 @@ with right_col:
         """,
         unsafe_allow_html=True
     )
+
 # --------------------------------------------------
 # TITLE
 # --------------------------------------------------
@@ -117,13 +124,13 @@ st.markdown(
     <h1 style="
         text-align:center;
         color:#7F47ED;
-        font-size:3.0rem;
+        font-size:2.6rem;
         margin-top:5px;
-        margin-bottom:15px;
+        margin-bottom:0px;
         line-height:1.1;
     ">
         Quezon Caring City Dashboard
-    </h1>
+    <
     """,
     unsafe_allow_html=True
 )
@@ -135,7 +142,6 @@ st.divider()
 # --------------------------------------------------
 
 (
-    geo, 
     childcare_centers,
     schools,
     health_centers,
@@ -145,35 +151,27 @@ st.divider()
     migration_centers
 ) = load_data()
 
-population_summary, population_sex, population_age = load_data_for_kpis()
+geo, bounds = load_geo()
 
 # --------------------------------------------------
-# CLEANING
+# POPULATION DATA
 # --------------------------------------------------
 
-health_centers    = clean_health_centers(health_centers)
-childcare_centers = clean_dataframe(childcare_centers)
-schools           = clean_dataframe(schools)
-older_person_care    = clean_dataframe(older_person_care)
-long_term_care    = clean_dataframe(long_term_care)
-satellite_offices = clean_dataframe(satellite_offices)
-satellite_offices["Name"] = "District " + satellite_offices["District"].astype(int).astype(str)
-migration_centers = clean_dataframe(migration_centers)
+population_summary, population_sex, population_age = (
+    load_data_for_kpis()
+)
+
 
 # --------------------------------------------------
 # QC CENTER
 # --------------------------------------------------
-
-minx, miny, maxx, maxy = geo.total_bounds
+minx, miny, maxx, maxy = bounds
 
 center_lon = (minx + maxx) / 2
 center_lat = (miny + maxy) / 2
 
-# --------------------------------------------------
-# SIDEBAR
-# --------------------------------------------------
-
-st.sidebar.title("Navigation")
+southwest = [miny, minx]
+northeast = [maxy, maxx]
 
 st.markdown("""
 <style>
@@ -185,41 +183,430 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-main_page = st.sidebar.selectbox(
-    "Available Pages",
-    [
-        "Population Overview",
-        "Childcare Centers",
-        "Schools",
-        "Health Centers Map",
-        "Older Persons Center Map",
-        "Long-Term Care & Rehabilitation",
-        "Persons with Disabilities",
-        "Satellite Offices",
-        "Migration Resource Center",
-        "Care Services Explorer"
-    ]
-)
+# --------------------------------------------------
+# SIDEBAR STYLE
+# --------------------------------------------------
 
-accessibility_page = st.sidebar.selectbox(
-    "Accessibility",
-    [
-        "",
-        "Accessibility Analysis",
-        "Care Planning & Investment Priorities"
-    ]
-)
+st.markdown("""
+<style>
 
-page = (
-    accessibility_page
-    if accessibility_page
-    else main_page
-)
+/* Sidebar titles */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color: #7F47ED !important;
+}
 
+/* Reduce top padding */
+[data-testid="stSidebarContent"] {
+    padding-top: -15rem;
+}
+
+/* Compact buttons */
+[data-testid="stSidebar"] .stButton > button {
+    min-height: 0px;
+    padding: 0rem 0rem;
+    font-size: 0.85rem;
+    border-radius: 5px;
+}
+
+/* Reduce spacing between widgets */
+[data-testid="stSidebar"] .element-container {
+    margin-bottom: 0.0001rem;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# --------------------------------------------------
+# PAGE STATE
+# --------------------------------------------------
+
+if "page" not in st.session_state:
+    st.session_state.page = "Population Overview"
+
+
+@st.cache_data(show_spinner="Building map...")
+def build_explorer_map(
+    selected_layers,
+    selected_district,
+    selected_climate_layers
+):
+    """
+    Builds the full Care Services Explorer folium map and
+    returns its rendered HTML string.
+
+    Cached on (selected_layers, selected_district,
+    selected_climate_layers) only — these are the only things
+    that actually change what's drawn. Streamlit reruns this
+    whole script on every widget interaction, which would
+    otherwise rebuild the map (re-encode every raster overlay to
+    PNG, rebuild every marker) from scratch each time even though
+    the underlying data and raster renders are already cached
+    individually. Caching the finished map means a rerun that
+    doesn't change any of these three arguments returns the
+    previously-built HTML immediately instead of reconstructing
+    and re-serializing the whole map.
+
+    Returns HTML (via m._repr_html_()) rather than the live
+    folium.Map object so the cached value is a plain, easily
+    hashable/picklable string — st_folium can render a Map object
+    directly, but caching the HTML avoids any ambiguity about
+    whether a cached Map object's internal state could be
+    accidentally mutated by a caller between cache hits.
+    """
+
+    service_layers = {
+
+        "Childcare Centers": {
+            "df": childcare_centers,
+            "color": "#4C1D95",
+            "symbol": "●",
+            "source": "Childcare Center",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Schools": {
+            "df": schools,
+            "color": "#5B21B6",
+            "symbol": "■",
+            "source": "School",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Health Centers": {
+            "df": health_centers,
+            "color": "#7F47ED",
+            "symbol": "★",
+            "source": "Health Facility",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Older Persons Facilities": {
+            "df": older_person_care,
+            "color": "#8B5CF6",
+            "symbol": "◆",
+            "source": "Older Persons Facility",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Long-Term Care & Rehabilitation": {
+            "df": long_term_care,
+            "color": "#A78BFA",
+            "symbol": "▲",
+            "source": "Rehabilitation Facility",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Action Offices": {
+            "df": satellite_offices,
+            "color": "#DDD6FE",
+            "symbol": "⬢",
+            "source": "Satellite Office",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Migration Resource Centers": {
+            "df": migration_centers,
+            "color": "#C084FC",
+            "symbol": "✦",
+            "source": "Migration Resource Center",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+    }
+
+    climate_overlay_layers = {
+        "Land-Surface Temperature": {
+            "path": "processed/climate/landsat_lst_summer_avg_7yr_EPSG3123_filled.tif",
+            "colormap": "YlOrRd",
+            "binary": False
+        },
+        "Vegetation (NDVI)": {
+            "path": "processed/climate/ndvi_mean_2025_EPSG3123.tif",
+            "colormap": "Greens",
+            "binary": False
+        },
+        "Flood Inundation (100-yr)": {
+            "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+            "colormap": "Blues",
+            "binary": True
+        }
+    }
+
+    # A small padding around the QC extent (in degrees) so the
+    # city boundary doesn't sit flush against the edge of the
+    # area the user can pan/zoom into.
+    bounds_padding = 0.03
+
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=12,
+        min_zoom=12,
+        max_zoom=18,
+        tiles="CartoDB positron",
+        max_bounds=True,
+        min_lat=miny - bounds_padding,
+        max_lat=maxy + bounds_padding,
+        min_lon=minx - bounds_padding,
+        max_lon=maxx + bounds_padding
+    )
+
+    geo_json, _ = load_geo_explorer()
+
+    folium.GeoJson(
+        geo_json,
+        style_function=lambda x: {
+            "fillColor": "#7fbf7f",
+            "color": "#666666",
+            "weight": 1,
+            "fillOpacity": 0.10,
+        }
+    ).add_to(m)
+
+    # ------------------------------------------
+    # CLIMATE OVERLAYS
+    # ------------------------------------------
+
+    if selected_climate_layers:
+
+        qc_boundary_explorer = load_qc_boundary()
+
+        for climate_layer_name in selected_climate_layers:
+
+            climate_layer = climate_overlay_layers[climate_layer_name]
+
+            try:
+
+                rgba, folium_bounds, _, _ = raster_to_image_overlay(
+                    climate_layer["path"],
+                    colormap=climate_layer["colormap"],
+                    binary=climate_layer["binary"],
+                    _mask_geometry=qc_boundary_explorer
+                )
+
+                folium.raster_layers.ImageOverlay(
+                    image=rgba,
+                    bounds=folium_bounds,
+                    origin="upper",
+                    opacity=1.0,
+                    name=climate_layer_name
+                ).add_to(m)
+
+            except Exception:
+                # Surfaced to the user outside this cached function
+                # (see the explorer page body), since st commands
+                # inside cached functions only show on the first,
+                # uncached run.
+                pass
+
+    # ------------------------------------------
+    # ADD MARKERS
+    # ------------------------------------------
+
+    for layer_name in selected_layers:
+
+        layer = service_layers[layer_name]
+
+        df = layer["df"]
+
+        if selected_district != "All":
+
+            df = df[
+                df[layer["district_col"]]
+                .astype(int)
+                == selected_district
+            ]
+
+        df = df.dropna(
+            subset=[
+                layer["lat_col"],
+                layer["lon_col"]
+            ]
+        )
+
+        has_sector = "Sector" in df.columns
+        has_category = "Category" in df.columns
+        has_barangay = "barangay" in df.columns
+        has_open = "open_hours" in df.columns
+        has_close = "close_hours" in df.columns
+        has_district = layer["district_col"] in df.columns
+        has_address = layer["address_col"] in df.columns
+
+        records = df.to_dict("records")
+
+        for row_dict in records:
+            popup_html = f"""
+            <b>{row_dict[layer['name_col']]}</b><br>
+            Type: {layer['source']}
+            """
+
+            if has_sector and pd.notna(row_dict["Sector"]):
+                popup_html += f"<br>Sector: {row_dict['Sector']}"
+
+            if has_category and pd.notna(row_dict["Category"]):
+                popup_html += f"<br>Category: {row_dict['Category']}"
+
+            if has_district and pd.notna(row_dict[layer["district_col"]]):
+                popup_html += (
+                    f"<br>District: "
+                    f"{int(row_dict[layer['district_col']])}"
+                )
+
+            if (
+                has_barangay
+                and pd.notna(row_dict["barangay"])
+                and str(row_dict["barangay"]).strip() != ""
+            ):
+                popup_html += f"<br>Barangay: {row_dict['barangay']}"
+
+            if has_address and pd.notna(row_dict[layer["address_col"]]):
+                popup_html += (
+                    f"<br>Address: "
+                    f"{row_dict[layer['address_col']]}"
+                )
+
+            if has_open and pd.notna(row_dict["open_hours"]):
+                popup_html += f"<br>Open: {row_dict['open_hours']}"
+
+            if has_close and pd.notna(row_dict["close_hours"]):
+                popup_html += f"<br>Close: {row_dict['close_hours']}"
+
+            category = row_dict.get("Category")
+            district = row_dict.get("District")
+
+            if layer_name == "Childcare Centers":
+                marker_color_value = childcare_color(category)
+
+            elif layer_name == "Schools":
+                marker_color_value = school_color(category)
+
+            elif layer_name == "Health Centers":
+                marker_color_value = marker_color(category)
+
+            elif layer_name == "Older Persons Facilities":
+                marker_color_value = opc_color(category)
+
+            elif layer_name == "Long-Term Care & Rehabilitation":
+                marker_color_value = ltc_color(category)
+
+            elif layer_name == "Action Offices":
+                marker_color_value = district_color(district)
+
+            elif layer_name == "Migration Resource Centers":
+                marker_color_value = "#C084FC"
+
+            else:
+                marker_color_value = "#7F47ED"
+
+            folium.Marker(
+                location=[
+                    row_dict[layer["lat_col"]],
+                    row_dict[layer["lon_col"]]
+                ],
+                icon=folium.DivIcon(
+                    html=f"""
+                    <div style="
+                        color:{marker_color_value};
+                        font-size:16px;
+                        font-weight:bold;
+                        text-align:center;
+                        text-shadow:
+                            -1px -1px 0 white,
+                            1px -1px 0 white,
+                            -1px  1px 0 white,
+                            1px  1px 0 white;
+                    ">
+                        {layer['symbol']}
+                    </div>
+                    """
+                ),
+                tooltip=str(
+                    row_dict[layer["name_col"]]
+                ),
+                popup=folium.Popup(
+                    popup_html,
+                    max_width=350,
+                    lazy=True
+                )
+            ).add_to(m)
+
+    return m._repr_html_()
+
+# Default values so variables always exist
 selected_category = "All"
 
+selected_childcare_sector = "All"
+selected_childcare_category = "All"
 
-if page == "Childcare Centers":
+selected_school_sector = "All"
+selected_school_category = "All"
+
+selected_opc_category = "All"
+
+selected_ltc_category = "All"
+
+# --------------------------------------------------
+# SIDEBAR
+# --------------------------------------------------
+
+st.sidebar.title("Navigation")
+st.sidebar.subheader("Care Maps")
+
+
+# --------------------------------------------------
+# POPULATION
+# --------------------------------------------------
+
+if st.sidebar.button(
+    "Population Overview",
+    width="stretch"
+):
+    st.session_state.page = "Population Overview"
+    st.rerun()
+
+
+# --------------------------------------------------
+# CHILDCARE
+# --------------------------------------------------
+
+if st.sidebar.button(
+    "Childcare Centers",
+    width='stretch'
+):
+    st.session_state.page = "Childcare Centers"
+    st.rerun()
+
+if st.session_state.page == "Childcare Centers":
+
+    st.sidebar.markdown("##### Filters")
 
     selected_childcare_sector = st.sidebar.radio(
         "Provider Type",
@@ -227,7 +614,8 @@ if page == "Childcare Centers":
             "All",
             "Public",
             "Private"
-        ]
+        ],
+        key="childcare_sector"
     )
 
     if selected_childcare_sector == "Public":
@@ -256,41 +644,24 @@ if page == "Childcare Centers":
 
     selected_childcare_category = st.sidebar.radio(
         "Facility Category",
-        category_options
+        category_options,
+        key="childcare_category"
     )
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Facility Categories")
+# --------------------------------------------------
+# SCHOOLS
+# --------------------------------------------------
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#5B21B6;font-size:22px;">●</span>
-        <b>Child Development Center</b><br>
-        <small>For children aged 3 to 4 years. The program focuses on providing children with early childhood education to support their growth and readiness for more formal education. 
-        </small>
-        """,
-        unsafe_allow_html=True
-    )
+if st.sidebar.button(
+    "Schools",
+    width='stretch'
+):
+    st.session_state.page = "Schools"
+    st.rerun()
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#7F47ED;font-size:22px;">●</span>
-        <b>Child Learning Center</b><br>
-        <small>Private childcare and early learning services.</small>
-        """,
-        unsafe_allow_html=True
-    )
+if st.session_state.page == "Schools":
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#A78BFA;font-size:22px;">●</span>
-        <b>Day Care Center</b><br>
-        <small>Private day care and supervision services.</small>
-        """,
-        unsafe_allow_html=True
-    )
-
-if page == "Schools":
+    st.sidebar.markdown("##### Filters")
 
     selected_school_sector = st.sidebar.radio(
         "Provider Type",
@@ -298,7 +669,8 @@ if page == "Schools":
             "All",
             "Public",
             "Private"
-        ]
+        ],
+        key="school_sector"
     )
 
     if selected_school_sector == "Public":
@@ -325,31 +697,24 @@ if page == "Schools":
 
     selected_school_category = st.sidebar.radio(
         "School Category",
-        category_options
+        category_options,
+        key="school_category"
     )
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### School Categories")
+# --------------------------------------------------
+# HEALTH CENTERS
+# --------------------------------------------------
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#5B21B6;font-size:22px;">●</span>
-        <b>Public School</b><br>
-        <small>Government-operated educational institutions.</small>
-        """,
-        unsafe_allow_html=True
-    )
+if st.sidebar.button(
+    "Health Centers Map",
+    width='stretch'
+):
+    st.session_state.page = "Health Centers Map"
+    st.rerun()
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#A78BFA;font-size:22px;">●</span>
-        <b>Private School</b><br>
-        <small>Privately operated educational institutions.</small>
-        """,
-        unsafe_allow_html=True
-    )
+if st.session_state.page == "Health Centers Map":
 
-if page == "Health Centers Map":
+    st.sidebar.markdown("##### Filters")
 
     selected_category = st.sidebar.radio(
         "Facility Type",
@@ -361,56 +726,24 @@ if page == "Health Centers Map":
             "Health Center",
             "Pharmacy",
             "Milk Bank"
-        ]
+        ],
+        key="health_category"
     )
 
-    category_descriptions = {
-        "QC LGU":
-            "Lying–in Clinics are maternity clinics for healthy pregnant women as an option for an affordable, if not free, cost of pregnancy and childbirth. If a pregnant woman is at high risk, however, she will be referred to deliver the child at a hospital.",
+# --------------------------------------------------
+# OLDER PERSONS
+# --------------------------------------------------
 
-        "National":
-            "National government-owned hospitals located in Quezon City.",
+if st.sidebar.button(
+    "Older Persons Center Map",
+    width='stretch'
+):
+    st.session_state.page = "Older Persons Center Map"
+    st.rerun()
 
-        "Super Health":
-            "These facilities serve both as a Health Center and a 24-hour operating Lying–in clinic and also provide basic health services.  Super Health Centers possess the necessary equipment for medical needs such as laboratory, dental services, breastfeeding services, lying-in clinic, and an ambulance.",
+if st.session_state.page == "Older Persons Center Map":
 
-        "Health Center":
-            "Health Centers are community patient-directed establishments that deliver comprehensive culturally competent, high-quality, primary healthcare services to the nation’s most vulnerable individuals and families, including people experiencing homelessness, agricultural workers, and residents of public housing and veterans.",
-
-        "Pharmacy":
-            "Health center pharmacy facilities.",
-
-        "Milk Bank":
-            "provides safe, pasteurized human milk to infants in need, especially premature babies and those whose mothers struggle with lactation or medical issues. Under the program, QCitizens may donate and receive milk at designated milk depots in the city."
-    }
-
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Facility Categories")
-
-    ordered_categories = [
-        "QC LGU",
-        "National",
-        "Super Health",
-        "Health Center",
-        "Pharmacy",
-        "Milk Bank"
-    ]
-
-    for cat in ordered_categories:
-
-        st.sidebar.markdown(
-            f"""
-            <span style="
-                color:{category_hex(cat)};
-                font-size:22px;
-            ">●</span>
-            <b>{cat}</b><br>
-            <small>{category_descriptions[cat]}</small>
-            """,
-            unsafe_allow_html=True
-        )
-
-if page == "Older Persons Center Map":
+    st.sidebar.markdown("##### Filters")
 
     selected_opc_category = st.sidebar.radio(
         "Facility Type",
@@ -418,31 +751,24 @@ if page == "Older Persons Center Map":
             "All",
             "Nursing Care Center",
             "Bahay Aruga for Abandoned Elderly"
-        ]
+        ],
+        key="opc_category"
     )
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Facility Categories")
+# --------------------------------------------------
+# LONG TERM CARE
+# --------------------------------------------------
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#4C1D95;font-size:22px;">●</span>
-        <b>Nursing Care Center</b><br>
-        <small>Residential facilities providing long-term nursing and care services.</small>
-        """,
-        unsafe_allow_html=True
-    )
+if st.sidebar.button(
+    "Long-Term Care & Rehabilitation",
+    width='stretch'
+):
+    st.session_state.page = "Long-Term Care & Rehabilitation"
+    st.rerun()
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#A78BFA;font-size:22px;">●</span>
-        <b>Bahay Aruga</b><br>
-        <small>Temporary residential facility for abandoned, neglected, abused, and indigent QC senior citizens aged 60 years and above. </small>
-        """,
-        unsafe_allow_html=True
-    )
+if st.session_state.page == "Long-Term Care & Rehabilitation":
 
-if page == "Long-Term Care & Rehabilitation":
+    st.sidebar.markdown("##### Filters")
 
     ltc_categories = sorted(
         long_term_care["Category"]
@@ -452,50 +778,78 @@ if page == "Long-Term Care & Rehabilitation":
 
     selected_ltc_category = st.sidebar.radio(
         "Facility Category",
-        ["All"] + list(ltc_categories)
+        ["All"] + list(ltc_categories),
+        key="ltc_category"
     )
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Facility Categories")
+# --------------------------------------------------
+# SATELLITE OFFICES
+# --------------------------------------------------
 
-    for cat in ltc_categories:
+if st.sidebar.button(
+    "Action Offices",
+    width='stretch'
+):
+    st.session_state.page = "Action Offices"
+    st.rerun()
 
-        st.sidebar.markdown(
-            f"""
-            <span style="
-                color:{ltc_color(cat)};
-                font-size:22px;
-            ">●</span>
-            <b>{cat}</b>
-            """,
-            unsafe_allow_html=True
-        )
+# --------------------------------------------------
+# MIGRATION
+# --------------------------------------------------
 
-if page == "Satellite Offices":
+if st.sidebar.button(
+    "Migration Resource Center",
+    width='stretch'
+):
+    st.session_state.page = "Migration Resource Center"
+    st.rerun()
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(
-        """
-        Satellite offices provide decentralized access
-        to city government services across Quezon City.
-        """
-    )
+# --------------------------------------------------
+# TOOLS
+# --------------------------------------------------
 
-if page == "Migration Resource Center":
+st.sidebar.subheader("Additional Tools")
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Facility Type")
+if st.sidebar.button(
+    "Care Services Explorer",
+    width='stretch'
+):
+    st.session_state.page = "Care Services Explorer"
+    st.rerun()
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#7F47ED;font-size:22px;">●</span>
-        <b>QC Migrants Resource Center</b><br>
-        <small>
-        Provides support, information, training, and services for migrant workers and their families.
-        </small>
-        """,
-        unsafe_allow_html=True
-    )
+if st.sidebar.button(
+    "Accessibility Analysis",
+    width='stretch'
+):
+    st.session_state.page = "Accessibility Analysis"
+    st.rerun()
+
+if st.sidebar.button(
+    "Care Planning & Investment Priorities",
+    width='stretch'
+):
+    st.session_state.page = "Care Planning & Investment Priorities"
+    st.rerun()
+
+if st.sidebar.button(
+    "Barangay Clusters",
+    width='stretch'
+):
+    st.session_state.page = "Barangay Clusters"
+    st.rerun()
+
+if st.sidebar.button(
+    "Climate & Hazard Exposure",
+    width='stretch'
+):
+    st.session_state.page = "Climate & Hazard Exposure"
+    st.rerun()
+
+# --------------------------------------------------
+# ACTIVE PAGE
+# --------------------------------------------------
+
+page = st.session_state.page
 
 if page == "Care Services Explorer":
 
@@ -583,7 +937,7 @@ if page == "Care Services Explorer":
 
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("## Satellite Offices")
+    st.sidebar.markdown("## Action Offices")
 
     st.sidebar.markdown(
         """
@@ -608,7 +962,13 @@ if page == "Care Services Explorer":
 # PAGES
 # --------------------------------------------------
 
+ 
+# --------------------------------------------------
 elif page == "Population Overview":
+
+    import geopandas as gpd
+    import plotly.express as px
+    import plotly.graph_objects as go
 
     st.title("Population Overview")
 
@@ -617,9 +977,43 @@ elif page == "Population Overview":
     resource allocation, and care service delivery decisions.
     """)
 
-    # --------------------------------------------------
-    # CLEANING
-    # --------------------------------------------------
+    # =====================================================
+    # AGE GROUP DEFINITION — ⚠️ PENDING CONFIRMATION WITH MARIAN
+    # (same definition documented in Notebook 2, Section 2.1.0)
+    # Source data arrives pre-aggregated into these four bands,
+    # so a different elderly/children cutoff (e.g. 65+ instead
+    # of 60+) cannot be derived from what we have — it would
+    # require re-tabulating from a more granular source.
+    # =====================================================
+
+    age_group_definition = {
+        "children_0_17": [
+            "0-5 (Early Childhood)",
+            "6-17 (School Age Children)"
+        ],
+        "working_age_18_59": [
+            "18-59 (Working Age Adult)"
+        ],
+        "elderly_60_plus": [
+            "60+ (Elderly)"
+        ]
+    }
+
+    # =====================================================
+    # LOAD MAPS
+    # =====================================================
+
+    barangay_map = gpd.read_file(
+        "processed/qc_barangays.geojson"
+    )
+
+    district_map = gpd.read_file(
+        "processed/qc_districts.geojson"
+    )
+
+    # =====================================================
+    # CLEAN DATA
+    # =====================================================
 
     for col in ["Male", "Female", "Total"]:
 
@@ -632,12 +1026,14 @@ elif page == "Population Overview":
                 .astype(float)
             )
 
-    age_columns = [
-        c for c in population_age.columns
-        if c not in ["Barangay", "District"]
+    age_cols = [
+        "0-5 (Early Childhood)",
+        "6-17 (School Age Children)",
+        "18-59 (Working Age Adult)",
+        "60+ (Elderly)"
     ]
 
-    for col in age_columns:
+    for col in age_cols + ["Total"]:
 
         population_age[col] = (
             population_age[col]
@@ -646,367 +1042,816 @@ elif page == "Population Overview":
             .astype(float)
         )
 
-    # --------------------------------------------------
-    # SUMMARY VALUES
-    # --------------------------------------------------
+    # =====================================================
+    # KPIs (TOP)
+    # =====================================================
 
-    total_population_2024 = (
-        population_sex["Total"]
-        .sum()
+    total_population = population_sex["Total"].sum()
+    total_male = population_sex["Male"].sum()
+    total_female = population_sex["Female"].sum()
+
+    early_childhood = population_age[
+        age_group_definition["children_0_17"][0]
+    ].sum()
+
+    school_age = population_age[
+        age_group_definition["children_0_17"][1]
+    ].sum()
+
+    working_age = population_age[
+        age_group_definition["working_age_18_59"]
+    ].sum().sum()
+
+    elderly = population_age[
+        age_group_definition["elderly_60_plus"]
+    ].sum().sum()
+
+    dependency_ratio = (
+        (
+            early_childhood
+            + school_age
+            + elderly
+        )
+        / working_age
+        * 100
     )
 
-    total_male = (
-        population_sex["Male"]
-        .sum()
-    )
-
-    total_female = (
-        population_sex["Female"]
-        .sum()
-    )
-
-    male_pct = (
+    sex_ratio_overall = (
         total_male
-        / total_population_2024
+        / total_female
         * 100
     )
 
-    female_pct = (
-        total_female
-        / total_population_2024
-        * 100
+    c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+
+    c1.metric(
+        "Population",
+        f"{total_population:,.0f}"
     )
 
-    total_barangays = (
-        population_sex["Barangay"]
-        .nunique()
+    c2.metric(
+        "0-5",
+        f"{early_childhood:,.0f}"
     )
 
-    total_districts = (
-        population_sex["District"]
-        .nunique()
+    c3.metric(
+        "6-17",
+        f"{school_age:,.0f}"
     )
 
-    # --------------------------------------------------
-    # POPULATION GROWTH
-    # --------------------------------------------------
-
-    pop_2020 = 2960048
-    pop_2024 = total_population_2024
-
-    growth_rate = (
-        (pop_2024 - pop_2020)
-        / pop_2020
-        * 100
+    c4.metric(
+        "18-59",
+        f"{working_age:,.0f}"
     )
 
-    # --------------------------------------------------
-    # KPI ROW
-    # --------------------------------------------------
-
-    k1, k2, k3, k4, k5 = st.columns(5)
-
-    k1.metric(
-        "Population (2024)",
-        f"{pop_2024:,.0f}"
+    c5.metric(
+        "60+",
+        f"{elderly:,.0f}"
     )
 
-    k2.metric(
-        "Population (2020)",
-        f"{pop_2020:,.0f}"
+    c6.metric(
+        "Dependency Ratio",
+        f"{dependency_ratio:.1f}"
     )
 
-    k3.metric(
-        "Growth Rate",
-        f"{growth_rate:.1f}%"
-    )
-
-    k4.metric(
-        "Barangays",
-        f"{total_barangays}"
-    )
-
-    k5.metric(
-        "Districts",
-        f"{total_districts}"
+    c7.metric(
+        "Sex Ratio (M/F)",
+        f"{sex_ratio_overall:.1f}"
     )
 
     st.divider()
 
-    # --------------------------------------------------
-    # SEX + AGE DISTRIBUTION
-    # --------------------------------------------------
+    st.info(
+        "📍 **Land Use layer pending.** A land use/zoning indicator "
+        "(e.g., % residential, % open space per barangay) is planned "
+        "for this page once Quezon City government shares the data, "
+        "or a public Geoportal Philippines alternative is confirmed. "
+        "See Notebooks 1–2 for status.",
+        icon="ℹ️"
+    )
 
-    col1, col2 = st.columns(2)
+    # =====================================================
+    # TABS
+    # =====================================================
 
-    with col1:
+    tab1, tab2 = st.tabs(
+        [
+            "Barangay Analysis",
+            "District Analysis"
+        ]
+    )
 
-        sex_df = pd.DataFrame(
-            {
-                "Sex": [
+    # =====================================================
+    # BARANGAY TAB
+    # =====================================================
+    with tab1:
+
+        # Normalize join keys defensively before merging.
+        # population_age["Barangay"] / population_sex["Barangay"]
+        # come from apply_barangay_mapping() in functions.py,
+        # which can return title-case names (e.g. "Greater
+        # Lagro") rather than the geojson's raw casing. The two
+        # currently happen to agree by coincidence, but relying
+        # on that isn't safe — explicitly uppercase both sides,
+        # same convention used on the other pages.
+        barangay_map["barangay_name"] = (
+            barangay_map["barangay_name"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+        population_age["Barangay"] = (
+            population_age["Barangay"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+        population_sex["Barangay"] = (
+            population_sex["Barangay"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+        barangay_df = barangay_map.merge(
+            population_age,
+            left_on="barangay_name",
+            right_on="Barangay",
+            how="left"
+        )
+
+        barangay_df = barangay_df.merge(
+            population_sex[
+                [
+                    "Barangay",
                     "Male",
                     "Female"
-                ],
-                "Population": [
-                    total_male,
-                    total_female
                 ]
-            }
+            ],
+            on="Barangay",
+            how="left"
         )
 
-        fig = px.pie(
-            sex_df,
-            names="Sex",
-            values="Population",
-            title="Population by Sex"
+        # ---------------------------------------------------
+        # DERIVED INDICATORS
+        # (children/working-age/elderly grouping driven by
+        # age_group_definition above — update there, not here,
+        # once confirmed with Marian)
+        # ---------------------------------------------------
+
+        barangay_df["children_0_17"] = barangay_df[
+            age_group_definition["children_0_17"]
+        ].sum(axis=1)
+
+        barangay_df["working_age"] = barangay_df[
+            age_group_definition["working_age_18_59"]
+        ].sum(axis=1)
+
+        barangay_df["elderly"] = barangay_df[
+            age_group_definition["elderly_60_plus"]
+        ].sum(axis=1)
+
+        barangay_df["children_pct"] = (
+            barangay_df["children_0_17"]
+            /
+            barangay_df["Total"]
+            * 100
         )
 
-        st.plotly_chart(
-            fig,
-            width='stretch'
+        barangay_df["elderly_pct"] = (
+            barangay_df["elderly"]
+            /
+            barangay_df["Total"]
+            * 100
         )
 
-        st.caption(
-            f"Male: {male_pct:.1f}% | Female: {female_pct:.1f}%"
+        barangay_df["dependency_ratio"] = (
+            (
+                barangay_df["children_0_17"]
+                +
+                barangay_df["elderly"]
+            )
+            /
+            barangay_df["working_age"]
+            * 100
         )
 
-    with col2:
-
-        age_df = pd.DataFrame(
-            {
-                "Age Group": [
-                    "0-5",
-                    "6-17",
-                    "18-59",
-                    "60+"
-                ],
-                "Population": [
-                    population_age[
-                        "0-5 \n(Early Childhood)"
-                    ].sum(),
-
-                    population_age[
-                        "6-17 \n(School Age Children)"
-                    ].sum(),
-
-                    population_age[
-                        "18-59 \n(Working Age Adult)"
-                    ].sum(),
-
-                    population_age[
-                        "60+ \n(Elderly)"
-                    ].sum()
-                ]
-            }
+        barangay_df["sex_ratio"] = (
+            barangay_df["Male"]
+            /
+            barangay_df["Female"]
+            * 100
         )
 
-        fig = px.bar(
-            age_df,
-            x="Age Group",
-            y="Population",
-            title="Population by Age Group"
+        barangay_metric = (
+            barangay_df
+            .to_crs("EPSG:32651")
         )
 
-        st.plotly_chart(
-            fig,
-            width='stretch'
+        barangay_df["area_km2"] = (
+            barangay_metric.geometry.area
+            / 1_000_000
         )
 
-    st.divider()
-
-    # --------------------------------------------------
-    # DISTRICT POPULATION
-    # --------------------------------------------------
-
-    st.subheader(
-        "Population by District"
-    )
-
-    district_population = (
-        population_sex
-        .groupby("District", as_index=False)
-        ["Total"]
-        .sum()
-        .sort_values(
-            "Total",
-            ascending=False
+        barangay_df["population_density"] = (
+            barangay_df["Total"]
+            /
+            barangay_df["area_km2"]
         )
-    )
 
-    fig = px.bar(
-        district_population,
-        x="District",
-        y="Total",
-        title="Population by District",
-        text_auto=","
-    )
+        # ---------------------------------------------------
+        # MAP — only the indicators that are genuinely useful
+        # to visualize spatially (dropped care_demand_index,
+        # dependency_ratio and sex_ratio from the MAP since
+        # they read better as ranked bar charts below)
+        # ---------------------------------------------------
 
-    st.plotly_chart(
-        fig,
-        width='stretch'
-    )
-
-    st.divider()
-
-    # --------------------------------------------------
-    # AGE STRUCTURE BY DISTRICT
-    # --------------------------------------------------
-
-    st.subheader(
-        "Age Structure by District"
-    )
-
-    district_age = (
-        population_age
-        .groupby("District")
-        [
+        indicator = st.selectbox(
+            "Select Population Indicator",
             [
-                "0-5 \n(Early Childhood)",
-                "6-17 \n(School Age Children)",
-                "18-59 \n(Working Age Adult)",
-                "60+ \n(Elderly)"
+                "Total Population",
+                "Female Population",
+                "Male Population",
+                "Children Population (0-17)",
+                "Working Age Population",
+                "Older Persons Population",
+                "Children Share (%)",
+                "Older Persons Share (%)",
+                "Population Density"
             ]
-        ]
-        .sum()
-        .reset_index()
-    )
+        )
 
-    district_age_long = district_age.melt(
-        id_vars="District",
-        var_name="Age Group",
-        value_name="Population"
-    )
+        indicator_map = {
+            "Total Population": "Total",
+            "Male Population": "Male",
+            "Female Population": "Female",
+            "Children Population (0-17)":
+                "children_0_17",
+            "Working Age Population":
+                "working_age",
+            "Older Persons Population":
+                "elderly",
+            "Children Share (%)":
+                "children_pct",
+            "Older Persons Share (%)":
+                "elderly_pct",
+            "Population Density":
+                "population_density"
+        }
 
-    fig = px.bar(
-        district_age_long,
-        x="District",
-        y="Population",
-        color="Age Group",
-        title="Population Structure by District"
-    )
+        selected_col = indicator_map[indicator]
 
-    st.plotly_chart(
-        fig,
-        width='stretch'
-    )
+        indicator_descriptions = {
+            "Total Population":
+                "Total number of residents recorded in each barangay.",
+            "Male Population":
+                "Number of male residents recorded in each barangay.",
+            "Female Population":
+                "Number of female residents recorded in each barangay.",
+            "Children Population (0-17)":
+                "Combined count of residents aged 0–5 and 6–17 — "
+                "the population segment most dependent on schools, "
+                "childcare, and pediatric health services.",
+            "Working Age Population":
+                "Residents aged 18–59, the segment that typically "
+                "supports the local economy and tax base.",
+            "Older Persons Population":
+                "Residents aged 60 and above — a key group for "
+                "senior care planning and health services.",
+            "Children Share (%)":
+                "Percentage of the barangay's population aged 0–17. "
+                "Higher values signal greater demand for schools "
+                "and child-focused services.",
+            "Older Persons Share (%)":
+                "Percentage of the barangay's population aged 60+. "
+                "Higher values signal greater demand for elderly "
+                "care and health services.",
+            "Population Density":
+                "Residents per square kilometer. Higher density "
+                "areas typically need more concentrated infrastructure "
+                "and service delivery points."
+        }
 
-    st.divider()
+        st.caption(indicator_descriptions[indicator])
 
-    # --------------------------------------------------
-    # TOP BARANGAYS
-    # --------------------------------------------------
+        fig = px.choropleth_map(
+            barangay_df,
+            geojson=barangay_df.geometry.__geo_interface__,
+            locations=barangay_df.index,
+            color=selected_col,
+            hover_name="Barangay",
+            hover_data={
+                selected_col: ":,.0f",
+                "District": True
+            },
+            center={
+                "lat": 14.676,
+                "lon": 121.043
+            },
+            zoom=11,
+            opacity=0.75,
+            color_continuous_scale="Purples"
+        )
 
-    col1, col2 = st.columns(2)
+        fig.update_coloraxes(
+            cmin=barangay_df[selected_col].quantile(0.05),
+            cmax=barangay_df[selected_col].quantile(0.95)
+        )
 
-    with col1:
+        fig.update_layout(
+            margin=dict(l=0, r=0, t=0, b=0),
+            height=650
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+        st.divider()
+
+        # ---------------------------------------------------
+        # TOP / BOTTOM BARANGAYS — DEPENDENCY RATIO
+        # ---------------------------------------------------
+
+        st.subheader("Dependency Ratio by Barangay")
+
+        col_dep1, col_dep2 = st.columns(2)
+
+        top_dep = (
+            barangay_df[["Barangay", "District", "dependency_ratio"]]
+            .dropna()
+            .sort_values("dependency_ratio", ascending=False)
+            .head(10)
+        )
+
+        bottom_dep = (
+            barangay_df[["Barangay", "District", "dependency_ratio"]]
+            .dropna()
+            .sort_values("dependency_ratio", ascending=True)
+            .head(10)
+        )
+
+        with col_dep1:
+            fig_top_dep = px.bar(
+                top_dep.sort_values("dependency_ratio"),
+                x="dependency_ratio",
+                y="Barangay",
+                orientation="h",
+                title="Top 10 — Highest Dependency Ratio",
+                color_discrete_sequence=["#6A0DAD"]
+            )
+            fig_top_dep.update_layout(
+                height=400,
+                margin=dict(l=0, r=0, t=40, b=0),
+                xaxis_title="Dependency Ratio"
+            )
+            st.plotly_chart(fig_top_dep, width="stretch")
+
+        with col_dep2:
+            fig_bottom_dep = px.bar(
+                bottom_dep.sort_values("dependency_ratio", ascending=False),
+                x="dependency_ratio",
+                y="Barangay",
+                orientation="h",
+                title="Top 10 — Lowest Dependency Ratio",
+                color_discrete_sequence=["#B399D4"]
+            )
+            fig_bottom_dep.update_layout(
+                height=400,
+                margin=dict(l=0, r=0, t=40, b=0),
+                xaxis_title="Dependency Ratio"
+            )
+            st.plotly_chart(fig_bottom_dep, width="stretch")
+
+        st.divider()
+
+        # ---------------------------------------------------
+        # TOP / BOTTOM BARANGAYS — POPULATION DENSITY
+        # ---------------------------------------------------
+
+        st.subheader("Population Density by Barangay")
+
+        col_den1, col_den2 = st.columns(2)
+
+        top_den = (
+            barangay_df[["Barangay", "District", "population_density"]]
+            .dropna()
+            .sort_values("population_density", ascending=False)
+            .head(10)
+        )
+
+        bottom_den = (
+            barangay_df[["Barangay", "District", "population_density"]]
+            .dropna()
+            .sort_values("population_density", ascending=True)
+            .head(10)
+        )
+
+        with col_den1:
+            fig_top_den = px.bar(
+                top_den.sort_values("population_density"),
+                x="population_density",
+                y="Barangay",
+                orientation="h",
+                title="Top 10 — Highest Density (people/km²)",
+                color_discrete_sequence=["#0D6A4A"]
+            )
+            fig_top_den.update_layout(
+                height=400,
+                margin=dict(l=0, r=0, t=40, b=0),
+                xaxis_title="Population Density"
+            )
+            st.plotly_chart(fig_top_den, width="stretch")
+
+        with col_den2:
+            fig_bottom_den = px.bar(
+                bottom_den.sort_values("population_density", ascending=False),
+                x="population_density",
+                y="Barangay",
+                orientation="h",
+                title="Top 10 — Lowest Density (people/km²)",
+                color_discrete_sequence=["#8FCBB3"]
+            )
+            fig_bottom_den.update_layout(
+                height=400,
+                margin=dict(l=0, r=0, t=40, b=0),
+                xaxis_title="Population Density"
+            )
+            st.plotly_chart(fig_bottom_den, width="stretch")
+
+        st.divider()
 
         st.subheader(
-            "Top 10 Most Populated Barangays"
+            f"Top 15 Barangays by {indicator}"
         )
 
-        top_barangays = (
-            population_sex
+        st.dataframe(
+            barangay_df[
+                [
+                    "Barangay",
+                    "District",
+                    selected_col
+                ]
+            ]
             .sort_values(
-                "Total",
+                selected_col,
                 ascending=False
             )
-            .head(10)
+            .head(15),
+            width="stretch"
         )
 
-        st.dataframe(
-            top_barangays[
-                [
-                    "Barangay",
-                    "District",
-                    "Total"
-                ]
+    # =====================================================
+    # DISTRICT TAB
+    # =====================================================
+    with tab2:
+
+        # ---------------------------------------------------
+        # DISTRICT AGGREGATION
+        # ---------------------------------------------------
+
+        district_pop = (
+            population_age
+            .groupby("District")
+            .sum(numeric_only=True)
+            .reset_index()
+        )
+
+        district_sex = (
+            population_sex
+            .groupby("District")
+            .agg(
+                Male=("Male", "sum"),
+                Female=("Female", "sum")
+            )
+            .reset_index()
+        )
+
+        district_pop = district_pop.merge(
+            district_sex,
+            on="District",
+            how="left"
+        )
+
+        district_pop["Dependency Ratio"] = (
+            (
+                district_pop[age_group_definition["children_0_17"]].sum(axis=1)
+                + district_pop[age_group_definition["elderly_60_plus"]].sum(axis=1)
+            )
+            /
+            district_pop[age_group_definition["working_age_18_59"]].sum(axis=1)
+            * 100
+        )
+
+        district_pop["Sex Ratio"] = (
+            district_pop["Male"]
+            /
+            district_pop["Female"]
+            * 100
+        )
+
+        # ---------------------------------------------------
+        # STANDARDIZE DISTRICT IDS
+        # ---------------------------------------------------
+
+        district_pop["District"] = (
+            district_pop["District"]
+            .astype(str)
+            .str.extract(r"(\d+)")[0]
+        )
+
+        district_map["district"] = (
+            district_map["district"]
+            .astype(str)
+            .str.extract(r"(\d+)")[0]
+        )
+
+        district_geo = district_map.merge(
+            district_pop,
+            left_on="district",
+            right_on="District",
+            how="left"
+        )
+
+        # ---------------------------------------------------
+        # DISTRICT MAP — kept to the indicators that matter
+        # most for resource planning (dropped raw M/F split
+        # from the map; that's better shown as the pyramid
+        # and ratio chart below)
+        # ---------------------------------------------------
+
+        district_indicator = st.selectbox(
+            "District Indicator",
+            [
+                "Total Population",
+                "Early Childhood (0-5)",
+                "School Age (6-17)",
+                "Working Age (18-59)",
+                "Older Persons (60+)",
+                "Dependency Ratio"
             ],
-            width='stretch'
+            key="district_indicator"
         )
 
-    with col2:
+        district_col_map = {
+            "Total Population": "Total",
+            "Early Childhood (0-5)":
+                "0-5 (Early Childhood)",
+            "School Age (6-17)":
+                "6-17 (School Age Children)",
+            "Working Age (18-59)":
+                "18-59 (Working Age Adult)",
+            "Older Persons (60+)":
+                "60+ (Elderly)",
+            "Dependency Ratio":
+                "Dependency Ratio"
+        }
+
+        district_col = district_col_map[
+            district_indicator
+        ]
+
+        district_indicator_descriptions = {
+            "Total Population":
+                "Total number of residents recorded in each district.",
+            "Early Childhood (0-5)":
+                "Residents aged 0–5, the segment most dependent on "
+                "daycare and early childhood health services.",
+            "School Age (6-17)":
+                "Residents aged 6–17, the segment that drives demand "
+                "for schools and youth programs.",
+            "Working Age (18-59)":
+                "Residents aged 18–59, the segment that typically "
+                "supports the local economy and tax base.",
+            "Older Persons (60+)":
+                "Residents aged 60 and above — a key group for "
+                "senior care planning and health services.",
+            "Dependency Ratio":
+                "Children and older persons combined, divided by "
+                "the working-age population (×100). Higher values "
+                "mean more dependents per working-age resident."
+        }
+
+        st.caption(
+            district_indicator_descriptions[district_indicator]
+        )
+
+        fig = px.choropleth_map(
+            district_geo,
+            geojson=district_geo.geometry.__geo_interface__,
+            locations=district_geo.index,
+            color=district_col,
+            hover_name="District",
+            hover_data={
+                district_col: ":,.0f"
+            },
+            center={
+                "lat": 14.676,
+                "lon": 121.043
+            },
+            zoom=11,
+            opacity=0.75,
+            color_continuous_scale="Purples"
+        )
+
+        fig.update_layout(
+            margin=dict(
+                l=0,
+                r=0,
+                t=0,
+                b=0
+            ),
+            height=650
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+        st.divider()
+
+        # ---------------------------------------------------
+        # DISTRICT AGE STRUCTURE (stacked bars)
+        # ---------------------------------------------------
+
+        district_age_long = district_pop.melt(
+            id_vars="District",
+            value_vars=age_cols,
+            var_name="Age Group",
+            value_name="Population"
+        )
+
+        fig_age = px.bar(
+            district_age_long,
+            x="District",
+            y="Population",
+            color="Age Group",
+            title="Population Structure by District",
+            barmode="stack"
+        )
+
+        fig_age.update_layout(height=450)
+
+        st.plotly_chart(
+            fig_age,
+            width="stretch"
+        )
+
+        st.divider()
+
+        # ---------------------------------------------------
+        # POPULATION PYRAMID (City-wide, Male vs Female)
+        # ---------------------------------------------------
+
+        st.subheader("Population Pyramid — Male vs Female")
+
+        fig_pyramid = go.Figure()
+
+        fig_pyramid.add_trace(
+            go.Bar(
+                y=["Male"],
+                x=[-total_male],
+                name="Male",
+                orientation="h",
+                marker_color="#3B6FA0"
+            )
+        )
+
+        fig_pyramid.add_trace(
+            go.Bar(
+                y=["Female"],
+                x=[total_female],
+                name="Female",
+                orientation="h",
+                marker_color="#C0567B"
+            )
+        )
+
+        fig_pyramid.update_layout(
+            barmode="overlay",
+            title="Citywide Population by Sex",
+            xaxis=dict(
+                tickvals=[-total_male, 0, total_female],
+                ticktext=[
+                    f"{total_male:,.0f}",
+                    "0",
+                    f"{total_female:,.0f}"
+                ],
+                title="Population"
+            ),
+            height=250,
+            margin=dict(l=0, r=0, t=40, b=0)
+        )
+
+        col_pyr1, col_pyr2 = st.columns([2, 1])
+
+        with col_pyr1:
+            st.plotly_chart(fig_pyramid, width="stretch")
+
+        with col_pyr2:
+            fig_ratio = px.bar(
+                district_pop.sort_values("Sex Ratio", ascending=False),
+                x="District",
+                y="Sex Ratio",
+                title="Sex Ratio (M/F ×100) by District",
+                color_discrete_sequence=["#3B6FA0"]
+            )
+            fig_ratio.add_hline(
+                y=100,
+                line_dash="dash",
+                line_color="gray",
+                annotation_text="Parity (100)"
+            )
+            fig_ratio.update_layout(
+                height=250,
+                margin=dict(l=0, r=0, t=40, b=0)
+            )
+            st.plotly_chart(fig_ratio, width="stretch")
+
+        st.divider()
+
+        # ---------------------------------------------------
+        # DISTRICT SUMMARY TABLE
+        # ---------------------------------------------------
+
+        district_summary = (
+            population_sex
+            .groupby("District")
+            .agg(
+                Population=("Total", "sum"),
+                Male=("Male", "sum"),
+                Female=("Female", "sum"),
+                Barangays=("Barangay", "nunique")
+            )
+            .reset_index()
+            .sort_values(
+                "Population",
+                ascending=False
+            )
+        )
+
+        district_summary["Male %"] = (
+            district_summary["Male"]
+            /
+            district_summary["Population"]
+            * 100
+        ).round(1)
+
+        district_summary["Female %"] = (
+            district_summary["Female"]
+            /
+            district_summary["Population"]
+            * 100
+        ).round(1)
 
         st.subheader(
-            "Least Populated Barangays"
-        )
-
-        smallest_barangays = (
-            population_sex
-            .sort_values(
-                "Total",
-                ascending=True
-            )
-            .head(10)
+            "District Demographic Summary"
         )
 
         st.dataframe(
-            smallest_barangays[
-                [
-                    "Barangay",
-                    "District",
-                    "Total"
-                ]
-            ],
-            width='stretch'
+            district_summary,
+            width="stretch"
         )
-
-    st.divider()
-
-    # --------------------------------------------------
-    # DISTRICT SUMMARY TABLE
-    # --------------------------------------------------
-
-    st.subheader(
-        "District Demographic Summary"
-    )
-
-    district_summary = (
-        population_sex
-        .groupby("District")
-        .agg(
-            Population=("Total", "sum"),
-            Male=("Male", "sum"),
-            Female=("Female", "sum"),
-            Barangays=("Barangay", "nunique")
-        )
-        .reset_index()
-        .sort_values(
-            "Population",
-            ascending=False
-        )
-    )
-
-    district_summary[
-        "Male %"
-    ] = (
-        district_summary["Male"]
-        / district_summary["Population"]
-        * 100
-    ).round(1)
-
-    district_summary[
-        "Female %"
-    ] = (
-        district_summary["Female"]
-        / district_summary["Population"]
-        * 100
-    ).round(1)
-
-    st.dataframe(
-        district_summary,
-        width='stretch'
-    )
 
 if page == "Childcare Centers":
 
-    st.title("Child Care Facilities")
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Childcare Facilities
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
 
     st.markdown("""
     Explore the spatial distribution of childcare facilities in Quezon City,
     including public Child Development Centers and private childcare providers.
-                
-                
     """)
+
+    st.markdown(
+        """
+        <span style="color:#5B21B6;font-size:18px;">●</span>
+        <b>Child Development Center</b> — For children aged 3–4 years and supports school readiness.<br>
+
+        <span style="color:#7F47ED;font-size:18px;">●</span>
+        <b>Child Learning Center</b> — Private childcare and early learning services.<br>
+
+        <span style="color:#A78BFA;font-size:18px;">●</span>
+        <b>Day Care Center</b> — Private day care and supervision services.
+        """,
+        unsafe_allow_html=True
+    )
 
     # --------------------------------------------------
     # CHILDCARE KPIs
@@ -1102,6 +1947,10 @@ if page == "Childcare Centers":
     # DISTRICT FILTER
     # --------------------------------------------------
 
+    # --------------------------------------------------
+    # DISTRICT FILTER
+    # --------------------------------------------------
+
     districts = sorted(
         childcare_centers["District"]
         .dropna()
@@ -1110,21 +1959,29 @@ if page == "Childcare Centers":
     )
 
     selected_district = st.selectbox(
-        "District",
-        ["All"] + list(districts)
+        "Select the district",
+        ["All"] + [f"District {d}" for d in districts]
     )
 
+    st.info("Hover over a facility to view details.")
+
     # --------------------------------------------------
-    # DATA FILTERING
+    # FILTERING
     # --------------------------------------------------
 
     cc = childcare_centers.copy()
 
     if selected_district != "All":
 
+        district_number = int(
+            selected_district.replace(
+                "District ",
+                ""
+            )
+        )
+
         cc = cc[
-            cc["District"].astype(int)
-            == selected_district
+            cc["District"] == district_number
         ]
 
     if selected_childcare_sector != "All":
@@ -1150,173 +2007,118 @@ if page == "Childcare Centers":
         ]
 
     # --------------------------------------------------
-    # SESSION STATE
+    # COLOR CONVERSION
     # --------------------------------------------------
 
-    if "selected_childcare_facility" not in st.session_state:
+    def hex_to_rgb(hex_color):
+        hex_color = hex_color.lstrip("#")
 
-        st.session_state.selected_childcare_facility = None
+        return [
+            int(hex_color[0:2], 16),
+            int(hex_color[2:4], 16),
+            int(hex_color[4:6], 16)
+        ]
+
+    colors = [
+        hex_to_rgb(
+            childcare_color(cat)
+        )
+        for cat in cc["Category"].astype(str)
+    ]
+
+    cc["r"] = [c[0] for c in colors]
+    cc["g"] = [c[1] for c in colors]
+    cc["b"] = [c[2] for c in colors]
 
     # --------------------------------------------------
-    # LAYOUT
+    # VIEW STATE
     # --------------------------------------------------
 
-    map_col, info_col = st.columns([2, 1])
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,   
+        max_zoom=17, 
+    )
+
+    # --------------------------------------------------
+    # BARANGAY BOUNDARIES
+    # --------------------------------------------------
+
+    polygon_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geo,
+        stroked=True,
+        filled=True,
+        get_fill_color=[127, 191, 127, 38],
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=1,
+        pickable=False
+    )
+
+    # --------------------------------------------------
+    # CHILDCARE POINTS
+    # --------------------------------------------------
+
+    childcare_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=cc,
+        get_position="[longitude, latitude]",
+        get_fill_color="[r, g, b]",
+        get_line_color="[r, g, b]",
+        stroked=True,
+        filled=True,
+        opacity=0.9,
+        line_width_min_pixels=2,
+        get_radius=40,
+        radius_min_pixels=4,
+        radius_max_pixels=4,
+        pickable=True
+    )
+
+    # --------------------------------------------------
+    # TOOLTIP
+    # --------------------------------------------------
+
+    tooltip = {
+        "html": """
+        <b>{Name}</b><br/>
+        Sector: {Sector}<br/>
+        Category: {Category}<br/>
+        District: {District}<br/>
+        Address: {Address}<br/>
+        Open: {open_hours}<br/>
+        Close: {close_hours}
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
+        }
+    }
 
     # --------------------------------------------------
     # MAP
     # --------------------------------------------------
 
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        tiles="CartoDB positron"
+    deck = pdk.Deck(
+        layers=[
+            polygon_layer,
+            childcare_layer
+        ],
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="light"
+
     )
 
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.15,
-        }
-    ).add_to(m)
-
-    # --------------------------------------------------
-    # MARKERS
-    # --------------------------------------------------
-
-    for _, row in cc.iterrows():
-
-        popup_html = f"""
-        <b>{row['Name']}</b><br>
-        Sector: {row['Sector']}<br>
-        Category: {row['Category']}<br>
-        District: {int(row['District'])}<br>
-        Address: {row['Address']}
-        """
-
-        folium.CircleMarker(
-            location=[
-                row["latitude"],
-                row["longitude"]
-            ],
-            radius=4,
-            color=childcare_color(row["Category"]),
-            fill=True,
-            fill_color=childcare_color(row["Category"]),
-            fill_opacity=0.9,
-            weight=2,
-            popup=folium.Popup(popup_html, max_width=350),
-            tooltip=row["Name"]
-        ).add_to(m)
-
-    # --------------------------------------------------
-    # MAP DISPLAY
-    # --------------------------------------------------
-
-    with map_col:
-
-        map_data = st_folium(
-            m,
-            height=700,
-            returned_objects=["last_object_clicked"]
-        )
-
-    # --------------------------------------------------
-    # CLICK DETECTION
-    # --------------------------------------------------
-
-    if (
-        map_data
-        and map_data.get("last_object_clicked")
-    ):
-
-        clicked_lat = map_data["last_object_clicked"]["lat"]
-        clicked_lon = map_data["last_object_clicked"]["lng"]
-
-        tmp = cc.copy()
-
-        tmp["distance"] = (
-            (tmp["latitude"] - clicked_lat) ** 2 +
-            (tmp["longitude"] - clicked_lon) ** 2
-        )
-
-        st.session_state.selected_childcare_facility = (
-            tmp.loc[
-                tmp["distance"].idxmin()
-            ]
-        )
-
-    # --------------------------------------------------
-    # INFO PANEL
-    # --------------------------------------------------
-
-    with info_col:
-
-        st.subheader("Facility Details")
-
-        if st.session_state.selected_childcare_facility is not None:
-
-            facility = (
-                st.session_state.selected_childcare_facility
-            )
-
-            st.markdown(
-                f"### {facility['Name']}"
-            )
-
-            st.write(
-                f"**Sector:** {facility['Sector']}"
-            )
-
-            st.write(
-                f"**Category:** {facility['Category']}"
-            )
-
-            st.write(
-                f"**District:** {int(facility['District'])}"
-            )
-            
-            st.write(
-                f"**Address:** {facility['Address']}"
-            )
-
-            if (
-                "open_hours" in facility.index
-                and "close_hours" in facility.index
-                and pd.notna(facility["open_hours"])
-                and pd.notna(facility["close_hours"])
-            ):
-
-                st.write(
-                    f"**Hours:** {facility['open_hours']} – {facility['close_hours']}"
-                )
-
-            elif (
-                "open_hours" in facility.index
-                and pd.notna(facility["open_hours"])
-            ):
-
-                st.write(
-                    f"**Opens:** {facility['open_hours']}"
-                )
-
-            elif (
-                "close_hours" in facility.index
-                and pd.notna(facility["close_hours"])
-            ):
-
-                st.write(
-                    f"**Closes:** {facility['close_hours']}"
-                )
-
-        else:
-
-            st.info(
-                "Click a facility on the map."
-            )
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width='stretch'
+    )
 
     # --------------------------------------------------
     # TABLE
@@ -1396,7 +2198,7 @@ if page == "Childcare Centers":
 
     early_childhood_population = (
         population_age[
-            "0-5 \n(Early Childhood)"
+            "0-5 (Early Childhood)"
         ]
         .sum()
     )
@@ -1431,12 +2233,35 @@ if page == "Childcare Centers":
 
 elif page == "Schools":
 
-    st.title("Schools")
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Schools
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
 
     st.markdown("""
     Explore the spatial distribution of schools across Quezon City,
     including both public and private educational institutions.
     """)
+
+    st.markdown(
+        """
+        <span style="color:#5B21B6;">●</span>
+        <b>Public School</b> — Government-operated educational institutions.<br>
+        <span style="color:#A78BFA;">●</span>
+        <b>Private School</b> — Privately operated educational institutions.
+        """,
+        unsafe_allow_html=True
+    )
 
     # KPIS
     total_schools = len(schools)
@@ -1502,7 +2327,7 @@ elif page == "Schools":
 
     school_age_population = (
         population_age[
-            "6-17 \n(School Age Children)"
+            "6-17 (School Age Children)"
         ]
         .sum()
     )
@@ -1540,9 +2365,11 @@ elif page == "Schools":
     )
 
     selected_district = st.selectbox(
-        "District",
-        ["All"] + list(districts)
+        "Select the district",
+        ["All"] + [f"District {d}" for d in districts]
     )
+
+    st.info("Hover over a school to view details.")
 
     # --------------------------------------------------
     # FILTERING
@@ -1552,9 +2379,16 @@ elif page == "Schools":
 
     if selected_district != "All":
 
+        district_number = int(
+            selected_district.replace(
+                "District ",
+                ""
+            )
+        )
+
         sch = sch[
             sch["District"].astype(int)
-            == selected_district
+            == district_number
         ]
 
     if selected_school_sector != "All":
@@ -1594,163 +2428,127 @@ elif page == "Schools":
             f"{missing_locations} schools do not have coordinates and are not shown on the map."
         )
 
-    sch_map = sch.dropna(
+    sch = sch.dropna(
         subset=["latitude", "longitude"]
     )
 
     # --------------------------------------------------
-    # SESSION STATE
+    # COLOR CONVERSION
     # --------------------------------------------------
 
-    if "selected_school" not in st.session_state:
+    def hex_to_rgb(hex_color):
 
-        st.session_state.selected_school = None
+        hex_color = hex_color.lstrip("#")
+
+        return [
+            int(hex_color[0:2], 16),
+            int(hex_color[2:4], 16),
+            int(hex_color[4:6], 16)
+        ]
+
+    colors = [
+        hex_to_rgb(
+            school_color(cat)
+        )
+        for cat in sch["Category"].astype(str)
+    ]
+
+    sch["r"] = [c[0] for c in colors]
+    sch["g"] = [c[1] for c in colors]
+    sch["b"] = [c[2] for c in colors]
 
     # --------------------------------------------------
-    # LAYOUT
+    # VIEW STATE
     # --------------------------------------------------
 
-    map_col, info_col = st.columns([2, 1])
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,   
+        max_zoom=17, 
+    )
+
+    # --------------------------------------------------
+    # BARANGAY POLYGONS
+    # --------------------------------------------------
+
+    polygon_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geo,
+        stroked=True,
+        filled=True,
+        get_fill_color=[127, 191, 127, 38],
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=1,
+        pickable=False
+
+    )
+
+    # --------------------------------------------------
+    # SCHOOL POINTS
+    # --------------------------------------------------
+
+    school_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=sch,
+        get_position="[longitude, latitude]",
+        get_fill_color="[r, g, b]",
+        get_line_color="[r, g, b]",
+        stroked=True,
+        filled=True,
+        opacity=0.9,
+        line_width_min_pixels=2,
+        get_radius=40,
+        radius_min_pixels=4,
+        radius_max_pixels=4,
+        pickable=True,
+    )
+
+    # --------------------------------------------------
+    # TOOLTIP
+    # --------------------------------------------------
+
+    
+
+    tooltip = {
+        "html": """
+        <b>{Name}</b><br/>
+        Sector: {Sector}<br/>
+        Category: {Category}<br/>
+        District: {District}<br/>
+        Address: {Address}<br/>
+        Open: {open_hours}<br/>
+        Close: {close_hours}
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
+        }
+    }
 
     # --------------------------------------------------
     # MAP
     # --------------------------------------------------
 
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        tiles="CartoDB positron"
+    deck = pdk.Deck(
+        layers=[
+            polygon_layer,
+            school_layer
+        ],
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="light"
+
     )
 
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.15,
-        }
-    ).add_to(m)
-
-    # --------------------------------------------------
-    # MARKERS
-    # --------------------------------------------------
-
-    for _, row in sch_map.iterrows():
-
-        popup_html = f"""
-        <b>{row['Name']}</b><br>
-        Sector: {row['Sector']}<br>
-        Category: {row['Category']}<br>
-        District: {int(row['District'])}<br>
-        Address: {row['Address']}
-        """
-
-        if pd.notna(row.get("open_hours")):
-            popup_html += f"<br>Open: {row['open_hours']}"
-
-        if pd.notna(row.get("close_hours")):
-            popup_html += f"<br>Close: {row['close_hours']}"
-
-        folium.CircleMarker(
-            location=[
-                row["latitude"],
-                row["longitude"]
-            ],
-            radius=4,
-            color=school_color(row["Category"]),
-            fill=True,
-            fill_color=school_color(row["Category"]),
-            fill_opacity=0.9,
-            weight=2,
-            popup=folium.Popup(popup_html, max_width=350),
-            tooltip=row["Name"]
-        ).add_to(m)
-
-    # --------------------------------------------------
-    # MAP DISPLAY
-    # --------------------------------------------------
-
-    with map_col:
-
-        map_data = st_folium(
-            m,
-            height=700,
-            returned_objects=["last_object_clicked"]
-        )
-
-    # --------------------------------------------------
-    # CLICK DETECTION
-    # --------------------------------------------------
-
-    if (
-        map_data
-        and map_data.get("last_object_clicked")
-    ):
-
-        clicked_lat = map_data["last_object_clicked"]["lat"]
-        clicked_lon = map_data["last_object_clicked"]["lng"]
-
-        tmp = sch_map.copy()
-
-        tmp["distance"] = (
-            (tmp["latitude"] - clicked_lat) ** 2 +
-            (tmp["longitude"] - clicked_lon) ** 2
-        )
-
-        st.session_state.selected_school = (
-            tmp.loc[
-                tmp["distance"].idxmin()
-            ]
-        )
-
-    # --------------------------------------------------
-    # INFO PANEL
-    # --------------------------------------------------
-
-    with info_col:
-
-        st.subheader("School Details")
-
-        if st.session_state.selected_school is not None:
-
-            facility = st.session_state.selected_school
-
-            st.markdown(
-                f"### {facility['Name']}"
-            )
-
-            st.write(
-                f"**Sector:** {facility['Sector']}"
-            )
-
-            st.write(
-                f"**Category:** {facility['Category']}"
-            )
-
-            st.write(
-                f"**District:** {int(facility['District'])}"
-            )
-
-            st.write(
-                f"**Address:** {facility['Address']}"
-            )
-
-            if pd.notna(facility.get("open_hours")):
-                st.write(
-                    f"**Open:** {facility['open_hours']}"
-                )
-
-            if pd.notna(facility.get("close_hours")):
-                st.write(
-                    f"**Close:** {facility['close_hours']}"
-                )
-
-        else:
-
-            st.info(
-                "Click a school on the map."
-            )
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width='stretch'
+    )
 
     # --------------------------------------------------
     # TABLE
@@ -1840,7 +2638,7 @@ elif page == "Schools":
         population_age
         .groupby("District")
         [
-            "6-17 \n(School Age Children)"
+            "6-17 (School Age Children)"
         ]
         .sum()
         .reset_index()
@@ -1848,7 +2646,7 @@ elif page == "Schools":
 
     district_population = district_population.rename(
         columns={
-            "6-17 \n(School Age Children)":
+            "6-17 (School Age Children)":
             "School_Age_Population"
         }
     )
@@ -1906,13 +2704,49 @@ elif page == "Schools":
 
 elif page == "Health Centers Map":
 
-    st.title("Health Centers & Hospitals") 
-    
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:0px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Health Centers & Hospitals
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
+
     st.markdown("""
-        Explore the spatial distribution of healthcare facilities in Quezon City.
-        The map supports the assessment of access to primary healthcare services,
-        facility coverage, and the availability of pharmacies across districts.
+    Explore the spatial distribution of healthcare facilities in Quezon City.
+    The map supports the assessment of access to primary healthcare services,
+    facility coverage, and the availability of pharmacies across districts.
     """)
+
+    st.markdown(
+        f"""
+        <span style="color:{category_hex('QC LGU')};">●</span>
+        <b>QC LGU</b> — Maternity and lying-in clinics for healthy pregnancies.<br>
+
+        <span style="color:{category_hex('National')};">●</span>
+        <b>National</b> — National government-owned hospitals.<br>
+
+        <span style="color:{category_hex('Super Health')};">●</span>
+        <b>Super Health</b> — Enhanced health centers with laboratory, dental, ambulance, breastfeeding, and lying-in services.<br>
+
+        <span style="color:{category_hex('Health Center')};">●</span>
+        <b>Health Center</b> — Community-based primary healthcare facilities.<br>
+
+        <span style="color:{category_hex('Pharmacy')};">●</span>
+        <b>Pharmacy</b> — Pharmacy services within health facilities.<br>
+
+        <span style="color:{category_hex('Milk Bank')};">●</span>
+        <b>Milk Bank</b> — Safe pasteurized human milk services for infants in need.
+        """,
+        unsafe_allow_html=True
+    )
 
     # --------------------------------------------------
     # HEALTH KPIs
@@ -1995,207 +2829,200 @@ elif page == "Health Centers Map":
     districts = sorted(
         health_centers["District"]
         .dropna()
+        .astype(int)
         .unique()
     )
 
     selected_district = st.selectbox(
-        "District",
-        ["All"] + list(districts)
+        "Select the district",
+        ["All"] + [f"District {d}" for d in districts]
     )
 
-    # --------------------------------------------------
-    # CATEGORY FILTER
-    # --------------------------------------------------
+    st.info("Hover over a facility to view details.")
 
-    category_options = [
-        "All",
-        "QC LGU",
-        "National",
-        "Health Center",
-        "Super Health",
-        "Pharmacy"
-    ]
+    # --------------------------------------------------
+    # FILTERING
+    # --------------------------------------------------
 
     hc = health_centers.copy()
 
-    # District filter
     if selected_district != "All":
+
+        district_number = int(
+            selected_district.replace(
+                "District ",
+                ""
+            )
+        )
+
         hc = hc[
-            hc["District"] == selected_district
+            hc["District"].astype(int)
+            == district_number
         ]
 
-    # Category filter
     if selected_category != "All":
 
         hc = hc[
-                hc["Category"]
-                .str.contains(
-                    selected_category,
-                    case=False,
-                    na=False
-                )
-            ]
-
-    hc["color"] = hc["Category"].apply(category_color)
+            hc["Category"]
+            .str.contains(
+                selected_category,
+                case=False,
+                na=False
+            )
+        ]
 
     # --------------------------------------------------
-    # SESSION STATE
+    # REMOVE MISSING COORDINATES
     # --------------------------------------------------
 
-    if "selected_facility" not in st.session_state:
-        st.session_state.selected_facility = None
-
-    # --------------------------------------------------
-    # LAYOUT
-    # --------------------------------------------------
-
-    map_col, info_col = st.columns([2, 1])
-
-    # --------------------------------------------------
-    # FOLIUM MAP
-    # --------------------------------------------------
-
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        tiles="CartoDB positron"
+    hc = hc.dropna(
+        subset=["latitude", "longitude"]
     )
 
     # --------------------------------------------------
-    # BARANGAYS
+    # HOURS DISPLAY
     # --------------------------------------------------
 
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.15,
+    if "open_hours" in hc.columns:
+        hc["open_display"] = (
+            hc["open_hours"]
+            .fillna("Not available")
+        )
+    else:
+        hc["open_display"] = "Not available"
+
+    if "close_hours" in hc.columns:
+        hc["close_display"] = (
+            hc["close_hours"]
+            .fillna("Not available")
+        )
+    else:
+        hc["close_display"] = "Not available"
+
+    # --------------------------------------------------
+    # BARANGAY DISPLAY
+    # --------------------------------------------------
+
+    if "barangay" in hc.columns:
+        hc["barangay_display"] = (
+            hc["barangay"]
+            .fillna("Not available")
+        )
+    else:
+        hc["barangay_display"] = "Not available"
+
+    # --------------------------------------------------
+    # COLOR CONVERSION
+    # --------------------------------------------------
+
+    def hex_to_rgb(hex_color):
+
+        hex_color = hex_color.lstrip("#")
+
+        return [
+            int(hex_color[0:2], 16),
+            int(hex_color[2:4], 16),
+            int(hex_color[4:6], 16)
+        ]
+
+    colors = [
+        hex_to_rgb(
+            marker_color(cat)
+        )
+        for cat in hc["Category"].astype(str)
+    ]
+
+    hc["r"] = [c[0] for c in colors]
+    hc["g"] = [c[1] for c in colors]
+    hc["b"] = [c[2] for c in colors]
+
+    # --------------------------------------------------
+    # VIEW STATE
+    # --------------------------------------------------
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,   
+        max_zoom=17, 
+    )
+
+    # --------------------------------------------------
+    # BARANGAY POLYGONS
+    # --------------------------------------------------
+
+    polygon_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geo,
+        stroked=True,
+        filled=True,
+        get_fill_color=[127, 191, 127, 38],
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=1,
+        pickable=False
+    )
+
+    # --------------------------------------------------
+    # HEALTH FACILITIES
+    # --------------------------------------------------
+
+    health_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=hc,
+        get_position="[longitude, latitude]",
+        get_fill_color="[r, g, b]",
+        get_line_color="[r, g, b]",
+        stroked=True,
+        filled=True,
+        opacity=0.9,
+        line_width_min_pixels=2,
+        get_radius=40,
+        radius_min_pixels=4,
+        radius_max_pixels=4,
+        pickable=True
+    )
+
+    # --------------------------------------------------
+    # TOOLTIP
+    # --------------------------------------------------
+
+    tooltip = {
+        "html": """
+        <b>{Name}</b><br/>
+        Category: {Category}<br/>
+        District: {District}<br/>
+        Barangay: {barangay_display}<br/>
+        Address: {Address}<br/>
+        Open: {open_display}<br/>
+        Close: {close_display}
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
         }
-    ).add_to(m)
+    }
 
     # --------------------------------------------------
-    # MARKERS
+    # MAP
     # --------------------------------------------------
 
-    for _, row in hc.iterrows():
-
-        popup_html = f"""
-        <b>{row['Name of Facility']}</b><br>
-        Category: {row['Category']}<br>
-        District: {int(row['District'])}<br>
-        Address: {row['Address']}
-        """
-
-        folium.CircleMarker(
-            location=[
-                row["latitude"],
-                row["longitude"]
-            ],
-            radius=4,
-            color=marker_color(row["Category"]),
-            fill=True,
-            fill_color=marker_color(row["Category"]),
-            fill_opacity=0.9,
-            weight=2,
-            popup=folium.Popup(popup_html, max_width=350),
-            tooltip=row["Name of Facility"]
-        ).add_to(m)
-
-    # --------------------------------------------------
-    # MAP RENDER
-    # --------------------------------------------------
-
-    with map_col:
-
-        map_data = st_folium(
-            m,
-            height=700,
-            width=None,
-            returned_objects=[
-                "last_object_clicked"
-            ]
-        )
-
-    # --------------------------------------------------
-    # DETECT CLICK
-    # --------------------------------------------------
-
-    if (
-        map_data
-        and map_data.get("last_object_clicked")
-    ):
-
-        clicked_lat = map_data["last_object_clicked"]["lat"]
-        clicked_lon = map_data["last_object_clicked"]["lng"]
-
-        hc_temp = hc.copy()
-
-        hc_temp["distance"] = (
-            (hc_temp["latitude"] - clicked_lat) ** 2 +
-            (hc_temp["longitude"] - clicked_lon) ** 2
-        )
-
-        st.session_state.selected_facility = (
-            hc_temp.loc[
-                hc_temp["distance"].idxmin()
-            ]
-        )
-
-    # --------------------------------------------------
-    # INFO PANEL
-    # --------------------------------------------------
-
-    with info_col:
-
-        st.subheader("Facility Details")
-
-        if st.session_state.selected_facility is not None:
-
-            facility = st.session_state.selected_facility
-
-            st.markdown(
-                f"### {facility['Name of Facility']}"
-            )
-
-            st.write(
-                f"**Category:** {facility['Category']}"
-            )
-
-            st.write(
-                f"**District:** {int(facility['District'])}"
-            )
-
-            if "barangay" in facility.index:
-                st.write(
-                    f"**Barangay:** {facility['barangay']}"
-                )
-
-            st.write(
-                f"**Address:** {facility['Address']}"
-            )
-        else:
-
-            st.info(
-                "Click a facility marker on the map."
-            )
-    # --------------------------------------------------
-    # TABLE
-    # --------------------------------------------------
-
-    st.subheader("Facilities")
-
-    st.dataframe(
-        hc[
-            [
-                "Name of Facility",
-                "District",
-                "Category",
-                "Address"
-            ]
+    deck = pdk.Deck(
+        layers=[
+            polygon_layer,
+            health_layer
         ],
-        width = 'stretch'
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+    )
+
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width='stretch'
     )
 
     # --------------------------------------------------
@@ -2365,15 +3192,36 @@ elif page == "Health Centers Map":
 
 elif page == "Older Persons Center Map":
 
-    st.title("Older Persons & Senior Citizens")
-
-    st.caption(
+    st.markdown(
         """
-        Interactive map of facilities supporting older persons in Quezon City,
-        including nursing care centers and Bahay Aruga facilities.
-        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Older Persons & Senior Citizens
+        </h2>
+        """,
+        unsafe_allow_html=True
     )
 
+    st.markdown("""
+    Explore facilities supporting older persons in Quezon City,
+    including nursing care centers and Bahay Aruga facilities.
+    """)
+
+    st.markdown(
+        """
+        <span style="color:#4C1D95;">●</span>
+        <b>Nursing Care Center</b> — Residential facilities providing long-term nursing and care services.<br>
+
+        <span style="color:#A78BFA;">●</span>
+        <b>Bahay Aruga</b> — Temporary residential facility for abandoned, neglected, abused, and indigent QC senior citizens aged 60 years and above.
+        """,
+        unsafe_allow_html=True
+    )
     # --------------------------------------------------
     # SENIOR CITIZEN KPIs
     # --------------------------------------------------
@@ -2492,7 +3340,7 @@ elif page == "Older Persons Center Map":
     )
 
     # --------------------------------------------------
-    # FILTERS
+    # DISTRICT FILTER
     # --------------------------------------------------
 
     district_options = sorted(
@@ -2501,26 +3349,37 @@ elif page == "Older Persons Center Map":
                 older_person_care["District"]
                 .dropna()
                 .astype(int),
-
                 pd.Series([3, 6])
             ]
         ).unique()
     )
- 
 
     selected_district = st.selectbox(
-        "District",
-        ["All"] + district_options,
+        "Select the district",
+        ["All"] + [f"District {d}" for d in district_options],
         key="opc_district"
     )
+
+    st.info("Hover over a facility to view details.")
+
+    # --------------------------------------------------
+    # FILTERING
+    # --------------------------------------------------
 
     opc = older_person_care.copy()
 
     if selected_district != "All":
 
+        district_number = int(
+            selected_district.replace(
+                "District ",
+                ""
+            )
+        )
+
         opc = opc[
             opc["District"].astype(int)
-            == selected_district
+            == district_number
         ]
 
     if selected_opc_category != "All":
@@ -2535,162 +3394,172 @@ elif page == "Older Persons Center Map":
         ]
 
     # --------------------------------------------------
-    # SESSION STATE
+    # MISSING COORDINATES
     # --------------------------------------------------
 
-    if "selected_senior_facility" not in st.session_state:
+    missing_locations = (
+        opc["latitude"].isna() |
+        opc["longitude"].isna()
+    ).sum()
 
-        st.session_state.selected_senior_facility = None
+    if missing_locations > 0:
 
-    map_col, info_col = st.columns([2, 1])
+        st.warning(
+            f"{missing_locations} facilities do not have coordinates and are not shown on the map."
+        )
 
-    # --------------------------------------------------
-    # MAP
-    # --------------------------------------------------
-
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        tiles="CartoDB positron"
+    opc = opc.dropna(
+        subset=["latitude", "longitude"]
     )
 
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.15,
+    # --------------------------------------------------
+    # DISPLAY COLUMNS
+    # --------------------------------------------------
+
+    if "barangay" in opc.columns:
+
+        opc["barangay_display"] = (
+            opc["barangay"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        opc["barangay_display"] = (
+            "Not available"
+        )
+
+    if "open_hours" in opc.columns:
+
+        opc["open_display"] = (
+            opc["open_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        opc["open_display"] = (
+            "Not available"
+        )
+
+    if "close_hours" in opc.columns:
+
+        opc["close_display"] = (
+            opc["close_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        opc["close_display"] = (
+            "Not available"
+        )
+
+    # --------------------------------------------------
+    # COLORS
+    # --------------------------------------------------
+
+    colors = [
+        hex_to_rgb(
+            opc_color(cat)
+        )
+        for cat in opc["Category"].astype(str)
+    ]
+
+    opc["r"] = [c[0] for c in colors]
+    opc["g"] = [c[1] for c in colors]
+    opc["b"] = [c[2] for c in colors]
+
+    # --------------------------------------------------
+    # VIEW STATE
+    # --------------------------------------------------
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,   
+        max_zoom=17, 
+    )
+
+    # --------------------------------------------------
+    # POLYGONS
+    # --------------------------------------------------
+
+    polygon_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geo,
+        stroked=True,
+        filled=True,
+        get_fill_color=[127, 191, 127, 38],
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=1,
+        pickable=False
+    )
+
+    # --------------------------------------------------
+    # FACILITIES
+    # --------------------------------------------------
+
+    facility_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=opc,
+        get_position="[longitude, latitude]",
+        get_fill_color="[r, g, b]",
+        get_line_color="[r, g, b]",
+        stroked=True,
+        filled=True,
+        opacity=0.9,
+        line_width_min_pixels=2,
+        get_radius=40,
+        radius_min_pixels=4,
+        radius_max_pixels=4,
+        pickable=True
+    )
+
+    # --------------------------------------------------
+    # TOOLTIP
+    # --------------------------------------------------
+
+    tooltip = {
+        "html": """
+        <b>{Name}</b><br/>
+        Category: {Category}<br/>
+        District: {District}<br/>
+        Barangay: {barangay_display}<br/>
+        Address: {Address}<br/>
+        Open: {open_display}<br/>
+        Close: {close_display}
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
         }
-    ).add_to(m)
+    }
 
     # --------------------------------------------------
-    # FACILITY MARKERS
+    # DECK
     # --------------------------------------------------
 
-    for _, row in opc.iterrows():
-
-        popup_html = f"""
-        <b>{row['Name']}</b><br>
-        Category: {row['Category']}<br>
-        District: {int(row['District'])}<br>
-        Barangay: {row['barangay']}<br>
-        Address: {row['Address']}
-        """
-
-        folium.CircleMarker(
-            location=[
-                row["latitude"],
-                row["longitude"]
-            ],
-            radius=5,
-            color=opc_color(row["Category"]),
-            fill=True,
-            fill_color=opc_color(row["Category"]),
-            fill_opacity=0.9,
-            weight=5,
-            popup=folium.Popup(popup_html, max_width=350),
-            tooltip=row["Name"]
-        ).add_to(m)
-
-    # --------------------------------------------------
-    # MAP DISPLAY
-    # --------------------------------------------------
-
-    with map_col:
-
-        map_data = st_folium(
-            m,
-            height=700,
-            width=None,
-            returned_objects=["last_object_clicked"]
-        )
-
-    # --------------------------------------------------
-    # CLICK DETECTION
-    # --------------------------------------------------
-
-    if (
-        map_data
-        and map_data.get("last_object_clicked")
-    ):
-
-        clicked_lat = map_data["last_object_clicked"]["lat"]
-        clicked_lon = map_data["last_object_clicked"]["lng"]
-
-        tmp = opc.copy()
-
-        tmp["distance"] = (
-            (tmp["latitude"] - clicked_lat) ** 2 +
-            (tmp["longitude"] - clicked_lon) ** 2
-        )
-
-        st.session_state.selected_senior_facility = (
-            tmp.loc[
-                tmp["distance"].idxmin()
-            ]
-        )
-
-    # --------------------------------------------------
-    # INFO PANEL
-    # --------------------------------------------------
-
-    with info_col:
-
-        st.subheader("Facility Details")
-
-        if st.session_state.selected_senior_facility is not None:
-
-            facility = st.session_state.selected_senior_facility
-
-            st.markdown(
-                f"### {facility['Name']}"
-            )
-
-            st.write(
-                f"**Category:** {facility['Category']}"
-            )
-
-            st.write(
-                f"**District:** {int(facility['District'])}"
-            )
-
-            st.write(
-                f"**Barangay:** {facility['barangay']}"
-            )
-
-            st.write(
-                f"**Address:** {facility['Address']}"
-            )
-
-        else:
-
-            st.info(
-                "Click a facility on the map."
-            )
-
-    # --------------------------------------------------
-    # TABLE
-    # --------------------------------------------------
-
-    st.divider()
-
-    st.subheader(
-        "Older Persons Care Facilities"
-    )
-
-    st.dataframe(
-        opc[
-            [
-                "Name",
-                "District",
-                "Category",
-                "Address"
-            ]
+    deck = pdk.Deck(
+        layers=[
+            polygon_layer,
+            facility_layer
         ],
-        width = 'stretch'
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
     )
-    
+
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width='stretch'
+    )
+
+
     # --------------------------------------------------
     # KPIS
     # --------------------------------------------------
@@ -2894,9 +3763,20 @@ elif page == "Older Persons Center Map":
     )
 
 elif page == "Long-Term Care & Rehabilitation":
-
-    st.title(
-        "Long-Term Care & Rehabilitation Services"
+    
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:0px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Long-Term Care & Rehabilitation Services
+        </h2>
+        """,
+        unsafe_allow_html=True
     )
 
     st.markdown("""
@@ -2904,6 +3784,20 @@ elif page == "Long-Term Care & Rehabilitation":
     rehabilitation, therapy, and specialized
     recovery services in Quezon City.
     """)
+
+    legend_html = ""
+
+    for cat in ltc_categories:
+        legend_html += (
+            f'<span style="color:{ltc_color(cat)};">●</span> '
+            f'<b>{cat}</b><br>'
+        )
+
+    st.markdown(
+        legend_html,
+        unsafe_allow_html=True
+    )
+
 
 
     # --------------------------------------------------
@@ -2951,11 +3845,9 @@ elif page == "Long-Term Care & Rehabilitation":
 
     st.divider()
 
-
-
-    # ----------------------------------
+    # --------------------------------------------------
     # DISTRICT FILTER
-    # ----------------------------------
+    # --------------------------------------------------
 
     districts = sorted(
         long_term_care["District"]
@@ -2965,21 +3857,30 @@ elif page == "Long-Term Care & Rehabilitation":
     )
 
     selected_district = st.selectbox(
-        "District",
-        ["All"] + list(districts)
+        "Select the district",
+        ["All"] + [f"District {d}" for d in districts]
     )
 
-    # ----------------------------------
+    st.info("Hover over a facility to view details.")
+
+    # --------------------------------------------------
     # FILTERING
-    # ----------------------------------
+    # --------------------------------------------------
 
     ltc = long_term_care.copy()
 
     if selected_district != "All":
 
+        district_number = int(
+            selected_district.replace(
+                "District ",
+                ""
+            )
+        )
+
         ltc = ltc[
             ltc["District"].astype(int)
-            == selected_district
+            == district_number
         ]
 
     if selected_ltc_category != "All":
@@ -2993,9 +3894,9 @@ elif page == "Long-Term Care & Rehabilitation":
             )
         ]
 
-    # ----------------------------------
-    # COORDINATES
-    # ----------------------------------
+    # --------------------------------------------------
+    # MISSING COORDINATES
+    # --------------------------------------------------
 
     missing_locations = (
         ltc["latitude"].isna() |
@@ -3008,134 +3909,156 @@ elif page == "Long-Term Care & Rehabilitation":
             f"{missing_locations} facilities do not have coordinates and are not shown on the map."
         )
 
-    ltc_map = ltc.dropna(
+    ltc = ltc.dropna(
         subset=["latitude", "longitude"]
     )
 
-    # ----------------------------------
-    # SESSION STATE
-    # ----------------------------------
+    # --------------------------------------------------
+    # DISPLAY COLUMNS
+    # --------------------------------------------------
 
-    if "selected_ltc" not in st.session_state:
+    if "barangay" in ltc.columns:
 
-        st.session_state.selected_ltc = None
+        ltc["barangay_display"] = (
+            ltc["barangay"]
+            .fillna("Not available")
+        )
 
-    map_col, info_col = st.columns([2, 1])
+    else:
 
-    # ----------------------------------
-    # MAP
-    # ----------------------------------
+        ltc["barangay_display"] = (
+            "Not available"
+        )
 
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        tiles="CartoDB positron"
+    if "open_hours" in ltc.columns:
+
+        ltc["open_display"] = (
+            ltc["open_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        ltc["open_display"] = (
+            "Not available"
+        )
+
+    if "close_hours" in ltc.columns:
+
+        ltc["close_display"] = (
+            ltc["close_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        ltc["close_display"] = (
+            "Not available"
+        )
+
+    # --------------------------------------------------
+    # COLORS
+    # --------------------------------------------------
+
+    colors = [
+        hex_to_rgb(
+            ltc_color(cat)
+        )
+        for cat in ltc["Category"].astype(str)
+    ]
+
+    ltc["r"] = [c[0] for c in colors]
+    ltc["g"] = [c[1] for c in colors]
+    ltc["b"] = [c[2] for c in colors]
+
+    # --------------------------------------------------
+    # VIEW STATE
+    # --------------------------------------------------
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,   
+        max_zoom=17, 
     )
 
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.15,
+    # --------------------------------------------------
+    # POLYGONS
+    # --------------------------------------------------
+
+    polygon_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geo,
+        stroked=True,
+        filled=True,
+        get_fill_color=[127, 191, 127, 38],
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=1,
+        pickable=False
+    )
+
+    # --------------------------------------------------
+    # FACILITIES
+    # --------------------------------------------------
+
+    facility_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=ltc,
+        get_position="[longitude, latitude]",
+        get_fill_color="[r, g, b]",
+        get_line_color="[r, g, b]",
+        stroked=True,
+        filled=True,
+        opacity=0.9,
+        line_width_min_pixels=2,
+        get_radius=40,
+        radius_min_pixels=4,
+        radius_max_pixels=4,
+        pickable=True
+    )
+
+    # --------------------------------------------------
+    # TOOLTIP
+    # --------------------------------------------------
+
+    tooltip = {
+        "html": """
+        <b>{Name}</b><br/>
+        Category: {Category}<br/>
+        District: {District}<br/>
+        Barangay: {barangay_display}<br/>
+        Address: {Address}<br/>
+        Open: {open_display}<br/>
+        Close: {close_display}
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
         }
-    ).add_to(m)
+    }
 
-    # ----------------------------------
-    # MARKERS
-    # ----------------------------------
+    # --------------------------------------------------
+    # DECK
+    # --------------------------------------------------
 
-    for _, row in ltc_map.iterrows():
+    deck = pdk.Deck(
+        layers=[
+            polygon_layer,
+            facility_layer
+        ],
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+    )
 
-        popup_html = f"""
-        <b>{row['Name']}</b><br>
-        Category: {row['Category']}<br>
-        District: {int(row['District'])}<br>
-        Address: {row['Address']}
-        """
-
-        folium.CircleMarker(
-            location=[
-                row["latitude"],
-                row["longitude"]
-            ],
-            radius=4,
-            color=ltc_color(row["Category"]),
-            fill=True,
-            fill_color=ltc_color(row["Category"]),
-            fill_opacity=0.9,
-            weight=2,
-            popup=folium.Popup(popup_html, max_width=350),
-            tooltip=row["Name"]
-        ).add_to(m)
-
-    with map_col:
-
-        map_data = st_folium(
-            m,
-            height=700,
-            returned_objects=["last_object_clicked"]
-        )
-
-    # ----------------------------------
-    # CLICK DETECTION
-    # ----------------------------------
-
-    if (
-        map_data
-        and map_data.get("last_object_clicked")
-    ):
-
-        clicked_lat = map_data["last_object_clicked"]["lat"]
-        clicked_lon = map_data["last_object_clicked"]["lng"]
-
-        tmp = ltc_map.copy()
-
-        tmp["distance"] = (
-            (tmp["latitude"] - clicked_lat) ** 2 +
-            (tmp["longitude"] - clicked_lon) ** 2
-        )
-
-        st.session_state.selected_ltc = (
-            tmp.loc[
-                tmp["distance"].idxmin()
-            ]
-        )
-
-    # ----------------------------------
-    # INFO PANEL
-    # ----------------------------------
-
-    with info_col:
-
-        st.subheader("Facility Details")
-
-        if st.session_state.selected_ltc is not None:
-
-            facility = st.session_state.selected_ltc
-
-            st.markdown(
-                f"### {facility['Name']}"
-            )
-
-            st.write(
-                f"**Category:** {facility['Category']}"
-            )
-
-            st.write(
-                f"**District:** {int(facility['District'])}"
-            )
-
-            st.write(
-                f"**Address:** {facility['Address']}"
-            )
-
-        else:
-
-            st.info(
-                "Click a facility on the map."
-            )
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width='stretch' 
+    )
 
     # ----------------------------------
     # TABLE
@@ -3161,7 +4084,7 @@ elif page == "Long-Term Care & Rehabilitation":
 
     elderly_population = (
         population_age[
-            "60+ \n(Elderly)"
+            "60+ (Elderly)"
         ]
         .sum()
     )
@@ -3330,13 +4253,34 @@ elif page == "Long-Term Care & Rehabilitation":
 
 elif page == "Persons with Disabilities":
 
-    st.title("Persons with Disabilities (PWD)")
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Migration Resource Center
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
 
     st.markdown("""
-    Overview of registered persons with disabilities in Quezon City,
-    including disability types, registration trends,
-    district distribution, and rehabilitation service coverage.
+    Explore facilities providing information, training,
+    referral services, and support for migrant workers
+    and their families in Quezon City.
     """)
+
+    st.markdown(
+        """
+        <span style="color:#7F47ED;">●</span>
+        <b>QC Migrants Resource Center</b> — Provides support, information, training, and services for migrant workers and their families.
+        """,
+        unsafe_allow_html=True
+    )
 
     # --------------------------------------------------
     # LOAD DATA
@@ -3766,11 +4710,23 @@ elif page == "Persons with Disabilities":
         width="stretch"
     )
 
-elif page == "Satellite Offices":
+elif page == "Action Offices":
 
-    st.title(
-        "Quezon City Satellite Offices"
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Quezon City Action Offices
+        </h2>
+        """,
+        unsafe_allow_html=True
     )
+
 
     st.caption(
         """
@@ -3780,38 +4736,47 @@ elif page == "Satellite Offices":
         """
     )
 
-    # ----------------------------------
+    # --------------------------------------------------
     # DISTRICT FILTER
-    # ----------------------------------
+    # --------------------------------------------------
 
     districts = sorted(
         satellite_offices["District"]
-        .astype(int)
         .dropna()
+        .astype(int)
         .unique()
     )
 
     selected_district = st.selectbox(
-        "District",
-        ["All"] + list(districts)
+        "Select the district",
+        ["All"] + [f"District {d}" for d in districts]
     )
 
-    # ----------------------------------
+    st.info("Hover over an office to view details.")
+
+    # --------------------------------------------------
     # FILTERING
-    # ----------------------------------
+    # --------------------------------------------------
 
     sat = satellite_offices.copy()
 
     if selected_district != "All":
 
+        district_number = int(
+            selected_district.replace(
+                "District ",
+                ""
+            )
+        )
+
         sat = sat[
-            sat["District"]
-            == selected_district
+            sat["District"].astype(int)
+            == district_number
         ]
 
-    # ----------------------------------
-    # COORDINATES
-    # ----------------------------------
+    # --------------------------------------------------
+    # MISSING COORDINATES
+    # --------------------------------------------------
 
     missing_locations = (
         sat["latitude"].isna() |
@@ -3824,135 +4789,160 @@ elif page == "Satellite Offices":
             f"{missing_locations} offices do not have coordinates and are not shown on the map."
         )
 
-    sat_map = sat.dropna(
+    sat = sat.dropna(
         subset=["latitude", "longitude"]
     )
 
-    # ----------------------------------
-    # SESSION STATE
-    # ----------------------------------
+    # --------------------------------------------------
+    # DISPLAY COLUMNS
+    # --------------------------------------------------
 
-    if "selected_satellite_office" not in st.session_state:
+    if "barangay" in sat.columns:
 
-        st.session_state.selected_satellite_office = None
+        sat["barangay_display"] = (
+            sat["barangay"]
+            .fillna("Not available")
+        )
 
-    map_col, info_col = st.columns([2, 1])
+    else:
 
-    # ----------------------------------
-    # MAP
-    # ----------------------------------
+        sat["barangay_display"] = (
+            "Not available"
+        )
 
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        tiles="CartoDB positron"
+    if "open_hours" in sat.columns:
+
+        sat["open_display"] = (
+            sat["open_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        sat["open_display"] = (
+            "Not available"
+        )
+
+    if "close_hours" in sat.columns:
+
+        sat["close_display"] = (
+            sat["close_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        sat["close_display"] = (
+            "Not available"
+        )
+
+    # --------------------------------------------------
+    # COLORS BY DISTRICT
+    # --------------------------------------------------
+
+    colors = [
+        hex_to_rgb(
+            district_color(d)
+        )
+        for d in sat["District"]
+    ]
+
+    sat["r"] = [c[0] for c in colors]
+    sat["g"] = [c[1] for c in colors]
+    sat["b"] = [c[2] for c in colors]
+
+    # --------------------------------------------------
+    # VIEW STATE
+    # --------------------------------------------------
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,   
+        max_zoom=17, 
     )
 
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.15,
+    # --------------------------------------------------
+    # POLYGONS
+    # --------------------------------------------------
+
+    polygon_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geo,
+        stroked=True,
+        filled=True,
+        get_fill_color=[127, 191, 127, 38],
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=1,
+        pickable=False
+    )
+
+    # --------------------------------------------------
+    # OFFICES
+    # --------------------------------------------------
+
+    office_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=sat,
+        get_position="[longitude, latitude]",
+        get_fill_color="[r, g, b]",
+        get_line_color="[r, g, b]",
+        stroked=True,
+        filled=True,
+        opacity=0.9,
+        line_width_min_pixels=2,
+        get_radius=40,
+        radius_min_pixels=4,
+        radius_max_pixels=4,
+        pickable=True
+    )
+
+    # --------------------------------------------------
+    # TOOLTIP
+    # --------------------------------------------------
+
+    tooltip = {
+        "html": """
+        <b>{Category}</b><br/>
+        District: {District}<br/>
+        Barangay: {barangay_display}<br/>
+        Address: {Address}<br/>
+        Open: {open_display}<br/>
+        Close: {close_display}
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
         }
-    ).add_to(m)
+    }
 
-    # ----------------------------------
-    # MARKERS
-    # ----------------------------------
+    # --------------------------------------------------
+    # DECK
+    # --------------------------------------------------
 
-    for _, row in sat_map.iterrows():
+    deck = pdk.Deck(
+        layers=[
+            polygon_layer,
+            office_layer
+        ],
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+    )
 
-        popup_html = f"""
-        {row['Category']}<br>
-        Address: {row['Address']}
-        """
-
-        folium.CircleMarker(
-            location=[
-                row["latitude"],
-                row["longitude"]
-            ],
-            radius=5,
-            color=district_color(row["District"]),
-            fill=True,
-            fill_color=district_color(row["District"]),
-            fill_opacity=0.9,
-            weight=2,
-            popup=folium.Popup(popup_html, max_width=350),
-            tooltip=row["Category"]
-        ).add_to(m)
-
-    with map_col:
-
-        map_data = st_folium(
-            m,
-            height=700,
-            returned_objects=["last_object_clicked"]
-        )
-
-    # ----------------------------------
-    # CLICK DETECTION
-    # ----------------------------------
-
-    if (
-        map_data
-        and map_data.get("last_object_clicked")
-    ):
-
-        clicked_lat = map_data["last_object_clicked"]["lat"]
-        clicked_lon = map_data["last_object_clicked"]["lng"]
-
-        tmp = sat_map.copy()
-
-        tmp["distance"] = (
-            (tmp["latitude"] - clicked_lat) ** 2 +
-            (tmp["longitude"] - clicked_lon) ** 2
-        )
-
-        st.session_state.selected_satellite_office = (
-            tmp.loc[
-                tmp["distance"].idxmin()
-            ]
-        )
-
-    # ----------------------------------
-    # INFO PANEL
-    # ----------------------------------
-
-    with info_col:
-
-        st.subheader("Office Details")
-
-        if (
-            st.session_state.selected_satellite_office
-            is not None
-        ):
-
-            office = (
-                st.session_state.selected_satellite_office
-            )
-
-            st.write(
-                f"**District:** {int(office['District'])}"
-            )
-
-            st.write(
-                f"**Address:** {office['Address']}"
-            )
-
-        else:
-
-            st.info(
-                "Click an office on the map."
-            )
-
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width='stretch'
+    )
     # ----------------------------------
     # TABLE
     # ----------------------------------
 
-    st.subheader("Satellite Offices")
+    st.subheader("Action Offices")
 
     st.dataframe(
         sat[
@@ -3966,17 +4956,30 @@ elif page == "Satellite Offices":
 
 elif page == "Migration Resource Center":
 
-    st.title("Migration Resource Center")
-
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Migration Resource Center
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
+    
     st.markdown("""
     Explore facilities providing information, training,
     referral services, and support for migrant workers
     and their families in Quezon City.
     """)
 
-    # ----------------------------------
+    # --------------------------------------------------
     # DISTRICT FILTER
-    # ----------------------------------
+    # --------------------------------------------------
 
     districts = sorted(
         migration_centers["District"]
@@ -3986,207 +4989,196 @@ elif page == "Migration Resource Center":
     )
 
     selected_district = st.selectbox(
-        "District",
-        ["All"] + list(districts)
+        "Select the district",
+        ["All"] + [f"District {d}" for d in districts]
     )
 
-    # ----------------------------------
+    st.info("Hover over a facility to view details.")
+
+    # --------------------------------------------------
     # FILTERING
-    # ----------------------------------
+    # --------------------------------------------------
 
     mig = migration_centers.copy()
 
     if selected_district != "All":
 
+        district_number = int(
+            selected_district.replace(
+                "District ",
+                ""
+            )
+        )
+
         mig = mig[
             mig["District"].astype(int)
-            == selected_district
+            == district_number
         ]
 
-    st.divider()
+    # --------------------------------------------------
+    # MISSING COORDINATES
+    # --------------------------------------------------
 
-    # ----------------------------------
-    # SESSION STATE
-    # ----------------------------------
+    missing_locations = (
+        mig["latitude"].isna() |
+        mig["longitude"].isna()
+    ).sum()
 
-    if "selected_migration_center" not in st.session_state:
+    if missing_locations > 0:
 
-        st.session_state.selected_migration_center = None
+        st.warning(
+            f"{missing_locations} facilities do not have coordinates and are not shown on the map."
+        )
 
-    # ----------------------------------
-    # LAYOUT
-    # ----------------------------------
-
-    map_col, info_col = st.columns([2, 1])
-
-    # ----------------------------------
-    # MAP
-    # ----------------------------------
-
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        tiles="CartoDB positron"
+    mig = mig.dropna(
+        subset=["latitude", "longitude"]
     )
 
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.15,
+    # --------------------------------------------------
+    # DISPLAY COLUMNS
+    # --------------------------------------------------
+
+    if "barangay" in mig.columns:
+
+        mig["barangay_display"] = (
+            mig["barangay"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        mig["barangay_display"] = (
+            "Not available"
+        )
+
+    if "open_hours" in mig.columns:
+
+        mig["open_display"] = (
+            mig["open_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        mig["open_display"] = (
+            "Not available"
+        )
+
+    if "close_hours" in mig.columns:
+
+        mig["close_display"] = (
+            mig["close_hours"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        mig["close_display"] = (
+            "Not available"
+        )
+
+    # --------------------------------------------------
+    # COLORS
+    # --------------------------------------------------
+
+    mig["r"] = 127
+    mig["g"] = 71
+    mig["b"] = 237
+
+    # --------------------------------------------------
+    # VIEW STATE
+    # --------------------------------------------------
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,   
+        max_zoom=17, 
+    )
+
+    # --------------------------------------------------
+    # POLYGONS
+    # --------------------------------------------------
+
+    polygon_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geo,
+        stroked=True,
+        filled=True,
+        get_fill_color=[127, 191, 127, 38],
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=1,
+        pickable=False
+    )
+
+    # --------------------------------------------------
+    # FACILITIES
+    # --------------------------------------------------
+
+    facility_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=mig,
+        get_position="[longitude, latitude]",
+        get_fill_color="[r, g, b]",
+        get_line_color="[r, g, b]",
+        stroked=True,
+        filled=True,
+        opacity=0.9,
+        line_width_min_pixels=2,
+        get_radius=40,
+        radius_min_pixels=4,
+        radius_max_pixels=4,
+        pickable=True
+    )
+
+    # --------------------------------------------------
+    # TOOLTIP
+    # --------------------------------------------------
+
+    tooltip = {
+        "html": """
+        <b>{Name}</b><br/>
+        Category: {Category}<br/>
+        District: {District}<br/>
+        Barangay: {barangay_display}<br/>
+        Address: {Address}<br/>
+        Open: {open_display}<br/>
+        Close: {close_display}<br/>
+        <br/>
+        <b>Services:</b><br/>
+        1. Pre-Migration and Pre-Employment Trainings<br/>
+        2. Pre-Departure Trainings<br/>
+        3. On-Site Support and Learning Sessions<br/>
+        4. Reintegration Trainings for OFW Returnees
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
         }
-    ).add_to(m)
+    }
 
-    # ----------------------------------
-    # MARKERS
-    # ----------------------------------
+    # --------------------------------------------------
+    # DECK
+    # --------------------------------------------------
 
-    for _, row in mig.iterrows():
+    deck = pdk.Deck(
+        layers=[
+            polygon_layer,
+            facility_layer
+        ],
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+    )
 
-        popup_html = f"""
-        <b>{row['Name']}</b><br>
-        Category: {row['Category']}<br>
-        District: {int(row['District'])}<br>
-        Address: {row['Address']}
-        """
-
-        folium.CircleMarker(
-            location=[
-                row["latitude"],
-                row["longitude"]
-            ],
-            radius=6,
-            color="#7F47ED",
-            fill=True,
-            fill_color="#7F47ED",
-            fill_opacity=0.9,
-            weight=2,
-            popup=folium.Popup(
-                popup_html,
-                max_width=350
-            ),
-            tooltip=row["Name"]
-        ).add_to(m)
-
-    # ----------------------------------
-    # MAP DISPLAY
-    # ----------------------------------
-
-    with map_col:
-
-        map_data = st_folium(
-            m,
-            height=700,
-            returned_objects=[
-                "last_object_clicked"
-            ]
-        )
-
-    # ----------------------------------
-    # CLICK DETECTION
-    # ----------------------------------
-
-    if (
-        map_data
-        and map_data.get(
-            "last_object_clicked"
-        )
-    ):
-
-        clicked_lat = (
-            map_data["last_object_clicked"]["lat"]
-        )
-
-        clicked_lon = (
-            map_data["last_object_clicked"]["lng"]
-        )
-
-        tmp = mig.copy()
-
-        tmp["distance"] = (
-            (tmp["latitude"] - clicked_lat) ** 2 +
-            (tmp["longitude"] - clicked_lon) ** 2
-        )
-
-        st.session_state.selected_migration_center = (
-            tmp.loc[
-                tmp["distance"].idxmin()
-            ]
-        )
-
-    # ----------------------------------
-    # INFO PANEL
-    # ----------------------------------
-
-    with info_col:
-
-        st.subheader("Facility Details")
-
-        if (
-            st.session_state.selected_migration_center
-            is not None
-        ):
-
-            facility = (
-                st.session_state.selected_migration_center
-            )
-
-            st.markdown(
-                f"### {facility['Name']}"
-            )
-
-            st.write(
-                f"**Category:** {facility['Category']}"
-            )
-
-            st.write(
-                f"**District:** {int(facility['District'])}"
-            )
-
-            if (
-                "barangay" in facility.index
-                and pd.notna(
-                    facility["barangay"]
-                )
-            ):
-
-                st.write(
-                    f"**Barangay:** {facility['barangay']}"
-                )
-
-            st.write(
-                f"**Address:** {facility['Address']}"
-            )
-
-            if (
-                "open_hours" in facility.index
-                and pd.notna(
-                    facility["open_hours"]
-                )
-            ):
-
-                st.write(
-                    f"**Open:** {facility['open_hours']}"
-                )
-
-            if (
-                "close_hours" in facility.index
-                and pd.notna(
-                    facility["close_hours"]
-                )
-            ):
-
-                st.write(
-                    f"**Close:** {facility['close_hours']}"
-                )
-
-        else:
-
-            st.info(
-                "Click the facility on the map."
-            )
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width='stretch'
+    )
 
     # ----------------------------------
     # TABLE
@@ -4213,14 +5205,29 @@ elif page == "Migration Resource Center":
 
 elif page == "Care Services Explorer":
 
-    st.title("Care Services Explorer")
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Care Services Explorer
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
 
     st.caption(
         """
         Explore childcare centers, schools, health facilities,
         older persons facilities, rehabilitation centers,
         migration resource centers, and Quezon City
-        satellite offices on a single map.
+        satellite offices on a single map — optionally overlaid
+        with land-surface temperature, vegetation, or flood
+        exposure layers.
         """
     )
 
@@ -4259,7 +5266,7 @@ elif page == "Care Services Explorer":
             "color": "#7F47ED",
             "symbol": "★",
             "source": "Health Facility",
-            "name_col": "Name of Facility",
+            "name_col": "Name",
             "district_col": "District",
             "address_col": "Address",
             "lat_col": "latitude",
@@ -4290,7 +5297,7 @@ elif page == "Care Services Explorer":
             "lon_col": "longitude"
         },
 
-        "Satellite Offices": {
+        "Action Offices": {
             "df": satellite_offices,
             "color": "#DDD6FE",
             "symbol": "⬢",
@@ -4301,6 +5308,7 @@ elif page == "Care Services Explorer":
             "lat_col": "latitude",
             "lon_col": "longitude"
         },
+
         "Migration Resource Centers": {
             "df": migration_centers,
             "color": "#C084FC",
@@ -4328,7 +5336,7 @@ elif page == "Care Services Explorer":
             f"""
             <span style="
                 color:{layer['color']};
-                font-size:22px;
+                font-size:25px;
             ">
             {layer['symbol']}
             </span>
@@ -4340,6 +5348,28 @@ elif page == "Care Services Explorer":
         )
 
     st.divider()
+
+    # --------------------------------------------------
+    # CLIMATE LAYER CONFIGURATION
+    # --------------------------------------------------
+
+    climate_overlay_layers = {
+        "Land-Surface Temperature": {
+            "path": "processed/climate/landsat_lst_summer_avg_7yr_EPSG3123_filled.tif",
+            "colormap": "YlOrRd",
+            "binary": False
+        },
+        "Vegetation (NDVI)": {
+            "path": "processed/climate/ndvi_mean_2025_EPSG3123.tif",
+            "colormap": "Greens",
+            "binary": False
+        },
+        "Flood Inundation (100-yr)": {
+            "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+            "colormap": "Blues",
+            "binary": True
+        }
+    }
 
     # --------------------------------------------------
     # FILTERS
@@ -4357,344 +5387,182 @@ elif page == "Care Services Explorer":
 
     with col2:
 
-        districts = sorted(
+        district_values = sorted(
             health_centers["District"]
             .dropna()
             .astype(int)
             .unique()
         )
 
-        selected_district = st.selectbox(
-            "District",
-            ["All"] + list(districts)
+        district_options = {
+            "All": "All"
+        }
+
+        district_options.update(
+            {
+                f"District {d}": d
+                for d in district_values
+            }
         )
 
-    # --------------------------------------------------
-    # SESSION STATE
-    # --------------------------------------------------
+        selected_district_label = st.selectbox(
+            "District",
+            list(district_options.keys())
+        )
 
-    if "selected_explorer_item" not in st.session_state:
-        st.session_state.selected_explorer_item = None
+        selected_district = district_options[
+            selected_district_label
+        ]
 
-    # --------------------------------------------------
-    # LAYOUT
-    # --------------------------------------------------
-
-    map_col, info_col = st.columns([2, 1])
-
-    # --------------------------------------------------
-    # MAP
-    # --------------------------------------------------
-
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        tiles="CartoDB positron"
+    selected_climate_layers = st.multiselect(
+        "Climate & Hazard Layers (optional)",
+        list(climate_overlay_layers.keys()),
+        default=[],
+        help=(
+            "Overlay land-surface temperature, vegetation, or "
+            "flood extent under the service markers above. See "
+            "the Climate & Hazard Exposure page for a closer look "
+            "at each layer individually."
+        )
     )
-
-    folium.GeoJson(
-        geo,
-        style_function=lambda x: {
-            "fillColor": "#7fbf7f",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.10,
-        }
-    ).add_to(m)
-
-    filtered_layers = {}
-
-    # --------------------------------------------------
-    # ADD MARKERS
-    # --------------------------------------------------
-
-    for layer_name in selected_layers:
-
-        layer = service_layers[layer_name]
-
-        df = layer["df"].copy()
-
-        if selected_district != "All":
-
-            df = df[
-                df[layer["district_col"]]
-                .astype(int)
-                == selected_district
-            ]
-
-        filtered_layers[layer_name] = df
-
-        for _, row in df.iterrows():
-
-            popup_html = f"""
-            <b>{row[layer['name_col']]}</b><br>
-            Type: {layer['source']}<br>
-            District: {int(row[layer['district_col']])}
-            """
-
-            # determine color based on the same rules used in each page
-            if layer_name == "Childcare Centers":
-                marker_color_value = childcare_color(row["Category"])
-
-            elif layer_name == "Schools":
-                marker_color_value = school_color(row["Category"])
-
-            elif layer_name == "Health Centers":
-                marker_color_value = marker_color(row["Category"])
-
-            elif layer_name == "Older Persons Facilities":
-                marker_color_value = opc_color(row["Category"])
-
-            elif layer_name == "Long-Term Care & Rehabilitation":
-                marker_color_value = ltc_color(row["Category"])
-
-            elif layer_name == "Satellite Offices":
-                marker_color_value = district_color(row["District"])
-            elif layer_name == "Migration Resource Centers":
-                marker_color_value = "#C084FC"
-
-            else:
-                marker_color_value = "#7F47ED"
-
-            folium.Marker(
-                location=[
-                    row[layer["lat_col"]],
-                    row[layer["lon_col"]]
-                ],
-                icon=folium.DivIcon(
-                    html=f"""
-                    <div style="
-                        color:{marker_color_value};
-                        font-size:18px;
-                        font-weight:bold;
-                        text-align:center;
-                    ">
-                        {layer['symbol']}
-                    </div>
-                    """
-                ),
-                popup=folium.Popup(popup_html, max_width=350),
-                tooltip=str(row[layer["name_col"]])
-            ).add_to(m)
 
     # --------------------------------------------------
     # MAP DISPLAY
     # --------------------------------------------------
 
-    with map_col:
-
-        map_data = st_folium(
-            m,
-            height=700,
-            returned_objects=["last_object_clicked"]
-        )
-
-    # --------------------------------------------------
-    # CLICK DETECTION
-    # --------------------------------------------------
-
-    if map_data and map_data.get("last_object_clicked"):
-
-        clicked_lat = map_data["last_object_clicked"]["lat"]
-        clicked_lon = map_data["last_object_clicked"]["lng"]
-
-        candidates = []
-
-        for layer_name in selected_layers:
-
-            layer = service_layers[layer_name]
-
-            df = filtered_layers[layer_name].copy()
-
-            if len(df) == 0:
-                continue
-
-            df["source"] = layer["source"]
-            df["name_field"] = layer["name_col"]
-            df["address_field"] = layer["address_col"]
-            df["district_field"] = layer["district_col"]
-
-            df["distance"] = (
-                (df[layer["lat_col"]] - clicked_lat) ** 2 +
-                (df[layer["lon_col"]] - clicked_lon) ** 2
-            )
-
-            candidates.append(df)
-
-        if len(candidates):
-
-            all_points = pd.concat(
-                candidates,
-                ignore_index=True
-            )
-
-            st.session_state.selected_explorer_item = (
-                all_points.loc[
-                    all_points["distance"].idxmin()
-                ]
-            )
-
-    # --------------------------------------------------
-    # DETAILS PANEL
-    # --------------------------------------------------
-    with info_col:
-
-        st.subheader("Details")
-
-        item = st.session_state.selected_explorer_item
-
-        if item is not None:
-
-            st.markdown(
-                f"### {item[item['name_field']]}"
-            )
-
-            st.write(
-                f"**Type:** {item['source']}"
-            )
-
-            # --------------------------
-            # DISTRICT
-            # --------------------------
-
-            district_value = item[item["district_field"]]
-
-            if pd.notna(district_value):
-
-                try:
-                    st.write(
-                        f"**District:** {int(district_value)}"
-                    )
-
-                except:
-                    st.write(
-                        f"**District:** {district_value}"
-                    )
-
-            # --------------------------
-            # ADDRESS
-            # --------------------------
-
-            if (
-                item["address_field"] in item.index
-                and pd.notna(item[item["address_field"]])
-            ):
-
-                st.write(
-                    f"**Address:** {item[item['address_field']]}"
-                )
-
-            # --------------------------
-            # BARANGAY
-            # --------------------------
-
-            if (
-                "barangay" in item.index
-                and pd.notna(item["barangay"])
-                and str(item["barangay"]).strip() != ""
-            ):
-
-                st.write(
-                    f"**Barangay:** {item['barangay']}"
-                )
-
-            # --------------------------
-            # CATEGORY
-            # --------------------------
-
-            if (
-                "Category" in item.index
-                and pd.notna(item["Category"])
-            ):
-
-                st.write(
-                    f"**Category:** {item['Category']}"
-                )
-
-        else:
-
-            st.info(
-                "Click a facility on the map."
-            )
-
-elif page == "Accessibility Analysis":
-    care = pd.read_csv(
-        "processed/care_v2.csv"
+    map_html = build_explorer_map(
+        tuple(selected_layers),
+        selected_district,
+        tuple(selected_climate_layers)
     )
 
-    st.title("Accessibility Analysis")
+    st.iframe(
+        map_html,
+        height=850,
+        width="stretch"
+    )
 
+
+elif page == "Accessibility Analysis":
+    import geopandas as gpd
+ 
+    care = pd.read_csv(
+        "processed/care_v3.csv"
+    )
+ 
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Accessibility Analysis
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
+
+    with st.expander("How are these indicators calculated?"):
+ 
+        st.markdown("""
+        The indicators below are the same at both the **District**
+        and **Barangay** level — only the level of aggregation
+        differs between the two tabs.
+ 
+        | Indicator | What it measures | Direction |
+        |---|---|---|
+        | **Facilities** | Count of registered care facilities of any kind (childcare, schools, health centers, elder care, etc.) located in the area | *Higher is better* |
+        | **Facilities per 10k Population** | Facilities scaled to population, so large and small areas can be compared fairly | *Higher is better* |
+        | **Care Gap Index** | Population ÷ Facilities — roughly, how many people each facility would need to serve on average if demand were spread evenly | *Lower is better* |
+        | **Accessibility Index** | Facilities per 10k Population, rescaled 0–100 (0 = the least-served area in the dataset, 100 = the best-served) | *Higher is better* |
+ 
+        **Accessibility Index and Care Gap Index point in opposite
+        directions on purpose.** A high Care Gap Index and a *low*
+        Accessibility Index both describe the same underserved area
+        — just measured from opposite ends. Don't read "higher" as
+        good for one and bad for the other without checking which
+        indicator you're looking at.
+ 
+        On the map and charts, **"Best Served"** refers to the
+        highest Accessibility Index, and **"Priority"** refers to
+        the lowest — i.e. the area with the fewest facilities
+        relative to its population.
+        """)
+ 
     tab1, tab2 = st.tabs(
         [
             "District Analysis",
             "Barangay Analysis"
         ]
     )
-
-
+ 
+ 
     with tab1:
         st.markdown("""
         This section examines the spatial distribution of care-related
         services across Quezon City and identifies districts where
         population needs may exceed available infrastructure.
         """)
-
+ 
         # ==================================================
         # CLEAN POPULATION
         # ==================================================
-
+ 
         pop = population_age.copy()
-
+ 
         age_cols = [
-            "0-5 \n(Early Childhood)",
-            "6-17 \n(School Age Children)",
-            "18-59 \n(Working Age Adult)",
-            "60+ \n(Elderly)",
+            "0-5 (Early Childhood)",
+            "6-17 (School Age Children)",
+            "18-59 (Working Age Adult)",
+            "60+ (Elderly)",
             "Total"
         ]
-
+ 
         for col in age_cols:
-
+ 
             pop[col] = (
                 pop[col]
                 .astype(str)
                 .str.replace(",", "")
                 .astype(float)
             )
-
+ 
         district_population = (
             pop.groupby("District")[age_cols]
             .sum()
             .reset_index()
         )
-
+ 
         district_population["District"] = (
             district_population["District"]
             .astype(int)
         )
-
+ 
         # ==================================================
         # CARE FACILITIES
         # ==================================================
-
+ 
         care_clean = care.copy()
-
+ 
         care_clean["district"] = (
             pd.to_numeric(
                 care_clean["district"],
                 errors="coerce"
             )
         )
-
+ 
         care_clean = care_clean.dropna(
             subset=["district"]
         )
-
+ 
         care_clean["district"] = (
             care_clean["district"]
             .astype(int)
         )
-
+ 
         facility_counts = (
             care_clean
             .groupby("district")
@@ -4706,58 +5574,58 @@ elif page == "Accessibility Analysis":
                 }
             )
         )
-
+ 
         # ==================================================
         # MERGE
         # ==================================================
-
+ 
         access = district_population.merge(
             facility_counts,
             on="District",
             how="left"
         )
-
+ 
         access["Facilities"] = (
             access["Facilities"]
             .fillna(0)
         )
-
+ 
         # ==================================================
         # INDICATORS
         # ==================================================
-
+ 
         access["Facilities per 10k Population"] = (
             access["Facilities"]
             /
             access["Total"]
             * 10000
         )
-
+ 
         access["Care Gap Index"] = (
             access["Total"]
             /
             access["Facilities"]
         )
-
+ 
         access = access.replace(
             [np.inf, -np.inf],
             np.nan
         )
-
+ 
         # ==================================================
         # ACCESSIBILITY INDEX
         # ==================================================
-
+ 
         min_score = (
             access["Facilities per 10k Population"]
             .min()
         )
-
+ 
         max_score = (
             access["Facilities per 10k Population"]
             .max()
         )
-
+ 
         access["Accessibility Index"] = (
             (
                 access["Facilities per 10k Population"]
@@ -4769,184 +5637,296 @@ elif page == "Accessibility Analysis":
                 - min_score
             )
         ) * 100
-
+ 
         access = access.round(2)
-
+ 
         # ==================================================
         # KPI CARDS
         # ==================================================
-
+ 
         avg_score = round(
             access["Accessibility Index"].mean(),
             1
         )
-
+ 
         best_district = int(
             access.loc[
                 access["Accessibility Index"].idxmax(),
                 "District"
             ]
         )
-
+ 
         worst_district = int(
             access.loc[
                 access["Accessibility Index"].idxmin(),
                 "District"
             ]
         )
-
+ 
         total_facilities = int(
             access["Facilities"].sum()
         )
-
+ 
         c1, c2, c3, c4 = st.columns(4)
-
+ 
         c1.metric(
             "Accessibility Index",
             avg_score
         )
-
+ 
         c2.metric(
             "Total Facilities",
             f"{total_facilities:,}"
         )
-
+ 
         c3.metric(
             "Best Served District",
             best_district
         )
-
+ 
         c4.metric(
             "Priority District",
             worst_district
         )
-
+ 
         st.divider()
-
+ 
         # ==================================================
         # DISTRICT GEOMETRY
         # ==================================================
-
-        barangay_district = (
-            care_clean[
-                ["barangay", "district"]
-            ]
-            .drop_duplicates()
-            .copy()
+ 
+        district_geo = gpd.read_file(
+            "processed/qc_districts.geojson"
         )
-
-        barangay_district["barangay"] = (
-            barangay_district["barangay"]
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
-
-        geo_tmp = geo.copy()
-
-        geo_tmp["barangay_name"] = (
-            geo_tmp["barangay_name"]
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
-
-        district_geo = geo_tmp.merge(
-            barangay_district,
-            left_on="barangay_name",
-            right_on="barangay",
-            how="left"
-        )
-
-        district_geo = district_geo.dropna(
-            subset=["district"]
-        )
-
+ 
         district_geo["district"] = (
             district_geo["district"]
+            .astype(str)
+            .str.extract(r"(\d+)")[0]
             .astype(int)
         )
-
-        district_geo = (
-            district_geo
-            .dissolve(by="district")
-            .reset_index()
-        )
-
+ 
         district_geo = district_geo.rename(
-            columns={
-                "district":"District"
-            }
+            columns={"district": "District"}
         )
-
+ 
         district_geo = district_geo.merge(
             access[
                 [
                     "District",
-                    "Accessibility Index"
+                    "Accessibility Index",
+                    "Facilities",
+                    "Total",
+                    "Facilities per 10k Population",
+                    "Care Gap Index"
                 ]
             ],
             on="District",
             how="left"
         )
-
+ 
         # ==================================================
         # MAP
         # ==================================================
-
+ 
         st.subheader(
             "District Accessibility Map"
         )
-
-        m = folium.Map(
-            location=[
-                center_lat,
-                center_lon
-            ],
-            zoom_start=11,
-            tiles="CartoDB positron"
+ 
+        st.caption(
+            "Darker = higher Accessibility Index = more facilities "
+            "relative to population (better served)."
         )
-
-        folium.Choropleth(
-            geo_data=district_geo,
-            data=district_geo,
-            columns=[
-                "District",
-                "Accessibility Index"
+ 
+        # ------------------------------------------
+        # Color ramp (PuRd-style) for Accessibility Index
+        # ------------------------------------------
+ 
+        def purd_color(value, vmin, vmax):
+ 
+            if pd.isna(value) or vmax == vmin:
+                return [217, 217, 217, 120]
+ 
+            t = (value - vmin) / (vmax - vmin)
+            t = min(max(t, 0), 1)
+ 
+            # Light lavender -> deep magenta/purple, approximating
+            # the matplotlib "PuRd" colormap used by folium.Choropleth
+            stops = [
+                (0.00, (247, 244, 249)),
+                (0.25, (215, 181, 216)),
+                (0.50, (223, 101, 176)),
+                (0.75, (174, 1, 126)),
+                (1.00, (103, 0, 31))
+            ]
+ 
+            for i in range(len(stops) - 1):
+ 
+                t0, c0 = stops[i]
+                t1, c1 = stops[i + 1]
+ 
+                if t0 <= t <= t1:
+ 
+                    local_t = (
+                        (t - t0) / (t1 - t0)
+                        if t1 > t0 else 0
+                    )
+ 
+                    r = c0[0] + (c1[0] - c0[0]) * local_t
+                    g = c0[1] + (c1[1] - c0[1]) * local_t
+                    b = c0[2] + (c1[2] - c0[2]) * local_t
+ 
+                    return [int(r), int(g), int(b), 200]
+ 
+            return [103, 0, 31, 200]
+ 
+        access_min = district_geo["Accessibility Index"].min()
+        access_max = district_geo["Accessibility Index"].max()
+ 
+        district_geo["fill_color"] = district_geo["Accessibility Index"].apply(
+            lambda v: purd_color(v, access_min, access_max)
+        )
+ 
+        district_geojson = json.loads(
+            district_geo.to_json()
+        )
+ 
+        # ------------------------------------------
+        # District label points (centroids)
+        # ------------------------------------------
+ 
+        district_labels = district_geo.copy()
+ 
+        # Reproject to a metric CRS before computing centroids —
+        # centroids computed directly on geographic (lat/lon)
+        # coordinates can be skewed for irregular polygons, since
+        # degrees of longitude aren't constant-width distances.
+        # Same EPSG:32651 (UTM Zone 51N) convention used for the
+        # area_km2 calculation on the Barangay Clusters page.
+        district_labels_metric = district_labels.to_crs("EPSG:32651")
+        district_centroids_metric = district_labels_metric.geometry.centroid
+ 
+        district_centroids = (
+            gpd.GeoSeries(district_centroids_metric, crs="EPSG:32651")
+            .to_crs(district_labels.crs)
+        )
+ 
+        district_labels["lon"] = district_centroids.x
+        district_labels["lat"] = district_centroids.y
+        district_labels["label"] = (
+            "District " + district_labels["District"].astype(str)
+        )
+ 
+        # ------------------------------------------
+        # VIEW STATE
+        # ------------------------------------------
+ 
+        view_state = pdk.ViewState(
+            latitude=center_lat,
+            longitude=center_lon,
+            zoom=11,
+            pitch=0,
+            min_zoom=11,
+            max_zoom=17,
+        )
+ 
+        # ------------------------------------------
+        # Barangay boundaries (background)
+        # ------------------------------------------
+ 
+        barangay_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=geo,
+            stroked=True,
+            filled=False,
+            get_line_color=[136, 136, 136],
+            line_width_min_pixels=0.5,
+            pickable=False
+        )
+ 
+        # ------------------------------------------
+        # District choropleth
+        # ------------------------------------------
+ 
+        district_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=district_geojson,
+            stroked=True,
+            filled=True,
+            get_fill_color="properties.fill_color",
+            get_line_color=[55, 65, 81],
+            line_width_min_pixels=2.5,
+            pickable=True,
+            auto_highlight=True
+        )
+ 
+        # ------------------------------------------
+        # District labels
+        # ------------------------------------------
+ 
+        label_layer = pdk.Layer(
+            "TextLayer",
+            data=district_labels,
+            get_position="[lon, lat]",
+            get_text="label",
+            get_size=14,
+            get_color=[17, 24, 39],
+            get_background_color=[255, 255, 255, 180],
+            background=True,
+            get_alignment_baseline=String("center"),
+            pickable=False
+        )
+ 
+        # ------------------------------------------
+        # TOOLTIP
+        # ------------------------------------------
+ 
+        tooltip = {
+            "html": """
+            <b>District {District}</b><br/>
+            Facilities: {Facilities}<br/>
+            Population: {Total}<br/>
+            Facilities / 10k Population: {Facilities per 10k Population}<br/>
+            Accessibility Index: {Accessibility Index}
+            """,
+            "style": {
+                "backgroundColor": "white",
+                "color": "black",
+                "fontSize": "12px"
+            }
+        }
+ 
+        # ------------------------------------------
+        # MAP
+        # ------------------------------------------
+ 
+        deck = pdk.Deck(
+            layers=[
+                barangay_layer,
+                district_layer,
+                label_layer
             ],
-            key_on="feature.properties.District",
-            fill_color="PuRd",
-            fill_opacity=0.85,
-            line_opacity=1,
-            legend_name="Accessibility Index"
-        ).add_to(m)
-
-        folium.GeoJson(
-            district_geo,
-            tooltip=folium.GeoJsonTooltip(
-                fields=[
-                    "District",
-                    "Accessibility Index"
-                ]
-            )
-        ).add_to(m)
-
-        st_folium(
-            m,
+            initial_view_state=view_state,
+            tooltip=tooltip,
+            map_style="light"
+        )
+ 
+        st.pydeck_chart(
+            deck,
             height=700,
-            width="stretch"
+            width='stretch'
         )
-
+ 
         st.divider()
-
+ 
         # ==================================================
         # CHARTS
         # ==================================================
-
+ 
         left, right = st.columns(2)
-
+ 
         with left:
-
+ 
             fig = px.bar(
                 access.sort_values(
                     "Accessibility Index",
@@ -4958,14 +5938,14 @@ elif page == "Accessibility Analysis":
                 color_continuous_scale="Purples",
                 title="Accessibility Index by District"
             )
-
+ 
             st.plotly_chart(
                 fig,
                 width="stretch"
             )
-
+ 
         with right:
-
+ 
             fig = px.bar(
                 access.sort_values(
                     "Care Gap Index",
@@ -4977,18 +5957,18 @@ elif page == "Accessibility Analysis":
                 color_continuous_scale="Reds",
                 title="Care Gap Index"
             )
-
+ 
             st.plotly_chart(
                 fig,
                 width="stretch"
             )
-
+ 
         st.divider()
-
+ 
         # ==================================================
         # POPULATION VS FACILITIES
         # ==================================================
-
+ 
         fig = px.scatter(
             access,
             x="Total",
@@ -4999,26 +5979,26 @@ elif page == "Accessibility Analysis":
             color_continuous_scale="Purples",
             title="Population vs Care Facilities"
         )
-
+ 
         fig.update_traces(
             textposition="top center"
         )
-
+ 
         st.plotly_chart(
             fig,
             width="stretch"
         )
-
+ 
         st.divider()
-
+ 
         # ==================================================
         # PRIORITY DISTRICTS
         # ==================================================
-
+ 
         st.subheader(
             "Priority Districts for Future Investment"
         )
-
+ 
         priority = (
             access.sort_values(
                 [
@@ -5032,101 +6012,101 @@ elif page == "Accessibility Analysis":
             )
             .head(5)
         )
-
+ 
         st.dataframe(
             priority,
             width="stretch"
         )
-
+ 
         st.divider()
-
+ 
         # ==================================================
         # FULL TABLE
         # ==================================================
-
+ 
         st.subheader(
             "District Accessibility Indicators"
         )
-
+ 
         st.dataframe(
             access,
             width="stretch"
         )
-
+ 
     with tab2:
-
+ 
         st.subheader(
             "Barangay-Level Accessibility"
         )
-
+ 
         # ==================================================
         # POPULATION
         # ==================================================
-
+ 
         barangay_pop = population_age.copy()
-
+ 
         age_cols = [
-            "0-5 \n(Early Childhood)",
-            "6-17 \n(School Age Children)",
-            "18-59 \n(Working Age Adult)",
-            "60+ \n(Elderly)",
+            "0-5 (Early Childhood)",
+            "6-17 (School Age Children)",
+            "18-59 (Working Age Adult)",
+            "60+ (Elderly)",
             "Total"
         ]
-
+ 
         for col in age_cols:
-
+ 
             barangay_pop[col] = (
                 barangay_pop[col]
                 .astype(str)
                 .str.replace(",", "")
                 .astype(float)
             )
-
+ 
         barangay_pop["Barangay"] = (
             barangay_pop["Barangay"]
             .astype(str)
             .str.strip()
             .str.upper()
         )
-
+ 
         # ==================================================
         # CARE FACILITY COUNTS
         # ==================================================
-
+ 
         barangay_facilities = (
             care_clean
             .groupby("barangay")
             .size()
             .reset_index(name="Facilities")
         )
-
+ 
         barangay_facilities["barangay"] = (
             barangay_facilities["barangay"]
             .astype(str)
             .str.strip()
             .str.upper()
         )
-
+ 
         # ==================================================
         # MERGE
         # ==================================================
-
+ 
         barangay_access = barangay_pop.merge(
             barangay_facilities,
             left_on="Barangay",
             right_on="barangay",
             how="left"
         )
-
+ 
         barangay_access["Facilities"] = (
             barangay_access["Facilities"]
             .fillna(0)
         )
-
+ 
         # ==================================================
         # INDICATORS
         # ==================================================
-
+ 
         barangay_access[
             "Facilities per 10k Population"
         ] = (
@@ -5135,7 +6115,7 @@ elif page == "Accessibility Analysis":
             barangay_access["Total"]
             * 10000
         )
-
+ 
         barangay_access[
             "Care Gap Index"
         ] = (
@@ -5143,28 +6123,28 @@ elif page == "Accessibility Analysis":
             /
             barangay_access["Facilities"]
         )
-
+ 
         barangay_access = barangay_access.replace(
             [np.inf, -np.inf],
             np.nan
         )
-
+ 
         # ==================================================
         # ACCESSIBILITY INDEX
         # ==================================================
-
+ 
         min_score = (
             barangay_access[
                 "Facilities per 10k Population"
             ].min()
         )
-
+ 
         max_score = (
             barangay_access[
                 "Facilities per 10k Population"
             ].max()
         )
-
+ 
         barangay_access[
             "Accessibility Index"
         ] = (
@@ -5180,7 +6160,7 @@ elif page == "Accessibility Analysis":
                 - min_score
             )
         ) * 100
-
+ 
         barangay_access = (
             barangay_access
             .round(2)
@@ -5188,18 +6168,18 @@ elif page == "Accessibility Analysis":
         # ==================================================
         # KPI CARDS
         # ==================================================
-
+ 
         no_facilities = (
             barangay_access["Facilities"] == 0
         ).sum()
-
+ 
         avg_access = round(
             barangay_access[
                 "Accessibility Index"
             ].mean(),
             1
         )
-
+ 
         top_barangay = (
             barangay_access.loc[
                 barangay_access[
@@ -5208,39 +6188,41 @@ elif page == "Accessibility Analysis":
                 "Barangay"
             ]
         )
-
+ 
         c1, c2, c3 = st.columns(3)
-
+ 
         c1.metric(
             "Average Accessibility",
             avg_access
         )
-
+ 
         c2.metric(
             "Barangays Without Facilities",
             int(no_facilities)
         )
-
+ 
         c3.metric(
             "Best Served Barangay",
             str(top_barangay)
         )
-
+ 
         st.divider()
-
+ 
         # ==================================================
         # BARANGAY MAP
         # ==================================================
-
-        barangay_geo = geo.copy()
-
+ 
+        barangay_geo = gpd.read_file(
+            "processed/qc_barangays.geojson"
+        )
+ 
         barangay_geo["barangay_name"] = (
             barangay_geo["barangay_name"]
             .astype(str)
             .str.strip()
             .str.upper()
         )
-
+ 
         barangay_geo = barangay_geo.merge(
             barangay_access[
                 [
@@ -5254,64 +6236,137 @@ elif page == "Accessibility Analysis":
             right_on="Barangay",
             how="left"
         )
-
+ 
         st.subheader(
             "Barangay Accessibility Map"
         )
-
-        m = folium.Map(
-            location=[
-                center_lat,
-                center_lon
-            ],
-            zoom_start=11,
-            tiles="CartoDB positron"
+ 
+        st.caption(
+            "Darker = higher Accessibility Index = more facilities "
+            "relative to population (better served)."
         )
-
-        folium.Choropleth(
-            geo_data=barangay_geo,
-            data=barangay_geo,
-            columns=[
-                "barangay_name",
-                "Accessibility Index"
+ 
+        def purd_color(value, vmin, vmax):
+ 
+            if pd.isna(value) or vmax == vmin:
+                return [217, 217, 217, 120]
+ 
+            t = (value - vmin) / (vmax - vmin)
+            t = min(max(t, 0), 1)
+ 
+            # Light lavender -> deep magenta/purple, approximating
+            # the matplotlib "PuRd" colormap used by folium.Choropleth
+            stops = [
+                (0.00, (247, 244, 249)),
+                (0.25, (215, 181, 216)),
+                (0.50, (223, 101, 176)),
+                (0.75, (174, 1, 126)),
+                (1.00, (103, 0, 31))
+            ]
+ 
+            for i in range(len(stops) - 1):
+ 
+                t0, c0 = stops[i]
+                t1, c1 = stops[i + 1]
+ 
+                if t0 <= t <= t1:
+ 
+                    local_t = (
+                        (t - t0) / (t1 - t0)
+                        if t1 > t0 else 0
+                    )
+ 
+                    r = c0[0] + (c1[0] - c0[0]) * local_t
+                    g = c0[1] + (c1[1] - c0[1]) * local_t
+                    b = c0[2] + (c1[2] - c0[2]) * local_t
+ 
+                    return [int(r), int(g), int(b), 215]
+ 
+            return [103, 0, 31, 215]
+ 
+        access_min = barangay_geo["Accessibility Index"].min()
+        access_max = barangay_geo["Accessibility Index"].max()
+ 
+        barangay_geo["fill_color"] = barangay_geo["Accessibility Index"].apply(
+            lambda v: purd_color(v, access_min, access_max)
+        )
+ 
+        barangay_choropleth_geojson = json.loads(
+            barangay_geo.to_json()
+        )
+ 
+        # ------------------------------------------
+        # VIEW STATE
+        # ------------------------------------------
+ 
+        view_state = pdk.ViewState(
+            latitude=center_lat,
+            longitude=center_lon,
+            zoom=11,
+            pitch=0,
+            min_zoom=11,
+            max_zoom=17,
+        )
+ 
+        # ------------------------------------------
+        # Barangay choropleth
+        # ------------------------------------------
+ 
+        barangay_choropleth_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=barangay_choropleth_geojson,
+            stroked=True,
+            filled=True,
+            get_fill_color="properties.fill_color",
+            get_line_color=[120, 120, 120, 150],
+            line_width_min_pixels=0.6,
+            pickable=True,
+            auto_highlight=True
+        )
+ 
+        # ------------------------------------------
+        # TOOLTIP
+        # ------------------------------------------
+ 
+        tooltip = {
+            "html": """
+            <b>{Barangay}</b><br/>
+            Facilities: {Facilities}<br/>
+            Population: {Total}<br/>
+            Accessibility Index: {Accessibility Index}
+            """,
+            "style": {
+                "backgroundColor": "white",
+                "color": "black",
+                "fontSize": "12px"
+            }
+        }
+ 
+        # ------------------------------------------
+        # MAP
+        # ------------------------------------------
+ 
+        deck = pdk.Deck(
+            layers=[
+                barangay_choropleth_layer
             ],
-            key_on="feature.properties.barangay_name",
-            fill_color="PuRd",
-            fill_opacity=0.85,
-            line_opacity=0.4,
-            legend_name="Accessibility Index"
-        ).add_to(m)
-
-        folium.GeoJson(
-            barangay_geo,
-            tooltip=folium.GeoJsonTooltip(
-                fields=[
-                    "Barangay",
-                    "Facilities",
-                    "Total",
-                    "Accessibility Index"
-                ],
-                aliases=[
-                    "Barangay",
-                    "Facilities",
-                    "Population",
-                    "Accessibility Index"
-                ]
-            )
-        ).add_to(m)
-
-        st_folium(
-            m,
+            initial_view_state=view_state,
+            tooltip=tooltip,
+            map_style="light"
+        )
+ 
+        st.pydeck_chart(
+            deck,
             height=750,
-            width="stretch"
+            width='stretch'
         )
-
+ 
         st.divider()
-
+ 
         # ==================================================
         # MOST UNDERSERVED BARANGAYS
         # ==================================================
-
+ 
         underserved = (
             barangay_access
             .sort_values(
@@ -5319,7 +6374,7 @@ elif page == "Accessibility Analysis":
             )
             .head(20)
         )
-
+ 
         fig = px.bar(
             underserved,
             x="Accessibility Index",
@@ -5329,16 +6384,16 @@ elif page == "Accessibility Analysis":
             color_continuous_scale="Reds",
             title="Most Underserved Barangays"
         )
-
+ 
         st.plotly_chart(
             fig,
             width="stretch"
         )
-
+ 
         # ==================================================
         # POPULATION VS FACILITIES
         # ==================================================
-
+ 
         fig = px.scatter(
             barangay_access,
             x="Total",
@@ -5349,22 +6404,22 @@ elif page == "Accessibility Analysis":
             color_continuous_scale="Purples",
             title="Population vs Facilities"
         )
-
+ 
         st.plotly_chart(
             fig,
             width="stretch"
         )
-
+ 
         st.divider()
-
+ 
         # ==================================================
         # PRIORITY BARANGAYS
         # ==================================================
-
+ 
         st.subheader(
             "Priority Barangays"
         )
-
+ 
         priority_barangays = (
             barangay_access
             .sort_values(
@@ -5379,7 +6434,7 @@ elif page == "Accessibility Analysis":
             )
             .head(25)
         )
-
+ 
         st.dataframe(
             priority_barangays[
                 [
@@ -5393,31 +6448,43 @@ elif page == "Accessibility Analysis":
             ],
             width="stretch"
         )
-
+ 
         st.divider()
-
+ 
         # ==================================================
         # FULL TABLE
         # ==================================================
-
+ 
         st.subheader(
             "Barangay Accessibility Indicators"
         )
-
+ 
         st.dataframe(
             barangay_access,
             width="stretch"
         )
 
-
 elif page == "Care Planning & Investment Priorities":
 
+    import geopandas as gpd
+
     care = pd.read_csv(
-        "processed/care_v2.csv"
+        "processed/care_v3.csv"
     )
 
-    st.title(
-        "Care Planning & Investment Priorities"
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Care Planning & Investment Priorities
+        </h2>
+        """,
+        unsafe_allow_html=True
     )
 
     st.markdown("""
@@ -5430,17 +6497,70 @@ elif page == "Care Planning & Investment Priorities":
     areas for intervention.
     """)
 
+    with st.expander("How is the Priority Score calculated?"):
+
+        st.markdown("""
+        **Higher Priority Score = higher priority for investment**
+        (i.e. the barangay appears more underserved relative to
+        its need). Scores are scaled 0–100, with 100 assigned to
+        the single most underserved barangay in the dataset.
+
+        The score blends four indicators, each barangay first
+        ranked against all others on that indicator, then combined
+        with the weights below:
+
+        | Indicator | What it measures | Direction | Weight |
+        |---|---|---|---|
+        | **Population** | Total residents in the barangay | Larger population → higher priority | 35% |
+        | **Care Burden** | Children (0–5) + older persons (60+) — the age groups that rely most on care services | Larger care burden → higher priority | 35% |
+        | **Facilities** | Number of registered care facilities of any kind (childcare, schools, health centers, elder care, etc.) | Fewer facilities → higher priority | 20% |
+        | **Service Diversity** | Number of *distinct types* of care service present (e.g. having both a school and a health center counts as more diverse than two schools) | Less diversity → higher priority | 10% |
+
+        A barangay with a large, care-dependent population and few or
+        no facilities will score near 100. A barangay with a small
+        population and many varied facilities will score near 0.
+
+        **Other indicators on this page, for reference:**
+        - **Facilities per 10k Population** — facility count normalized
+          by population, so large and small barangays can be compared
+          fairly. *Higher is better* (more facilities relative to people).
+        - **Care Burden per Facility** — how many children + older
+          persons each facility would need to serve on average if
+          demand were spread evenly. *Lower is better.*
+        - **Children per Facility / Elderly per Facility** — the same
+          idea, split by age group (children 0–5; older persons 60+)
+          and divided only by facilities that actually serve that
+          group (Childcare + Schools for children; Older Persons Care
+          + Long-Term Care for the elderly). *Lower is better* for both.
+        - **Care Desert** — a barangay with **zero** registered care
+          facilities of any kind. This is a flag, not a score.
+        """)
+
     # ==================================================
     # CLEAN POPULATION
     # ==================================================
 
     pop = population_age.copy()
 
+    # apply_barangay_mapping() pulls the final "Barangay"
+    # value from barangay_district_mapping.csv's BARANGAY
+    # column, which is title-case (e.g. "Greater Lagro"),
+    # not uppercase. Every merge key on this page (care_clean,
+    # barangay_geo["barangay_name"]) is uppercased, so this
+    # must be normalized too or barangays like Greater Lagro
+    # silently fail to match and show as 0 facilities.
+    pop["Barangay"] = (
+        pop["Barangay"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
     age_cols = [
-        "0-5 \n(Early Childhood)",
-        "6-17 \n(School Age Children)",
-        "18-59 \n(Working Age Adult)",
-        "60+ \n(Elderly)",
+        "0-5 (Early Childhood)",
+        "6-17 (School Age Children)",
+        "18-59 (Working Age Adult)",
+        "60+ (Elderly)",
         "Total"
     ]
 
@@ -5463,6 +6583,7 @@ elif page == "Care Planning & Investment Priorities":
         care_clean["barangay"]
         .astype(str)
         .str.strip()
+        .str.upper()
     )
 
     care_clean = care_clean[
@@ -5526,9 +6647,9 @@ elif page == "Care Planning & Investment Priorities":
     # ==================================================
 
     barangay_access["Care Burden"] = (
-        barangay_access["0-5 \n(Early Childhood)"]
+        barangay_access["0-5 (Early Childhood)"]
         +
-        barangay_access["60+ \n(Elderly)"]
+        barangay_access["60+ (Elderly)"]
     )
 
     barangay_access["Facilities per 10k Population"] = (
@@ -5547,6 +6668,21 @@ elif page == "Care Planning & Investment Priorities":
     barangay_access = barangay_access.replace(
         [np.inf, -np.inf],
         np.nan
+    )
+
+    # ==================================================
+    # CHILDREN / ELDERLY PER FACILITY
+    # (adapted from the supply & cluster indicator
+    # notebooks, which compute child_per_facility and
+    # elderly_per_facility separately rather than as
+    # a single combined "Care Burden" — useful to see
+    # whether a barangay's gap is specifically in
+    # childcare/school capacity or in elder care capacity)
+    # ==================================================
+
+    barangay_access = compute_population_per_facility(
+        barangay_access,
+        care_clean
     )
 
     # ==================================================
@@ -5585,14 +6721,26 @@ elif page == "Care Planning & Investment Priorities":
     # PRIORITY SCORE
     # ==================================================
 
+    # Each *_Rank column above uses rank 1 = "worst off" on that
+    # metric (rank(ascending=False) for Population/Burden puts
+    # the largest value at rank 1; rank(ascending=True) for
+    # Facilities/Diversity puts the smallest value, e.g. 0
+    # facilities, at rank 1). Summing those raw ranks directly
+    # would mean LOWER totals (rank 1 across the board) score
+    # LOWEST after the /max*100 step below — the opposite of
+    # "higher score = higher priority." Inverting each rank
+    # first (n_barangays + 1 - rank) makes "worst off" contribute
+    # the most, so the final score correctly increases with need.
+    n_barangays = len(barangay_access)
+
     barangay_access["Priority Score"] = (
-        barangay_access["Population Rank"] * 0.35
+        (n_barangays + 1 - barangay_access["Population Rank"]) * 0.35
         +
-        barangay_access["Burden Rank"] * 0.35
+        (n_barangays + 1 - barangay_access["Burden Rank"]) * 0.35
         +
-        barangay_access["Facility Rank"] * 0.20
+        (n_barangays + 1 - barangay_access["Facility Rank"]) * 0.20
         +
-        barangay_access["Diversity Rank"] * 0.10
+        (n_barangays + 1 - barangay_access["Diversity Rank"]) * 0.10
     )
 
     max_score = (
@@ -5664,57 +6812,197 @@ elif page == "Care Planning & Investment Priorities":
     # MAP
     # ==================================================
 
-    priority_map = geo.merge(
+    barangay_geo = gpd.read_file(
+        "processed/qc_barangays.geojson"
+    )
+
+    # Normalize join keys defensively — both sides must
+    # match exactly on the merge key, regardless of how
+    # they were cleaned upstream.
+    barangay_geo["barangay_name"] = (
+        barangay_geo["barangay_name"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    barangay_access["Barangay"] = (
+        barangay_access["Barangay"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    priority_map = barangay_geo.merge(
         barangay_access,
         left_on="barangay_name",
         right_on="Barangay",
         how="left"
     )
 
+    unmatched = int(priority_map["Priority Score"].isna().sum())
+
+    if unmatched > 0:
+        st.warning(
+            f"{unmatched} barangay polygon(s) didn't match any "
+            "row in the priority table and will show as gray "
+            "with no score — check spelling/casing of barangay "
+            "names in the source data."
+        )
+
     st.subheader(
         "Priority Investment Map"
     )
 
-    m = folium.Map(
-        location=[
-            center_lat,
-            center_lon
-        ],
-        zoom_start=11,
-        tiles="CartoDB positron"
+    st.caption(
+        "Darker = higher Priority Score = more underserved relative "
+        "to need. Gray = no care facility data available for that "
+        "barangay (see note above if shown)."
     )
 
-    folium.Choropleth(
-        geo_data=priority_map,
-        data=priority_map,
-        columns=[
-            "barangay_name",
-            "Priority Score"
+    def purd_color(value, vmin, vmax):
+
+        if pd.isna(value) or vmax == vmin:
+            return [204, 204, 204, 100]
+
+        t = (value - vmin) / (vmax - vmin)
+        t = min(max(t, 0), 1)
+
+        # Light lavender -> deep magenta/purple, approximating
+        # the matplotlib "PuRd" colormap used by folium.Choropleth
+        stops = [
+            (0.00, (247, 244, 249)),
+            (0.25, (215, 181, 216)),
+            (0.50, (223, 101, 176)),
+            (0.75, (174, 1, 126)),
+            (1.00, (103, 0, 31))
+        ]
+
+        for i in range(len(stops) - 1):
+
+            t0, c0 = stops[i]
+            t1, c1 = stops[i + 1]
+
+            if t0 <= t <= t1:
+
+                local_t = (
+                    (t - t0) / (t1 - t0)
+                    if t1 > t0 else 0
+                )
+
+                r = c0[0] + (c1[0] - c0[0]) * local_t
+                g = c0[1] + (c1[1] - c0[1]) * local_t
+                b = c0[2] + (c1[2] - c0[2]) * local_t
+
+                return [int(r), int(g), int(b), 205]
+
+        return [103, 0, 31, 205]
+
+    # Colors must be computed from the numeric "Priority Score"
+    # BEFORE that column gets overwritten with the "No data"
+    # placeholder string below.
+    score_min = priority_map["Priority Score"].min()
+    score_max = priority_map["Priority Score"].max()
+
+    priority_map["fill_color"] = priority_map["Priority Score"].apply(
+        lambda v: purd_color(v, score_min, score_max)
+    )
+
+    tooltip_fields = [
+        "Barangay",
+        "Facilities",
+        "Care Burden",
+        "Service Diversity",
+        "Priority Score"
+    ]
+
+    # "Barangay" comes from the right side of the left-merge above,
+    # so it's NaN for any polygon with no matching row in
+    # barangay_access (e.g. Damar, Reservoir — barangays with no
+    # care_v3 records at all). "barangay_name" comes from the
+    # geometry itself and is always populated, so use it as the
+    # display name whenever "Barangay" is missing.
+    priority_map["Barangay"] = (
+        priority_map["Barangay"]
+        .fillna(priority_map["barangay_name"])
+    )
+
+    # Round numeric fields and substitute a clear placeholder
+    # for missing values so the tooltip never shows blank.
+    for col in ["Facilities", "Care Burden", "Service Diversity", "Priority Score"]:
+        priority_map[col] = priority_map[col].round(1)
+
+    priority_map[tooltip_fields] = priority_map[tooltip_fields].fillna("No data")
+
+    priority_map_geojson = json.loads(
+        priority_map.to_json()
+    )
+
+    # ------------------------------------------
+    # VIEW STATE
+    # ------------------------------------------
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,
+        max_zoom=17,
+    )
+
+    # ------------------------------------------
+    # Priority choropleth
+    # ------------------------------------------
+
+    priority_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=priority_map_geojson,
+        stroked=True,
+        filled=True,
+        get_fill_color="properties.fill_color",
+        get_line_color=[102, 102, 102, 150],
+        line_width_min_pixels=0.5,
+        pickable=True,
+        auto_highlight=True
+    )
+
+    # ------------------------------------------
+    # TOOLTIP
+    # ------------------------------------------
+
+    tooltip = {
+        "html": """
+        <b>{Barangay}</b><br/>
+        Facilities: {Facilities}<br/>
+        Care Burden: {Care Burden}<br/>
+        Service Diversity: {Service Diversity}<br/>
+        Priority Score: {Priority Score}
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
+        }
+    }
+
+    # ------------------------------------------
+    # MAP
+    # ------------------------------------------
+
+    deck = pdk.Deck(
+        layers=[
+            priority_layer
         ],
-        key_on="feature.properties.barangay_name",
-        fill_color="PuRd",
-        fill_opacity=0.8,
-        line_opacity=0.5,
-        legend_name="Priority Score"
-    ).add_to(m)
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="light"
+    )
 
-    folium.GeoJson(
-        priority_map,
-        tooltip=folium.GeoJsonTooltip(
-            fields=[
-                "Barangay",
-                "Facilities",
-                "Care Burden",
-                "Service Diversity",
-                "Priority Score"
-            ]
-        )
-    ).add_to(m)
-
-    st_folium(
-        m,
+    st.pydeck_chart(
+        deck,
         height=750,
-        width="stretch"
+        width='stretch'
     )
 
     st.divider()
@@ -5892,6 +7180,128 @@ elif page == "Care Planning & Investment Priorities":
 
     st.divider()
 
+    # ==================================================
+    # CHILDREN / ELDERLY PER FACILITY
+    # ==================================================
+
+    st.subheader(
+        "Children & Elderly Demand per Facility"
+    )
+
+    st.markdown("""
+    "Care Burden" above combines young children and
+    older persons into a single figure. The indicators
+    below separate the two groups, dividing each
+    population by the number of facilities that
+    specifically serve it (Childcare + Schools for
+    children; Older Persons Care + Long-Term Care for
+    the elderly). This shows whether a barangay's gap
+    is concentrated in childcare/school capacity,
+    elder care capacity, or both.
+    """)
+
+    cpf_col1, cpf_col2, cpf_col3, cpf_col4 = st.columns(4)
+
+    with cpf_col1:
+
+        st.metric(
+            "Median Children per Facility",
+            f"{barangay_access['Children per Facility'].median():,.0f}"
+        )
+
+    with cpf_col2:
+
+        st.metric(
+            "Median Elderly per Facility",
+            f"{barangay_access['Elderly per Facility'].median():,.0f}"
+        )
+
+    with cpf_col3:
+
+        st.metric(
+            "Barangays with No Child-Serving Facility",
+            int((barangay_access["Child-Serving Facilities"] == 0).sum())
+        )
+
+    with cpf_col4:
+
+        st.metric(
+            "Barangays with No Elderly-Serving Facility",
+            int((barangay_access["Elderly-Serving Facilities"] == 0).sum())
+        )
+
+    cpf_left, cpf_right = st.columns(2)
+
+    with cpf_left:
+
+        top_children = (
+            barangay_access
+            .dropna(subset=["Children per Facility"])
+            .sort_values("Children per Facility", ascending=False)
+            .head(15)
+        )
+
+        fig = px.bar(
+            top_children,
+            x="Children per Facility",
+            y="Barangay",
+            orientation="h",
+            color="Children per Facility",
+            color_continuous_scale="Purples",
+            title="Highest Children per Facility (0-5 yrs)"
+        )
+
+        fig.update_layout(height=550)
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+    with cpf_right:
+
+        top_elderly = (
+            barangay_access
+            .dropna(subset=["Elderly per Facility"])
+            .sort_values("Elderly per Facility", ascending=False)
+            .head(15)
+        )
+
+        fig = px.bar(
+            top_elderly,
+            x="Elderly per Facility",
+            y="Barangay",
+            orientation="h",
+            color="Elderly per Facility",
+            color_continuous_scale="Purples",
+            title="Highest Elderly per Facility (60+ yrs)"
+        )
+
+        fig.update_layout(height=550)
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+    st.dataframe(
+        barangay_access[
+            [
+                "Barangay",
+                "District",
+                "0-5 (Early Childhood)",
+                "Child-Serving Facilities",
+                "Children per Facility",
+                "60+ (Elderly)",
+                "Elderly-Serving Facilities",
+                "Elderly per Facility"
+            ]
+        ].sort_values("Children per Facility", ascending=False),
+        width="stretch"
+    )
+
+    st.divider()
+
 
     # ==================================================
     # DOWNLOAD TABLE
@@ -5909,3 +7319,742 @@ elif page == "Care Planning & Investment Priorities":
         "priority_barangays.csv",
         "text/csv"
     )
+
+elif page == "Barangay Clusters":
+
+    import geopandas as gpd
+    import plotly.graph_objects as go
+
+    care = pd.read_csv(
+        "processed/care_v3.csv"
+    )
+
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Barangay Clusters
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.markdown("""
+    This page groups barangays into clusters that share
+    similar demographic and care-service profiles —
+    adapted from the project's clustering methodology
+    (K-means on standardized indicators). Clustering
+    helps surface neighborhoods that face comparable
+    pressures (e.g. dense and young vs. sparse and
+    older, or service-rich vs. service-poor) so that
+    interventions can be tailored by *type* of
+    barangay rather than one at a time.
+
+    **Features used:** population density, share of
+    children (0-17), share of older persons (60+),
+    dependency ratio, and the mix of care services
+    present locally (e.g. share of facilities that are
+    Childcare, Schools, Health centers, Older Persons
+    Care, etc.) — standing in for the land-use mix used
+    in the original notebooks, since Quezon City's data
+    is facility-based rather than raster-based.
+    """)
+
+    # ==================================================
+    # AGE GROUP DEFINITION (same as Population Overview)
+    # ==================================================
+
+    age_group_definition = {
+        "children_0_17": [
+            "0-5 (Early Childhood)",
+            "6-17 (School Age Children)"
+        ],
+        "working_age_18_59": [
+            "18-59 (Working Age Adult)"
+        ],
+        "elderly_60_plus": [
+            "60+ (Elderly)"
+        ]
+    }
+
+    # ==================================================
+    # CLEAN POPULATION
+    # ==================================================
+
+    pop = population_age.copy()
+
+    age_cols = [
+        "0-5 (Early Childhood)",
+        "6-17 (School Age Children)",
+        "18-59 (Working Age Adult)",
+        "60+ (Elderly)",
+        "Total"
+    ]
+
+    for col in age_cols:
+
+        pop[col] = (
+            pop[col]
+            .astype(str)
+            .str.replace(",", "")
+            .astype(float)
+        )
+
+    pop["children_0_17"] = pop[
+        age_group_definition["children_0_17"]
+    ].sum(axis=1)
+
+    pop["working_age"] = pop[
+        age_group_definition["working_age_18_59"]
+    ].sum(axis=1)
+
+    pop["elderly"] = pop[
+        age_group_definition["elderly_60_plus"]
+    ].sum(axis=1)
+
+    pop["children_pct"] = (
+        pop["children_0_17"] / pop["Total"] * 100
+    )
+
+    pop["elderly_pct"] = (
+        pop["elderly"] / pop["Total"] * 100
+    )
+
+    pop["dependency_ratio"] = (
+        (pop["children_0_17"] + pop["elderly"])
+        / pop["working_age"]
+        * 100
+    )
+
+    # ==================================================
+    # POPULATION DENSITY (needs barangay geometry)
+    # ==================================================
+
+    barangay_map = gpd.read_file(
+        "processed/qc_barangays.geojson"
+    )
+
+    barangay_map["barangay_name"] = (
+        barangay_map["barangay_name"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    pop["Barangay"] = (
+        pop["Barangay"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    pop_geo = barangay_map.merge(
+        pop,
+        left_on="barangay_name",
+        right_on="Barangay",
+        how="left"
+    )
+
+    pop_geo_metric = pop_geo.to_crs("EPSG:32651")
+
+    pop_geo["area_km2"] = (
+        pop_geo_metric.geometry.area / 1_000_000
+    )
+
+    pop_geo["population_density"] = (
+        pop_geo["Total"] / pop_geo["area_km2"]
+    )
+
+    pop_geo = pop_geo.replace([np.inf, -np.inf], np.nan)
+
+    numeric_guard_cols = [
+        "Total",
+        "children_0_17",
+        "working_age",
+        "elderly",
+        "children_pct",
+        "elderly_pct",
+        "dependency_ratio",
+        "population_density"
+    ]
+
+    pop_geo[numeric_guard_cols] = (
+        pop_geo[numeric_guard_cols].fillna(0)
+    )
+
+    # ==================================================
+    # CARE DATA
+    # ==================================================
+
+    care_clean = care.copy()
+
+    care_clean["barangay"] = (
+        care_clean["barangay"]
+        .astype(str)
+        .str.strip()
+    )
+
+    care_clean = care_clean[
+        care_clean["barangay"].notna()
+    ]
+
+    # ==================================================
+    # BUILD FEATURES & RUN CLUSTERING
+    # ==================================================
+
+    n_clusters = st.slider(
+        "Number of clusters",
+        min_value=2,
+        max_value=6,
+        value=4,
+        help="""
+        Matches the K-means exploration range used in the
+        clustering notebook (3 to 6 clusters tested there).
+        """
+    )
+
+    cluster_features_df, feature_cols = build_cluster_features(
+        pop_geo,
+        care_clean
+    )
+
+    clustered, scaled_features = run_barangay_clustering(
+        cluster_features_df,
+        feature_cols,
+        n_clusters=n_clusters
+    )
+
+    clustered["Cluster"] = clustered["Cluster"].astype(int)
+
+    # ==================================================
+    # KPI CARDS
+    # ==================================================
+
+    cluster_sizes = (
+        clustered
+        .groupby("Cluster")
+        .size()
+        .reset_index(name="Barangays")
+    )
+
+    largest_cluster = int(
+        cluster_sizes.loc[
+            cluster_sizes["Barangays"].idxmax(),
+            "Cluster"
+        ]
+    )
+
+    k1, k2, k3 = st.columns(3)
+
+    k1.metric(
+        "Barangays Clustered",
+        int(clustered["barangay_name"].notna().sum())
+    )
+
+    k2.metric(
+        "Clusters",
+        n_clusters
+    )
+
+    k3.metric(
+        "Largest Cluster",
+        f"Cluster {largest_cluster}"
+    )
+
+    st.divider()
+
+    # ==================================================
+    # MAP
+    # ==================================================
+
+    st.subheader(
+        "Barangay Cluster Map"
+    )
+
+    def hex_to_rgb(hex_color):
+        hex_color = hex_color.lstrip("#")
+
+        return [
+            int(hex_color[0:2], 16),
+            int(hex_color[2:4], 16),
+            int(hex_color[4:6], 16)
+        ]
+
+    clustered["fill_color"] = clustered["Cluster"].apply(
+        lambda c: hex_to_rgb(cluster_color(c)) + [205]
+    )
+
+    cluster_map_geojson = json.loads(
+        clustered.to_json()
+    )
+
+    # ------------------------------------------
+    # VIEW STATE
+    # ------------------------------------------
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,
+        max_zoom=17,
+    )
+
+    # ------------------------------------------
+    # Cluster choropleth
+    # ------------------------------------------
+
+    cluster_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=cluster_map_geojson,
+        stroked=True,
+        filled=True,
+        get_fill_color="properties.fill_color",
+        get_line_color=[102, 102, 102],
+        line_width_min_pixels=0.5,
+        pickable=True,
+        auto_highlight=True
+    )
+
+    # ------------------------------------------
+    # TOOLTIP
+    # ------------------------------------------
+
+    tooltip = {
+        "html": """
+        <b>{barangay_name}</b><br/>
+        Cluster: {Cluster}<br/>
+        Population: {Total}<br/>
+        Density (per km²): {population_density}<br/>
+        Children Share (%): {children_pct}<br/>
+        Older Persons Share (%): {elderly_pct}<br/>
+        Dependency Ratio: {dependency_ratio}
+        """,
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
+        }
+    }
+
+    # ------------------------------------------
+    # MAP
+    # ------------------------------------------
+
+    deck = pdk.Deck(
+        layers=[
+            cluster_layer
+        ],
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="light"
+    )
+
+    legend_items = "".join(
+        f"""
+        <span style="color:{cluster_color(c)};font-size:18px;">●</span>
+        Cluster {c}&nbsp;&nbsp;
+        """
+        for c in sorted(clustered["Cluster"].dropna().unique())
+    )
+
+    st.markdown(legend_items, unsafe_allow_html=True)
+
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width="stretch"
+    )
+
+    st.divider()
+
+    # ==================================================
+    # CLUSTER PROFILES (WIND ROSE / RADAR)
+    # ==================================================
+
+    st.subheader(
+        "Cluster Profiles"
+    )
+
+    st.markdown("""
+    Each radar chart shows the average standardized value
+    of each feature within a cluster (0 is the citywide
+    average; positive values are above average, negative
+    values are below average) — the same "wind rose"
+    profiling used in the clustering notebook to interpret
+    what makes each cluster distinct.
+    """)
+
+    profile_cols = min(2, n_clusters)
+    cluster_ids = sorted(clustered["Cluster"].dropna().unique())
+
+    cols = st.columns(profile_cols)
+
+    cluster_means = (
+        scaled_features
+        .groupby(clustered["Cluster"])
+        .mean()
+    )
+
+    radar_labels = [
+        c.replace("share_", "% ").replace("_", " ")
+        for c in feature_cols
+    ]
+
+    for i, cid in enumerate(cluster_ids):
+
+        with cols[i % profile_cols]:
+
+            values = cluster_means.loc[int(cid)].tolist()
+
+            fig = go.Figure()
+
+            fig.add_trace(
+                go.Scatterpolar(
+                    r=values + values[:1],
+                    theta=radar_labels + radar_labels[:1],
+                    fill="toself",
+                    name=f"Cluster {int(cid)}",
+                    line_color=cluster_color(cid)
+                )
+            )
+
+            fig.update_layout(
+                title=f"Cluster {int(cid)} ({int(cluster_sizes.set_index('Cluster').loc[int(cid), 'Barangays'])} barangays)",
+                showlegend=False,
+                height=400
+            )
+
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
+
+    st.divider()
+
+    # ==================================================
+    # CLUSTER SUMMARY TABLE
+    # ==================================================
+
+    st.subheader(
+        "Cluster Summary"
+    )
+
+    summary_cols = [
+        "Total",
+        "population_density",
+        "children_pct",
+        "elderly_pct",
+        "dependency_ratio"
+    ]
+
+    cluster_summary = (
+        clustered
+        .groupby("Cluster")[summary_cols]
+        .mean()
+        .round(2)
+        .reset_index()
+    )
+
+    cluster_summary = cluster_summary.merge(
+        cluster_sizes,
+        on="Cluster"
+    )
+
+    cluster_summary = cluster_summary.rename(
+        columns={
+            "Total": "Avg. Population",
+            "population_density": "Avg. Density (per km²)",
+            "children_pct": "Avg. Children Share (%)",
+            "elderly_pct": "Avg. Elderly Share (%)",
+            "dependency_ratio": "Avg. Dependency Ratio"
+        }
+    )
+
+    st.dataframe(
+        cluster_summary,
+        width="stretch"
+    )
+
+    st.divider()
+
+    # ==================================================
+    # BARANGAYS BY CLUSTER
+    # ==================================================
+
+    st.subheader(
+        "Barangays by Cluster"
+    )
+
+    selected_cluster = st.selectbox(
+        "View barangays in cluster",
+        cluster_ids
+    )
+
+    st.dataframe(
+        clustered[
+            clustered["Cluster"] == selected_cluster
+        ][
+            [
+                "barangay_name",
+                "District",
+                "Total",
+                "population_density",
+                "children_pct",
+                "elderly_pct",
+                "dependency_ratio"
+            ]
+        ].rename(columns={"barangay_name": "Barangay"})
+        .sort_values("Total", ascending=False),
+        width="stretch"
+    )
+
+    st.divider()
+
+    # ==================================================
+    # DOWNLOAD
+    # ==================================================
+
+    cluster_csv = (
+        clustered.drop(columns="geometry", errors="ignore")
+        .to_csv(index=False)
+        .encode("utf-8")
+    )
+
+    st.download_button(
+        "Download Barangay Cluster Table",
+        cluster_csv,
+        "barangay_clusters.csv",
+        "text/csv"
+    )
+elif page == "Climate & Hazard Exposure":
+
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Climate & Hazard Exposure
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.caption(
+        """
+        Explore climate and hazard layers for Quezon City one at
+        a time: land-surface temperature, vegetation cover, and
+        100-year flood inundation. Select a layer below.
+        """
+    )
+
+    # --------------------------------------------------
+    # LAYER CONFIGURATION
+    # --------------------------------------------------
+
+    climate_layers = {
+        "Land-Surface Temperature": {
+            "path": "processed/climate/landsat_lst_summer_avg_7yr_EPSG3123_filled.tif",
+            "colormap": "YlOrRd",
+            "binary": False,
+            "unit": "°C",
+            "legend_label": "Land-Surface Temperature (°C)",
+            "description": (
+                "7-year summer average land-surface temperature, "
+                "derived from Landsat thermal imagery (~30m "
+                "resolution). Higher values indicate stronger "
+                "urban heat — typically dense, paved, low-vegetation "
+                "areas. Color scale is clipped to the 2nd-98th "
+                "percentile to avoid a handful of extreme pixels "
+                "flattening the rest of the map."
+            )
+        },
+        "Vegetation (NDVI)": {
+            "path": "processed/climate/ndvi_mean_2025_EPSG3123.tif",
+            "colormap": "Greens",
+            "binary": False,
+            "unit": "NDVI",
+            "legend_label": "NDVI (vegetation index)",
+            "description": (
+                "2025 mean Normalized Difference Vegetation Index "
+                "(~10m resolution). Values range roughly from -1 to "
+                "1; higher (darker green) means denser, healthier "
+                "vegetation, lower (pale) means bare soil, pavement, "
+                "or built-up area. Useful as a rough inverse proxy "
+                "for heat exposure and a direct proxy for green "
+                "space access."
+            )
+        },
+        "Flood Inundation (100-yr)": {
+            "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+            "colormap": "Blues",
+            "binary": True,
+            "unit": "flooded / not flooded",
+            "legend_label": "Flood depth > 30cm (100-year rain event)",
+            "description": (
+                "Binary flood extent (~10m resolution) showing "
+                "areas expected to see more than 30cm of inundation "
+                "depth in a 100-year rainfall event. This is a mask, "
+                "not a depth map — for full depth classes (0.2-0.5m, "
+                "0.5-1.5m, 1.5-3m, >3m), see the static reference map "
+                "below."
+            )
+        }
+    }
+
+    if "climate_layer" not in st.session_state:
+        st.session_state.climate_layer = "Land-Surface Temperature"
+
+    # --------------------------------------------------
+    # LAYER TOGGLE BUTTONS
+    # --------------------------------------------------
+
+    toggle_cols = st.columns(len(climate_layers))
+
+    for i, layer_name in enumerate(climate_layers.keys()):
+
+        is_active = (
+            st.session_state.climate_layer == layer_name
+        )
+
+        if toggle_cols[i].button(
+            layer_name,
+            width="stretch",
+            type="primary" if is_active else "secondary"
+        ):
+            st.session_state.climate_layer = layer_name
+            st.rerun()
+
+    st.divider()
+
+    active_layer_name = st.session_state.climate_layer
+    active_layer = climate_layers[active_layer_name]
+
+    st.subheader(active_layer_name)
+    st.caption(active_layer["description"])
+
+    # --------------------------------------------------
+    # RENDER ACTIVE RASTER LAYER
+    # --------------------------------------------------
+
+    try:
+
+        qc_boundary = load_qc_boundary()
+
+        png_data_uri, bounds_corners, vmin, vmax = raster_to_bitmap_layer(
+            active_layer["path"],
+            colormap=active_layer["colormap"],
+            binary=active_layer["binary"],
+            _mask_geometry=qc_boundary
+        )
+
+        view_state = pdk.ViewState(
+            latitude=center_lat,
+            longitude=center_lon,
+            zoom=11,
+            pitch=0,
+            min_zoom=9,
+            max_zoom=17,
+        )
+
+        boundary_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=geo,
+            stroked=True,
+            filled=False,
+            get_line_color=[80, 80, 80, 180],
+            line_width_min_pixels=0.6,
+            pickable=False
+        )
+
+        # png_data_uri already comes back pre-quoted (a string
+        # containing literal quote characters), and bounds_corners
+        # is already the 4-corner format BitmapLayer expects —
+        # see raster_to_bitmap_layer's docstring in functions.py.
+        bitmap_layer = pdk.Layer(
+            "BitmapLayer",
+            image=png_data_uri,
+            bounds=bounds_corners,
+            opacity=1.0
+        )
+
+        deck = pdk.Deck(
+            layers=[
+                bitmap_layer,
+                boundary_layer
+            ],
+            initial_view_state=view_state,
+            map_style="light"
+        )
+
+        st.pydeck_chart(
+            deck,
+            height=700,
+            width="stretch"
+        )
+
+        if active_layer["binary"]:
+
+            st.caption(
+                f"Legend: {active_layer['legend_label']} — "
+                "shaded areas indicate flooding, unshaded areas "
+                "do not."
+            )
+
+        else:
+
+            st.caption(
+                f"Legend: {active_layer['legend_label']} — "
+                f"color scale spans {vmin:.1f} to {vmax:.1f} "
+                f"{active_layer['unit']} (2nd-98th percentile "
+                "of this layer's data)."
+            )
+
+    except Exception as e:
+
+        st.error(
+            f"Could not render this layer: {e}. "
+            "Check that rasterio and pyproj are installed, and "
+            f"that the file exists at `{active_layer['path']}`."
+        )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # STATIC REFERENCE MAPS
+    # --------------------------------------------------
+
+    with st.expander("Static reference maps (full legend detail)"):
+
+        st.markdown("""
+        These are the original, fully-styled reference maps used
+        to produce the layers above. The flood map in particular
+        shows depth classes that the binary mask above doesn't
+        capture (0.2-0.5m, 0.5-1.5m, 1.5-3m, more than 3m).
+        """)
+
+        ref_col1, ref_col2 = st.columns(2)
+
+        with ref_col1:
+            st.image(
+                "processed/climate/Flood_QC.png",
+                caption="100-year rain flood map in Quezon City",
+                width="stretch"
+            )
+
+        with ref_col2:
+            st.image(
+                "processed/climate/Heatwaves.png",
+                caption="Land-surface temperature reference map",
+                width="stretch"
+            )
