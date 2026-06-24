@@ -970,8 +970,20 @@ elif page == "Population Overview":
     import plotly.express as px
     import plotly.graph_objects as go
 
-    st.title("Population Overview")
-
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Population Overview
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
     st.markdown("""
     Demographic profile of Quezon City to support planning,
     resource allocation, and care service delivery decisions.
@@ -1310,37 +1322,75 @@ elif page == "Population Overview":
 
         st.caption(indicator_descriptions[indicator])
 
-        fig = px.choropleth_map(
-            barangay_df,
-            geojson=barangay_df.geometry.__geo_interface__,
-            locations=barangay_df.index,
-            color=selected_col,
-            hover_name="Barangay",
-            hover_data={
-                selected_col: ":,.0f",
-                "District": True
-            },
-            center={
-                "lat": 14.676,
-                "lon": 121.043
-            },
+        # ---------------------------------------------------
+        # CHOROPLETH FILL COLORS (continuous, Purples ramp,
+        # clipped to 5th-95th percentile — same clipping the
+        # Plotly version used via update_coloraxes)
+        # ---------------------------------------------------
+
+        vmin = barangay_df[selected_col].quantile(0.05)
+        vmax = barangay_df[selected_col].quantile(0.95)
+
+        barangay_df["fill_color"] = barangay_df[selected_col].apply(
+            lambda v: value_to_rgba(v, vmin, vmax)
+        )
+
+        barangay_geojson = json.loads(
+            barangay_df.to_json()
+        )
+
+        # ---------------------------------------------------
+        # VIEW STATE — locked to the same zoom range as the
+        # other maps in this dashboard, so users can't zoom
+        # out past the city boundary
+        # ---------------------------------------------------
+
+        view_state = pdk.ViewState(
+            latitude=center_lat,
+            longitude=center_lon,
             zoom=11,
-            opacity=0.75,
-            color_continuous_scale="Purples"
+            pitch=0,
+            min_zoom=11,
+            max_zoom=17,
         )
 
-        fig.update_coloraxes(
-            cmin=barangay_df[selected_col].quantile(0.05),
-            cmax=barangay_df[selected_col].quantile(0.95)
+        choropleth_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=barangay_geojson,
+            stroked=True,
+            filled=True,
+            get_fill_color="properties.fill_color",
+            get_line_color=[102, 102, 102],
+            line_width_min_pixels=0.5,
+            pickable=True,
+            auto_highlight=True
         )
 
-        fig.update_layout(
-            margin=dict(l=0, r=0, t=0, b=0),
-            height=650
+        tooltip = {
+            "html": f"""
+            <b>{{Barangay}}</b><br/>
+            District: {{District}}<br/>
+            {indicator}: {{{selected_col}}}
+            """,
+            "style": {
+                "backgroundColor": "white",
+                "color": "black",
+                "fontSize": "12px"
+            }
+        }
+
+        deck = pdk.Deck(
+            layers=[
+                choropleth_layer
+            ],
+            initial_view_state=view_state,
+            tooltip=tooltip,
+            map_style="light"
         )
 
-        st.plotly_chart(
-            fig,
+        st.pydeck_chart(
+            deck,
+            height=650,
             width="stretch"
         )
 
@@ -1540,44 +1590,75 @@ elif page == "Population Overview":
             district_indicator_descriptions[district_indicator]
         )
 
-        fig = px.choropleth_map(
-            district_geo,
-            geojson=district_geo.geometry.__geo_interface__,
-            locations=district_geo.index,
-            color=district_col,
-            hover_name="District",
-            hover_data={
-                district_col: ":,.0f"
-            },
-            center={
-                "lat": 14.676,
-                "lon": 121.043
-            },
+        # ---------------------------------------------------
+        # CHOROPLETH FILL COLORS (continuous, Purples ramp,
+        # full min/max range — this map had no percentile
+        # clipping in the Plotly version, so none is added
+        # here either)
+        # ---------------------------------------------------
+
+        district_vmin = district_geo[district_col].min()
+        district_vmax = district_geo[district_col].max()
+
+        district_geo["fill_color"] = district_geo[district_col].apply(
+            lambda v: value_to_rgba(v, district_vmin, district_vmax)
+        )
+
+        district_geojson = json.loads(
+            district_geo.to_json()
+        )
+
+        # ---------------------------------------------------
+        # VIEW STATE — locked to the same zoom range as the
+        # other maps in this dashboard, so users can't zoom
+        # out past the city boundary
+        # ---------------------------------------------------
+
+        view_state = pdk.ViewState(
+            latitude=center_lat,
+            longitude=center_lon,
             zoom=11,
-            opacity=0.75,
-            color_continuous_scale="Purples"
+            pitch=0,
+            min_zoom=11,
+            max_zoom=17,
         )
 
-        fig.update_layout(
-            margin=dict(
-                l=0,
-                r=0,
-                t=0,
-                b=0
-            ),
-            height=650
+        district_choropleth_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=district_geojson,
+            stroked=True,
+            filled=True,
+            get_fill_color="properties.fill_color",
+            get_line_color=[102, 102, 102],
+            line_width_min_pixels=0.5,
+            pickable=True,
+            auto_highlight=True
         )
 
-        # Prevent users from zooming too far out
-        fig.update_layout(
-            map=dict(
-                minzoom=11,   # lowest zoom allowed
-                maxzoom=16    # optional maximum zoom in
-            )
+        tooltip = {
+            "html": f"""
+            <b>District {{District}}</b><br/>
+            {district_indicator}: {{{district_col}}}
+            """,
+            "style": {
+                "backgroundColor": "white",
+                "color": "black",
+                "fontSize": "12px"
+            }
+        }
+
+        deck = pdk.Deck(
+            layers=[
+                district_choropleth_layer
+            ],
+            initial_view_state=view_state,
+            tooltip=tooltip,
+            map_style="light"
         )
 
-        st.plotly_chart(
-            fig,
+        st.pydeck_chart(
+            deck,
+            height=650,
             width="stretch"
         )
 
