@@ -1568,6 +1568,14 @@ elif page == "Population Overview":
             height=650
         )
 
+        # Prevent users from zooming too far out
+        fig.update_layout(
+            map=dict(
+                minzoom=11,   # lowest zoom allowed
+                maxzoom=16    # optional maximum zoom in
+            )
+        )
+
         st.plotly_chart(
             fig,
             width="stretch"
