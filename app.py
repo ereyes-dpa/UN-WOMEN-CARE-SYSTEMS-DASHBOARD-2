@@ -54,9 +54,21 @@ fcdo_logo = get_base64("assets/fcdo_logo.png")
 un_logo   = get_base64("assets/unwomen_logo.png")
 qc_logo   = get_base64("assets/qc_logo.png")
 
-QC_HEIGHT   = 60
-FCDO_HEIGHT = 60
-UN_HEIGHT   = 40
+# Heights are chosen for consistent *visual weight*, not
+# identical pixel height: QC is a dense, near-square seal,
+# while FCDO and UN Women are wide wordmark+icon banners
+# with a lot of thin strokes, whitespace, and small caption
+# text. At equal pixel height the seal reads as too small
+# and the wordmark captions become illegible, so QC is sized
+# up relative to the banners until the three read as
+# comparably "heavy" on the page. All three sit in one
+# shared flex row so they share a single vertical-center
+# alignment — no per-logo nudging needed.
+LOGO_ROW_HEIGHT = 80
+
+FCDO_HEIGHT = 56
+UN_HEIGHT   = 56
+QC_HEIGHT   = 72
 
 left_col, spacer_col, right_col = st.columns([1, 3, 3])
 
@@ -68,13 +80,11 @@ with left_col:
         <div style="
             display:flex;
             align-items:center;
-            height:80px;
+            height:{LOGO_ROW_HEIGHT}px;
         ">
             <a href="https://quezoncity.gov.ph/" target="_blank">
                 <img src="data:image/png;base64,{qc_logo}"
-                     style="height:{QC_HEIGHT}px; width:auto;
-                    transform: translateY(14px);
-        ">
+                     style="height:{QC_HEIGHT}px; width:auto;">
             </a>
         </div>
         """,
@@ -91,29 +101,23 @@ with right_col:
             justify-content:flex-end;
             align-items:center;
             gap:20px;
-            height:80px;
+            height:{LOGO_ROW_HEIGHT}px;
         ">
             <a href="https://www.gov.uk/government/organisations/foreign-commonwealth-development-office"
                target="_blank">
                 <img src="data:image/webp;base64,{fcdo_logo}"
-                     style="
-                        height:{FCDO_HEIGHT}px;
-                        width:auto;
-                        transform: translateY(8px);
-                     ">
+                     style="height:{FCDO_HEIGHT}px; width:auto;">
             </a>
             <a href="https://www.unwomen.org/en"
                target="_blank">
                 <img src="data:image/png;base64,{un_logo}"
-                     style="
-                        height:{UN_HEIGHT}px;
-                        width:auto;
-                     ">
+                     style="height:{UN_HEIGHT}px; width:auto;">
             </a>
         </div>
         """,
         unsafe_allow_html=True
     )
+
 
 # --------------------------------------------------
 # TITLE
@@ -160,6 +164,17 @@ geo, bounds = load_geo()
 population_summary, population_sex, population_age = (
     load_data_for_kpis()
 )
+
+# --------------------------------------------------
+# FULL INDICATORS TABLE (new accessibility, disability,
+# and CBMS socio-economic columns beyond the legacy
+# population_summary/sex/age shape above) + city-wide
+# climate context figures.
+# --------------------------------------------------
+
+demographics = load_demographics()
+climate_context = load_climate_context()
+demand_city_context, demand_district_context = load_demand_context()
 
 
 # --------------------------------------------------
@@ -234,7 +249,7 @@ def build_explorer_map(
 ):
     """
     Builds the full Care Services Explorer folium map and
-    returns its rendered HTML string.
+    returns (html, climate_legend_info).
 
     Cached on (selected_layers, selected_district,
     selected_climate_layers) only — these are the only things
@@ -248,12 +263,21 @@ def build_explorer_map(
     previously-built HTML immediately instead of reconstructing
     and re-serializing the whole map.
 
-    Returns HTML (via m._repr_html_()) rather than the live
-    folium.Map object so the cached value is a plain, easily
-    hashable/picklable string — st_folium can render a Map object
-    directly, but caching the HTML avoids any ambiguity about
-    whether a cached Map object's internal state could be
-    accidentally mutated by a caller between cache hits.
+    html is the rendered map (via m._repr_html_()) rather than
+    the live folium.Map object, so the cached value is a plain,
+    easily hashable/picklable string — st_folium can render a
+    Map object directly, but caching the HTML avoids any
+    ambiguity about whether a cached Map object's internal state
+    could be accidentally mutated by a caller between cache hits.
+
+    climate_legend_info is a dict of
+    {layer_name: (vmin, vmax)} for every selected *non-binary*
+    climate layer (Land-Surface Temperature, NDVI) — used by the
+    caller to render a color-scale legend outside this function,
+    since folium's rendered HTML is opaque to Streamlit and can't
+    host a native st widget itself. Binary layers (Flood
+    Inundation) are intentionally excluded since they're a
+    flooded/not-flooded mask, not a continuous scale.
     """
 
     service_layers = {
@@ -272,7 +296,7 @@ def build_explorer_map(
 
         "Schools": {
             "df": schools,
-            "color": "#5B21B6",
+            "color": "#055B52",
             "symbol": "■",
             "source": "School",
             "name_col": "Name",
@@ -284,7 +308,7 @@ def build_explorer_map(
 
         "Health Centers": {
             "df": health_centers,
-            "color": "#7F47ED",
+            "color": "#4C1D95",
             "symbol": "★",
             "source": "Health Facility",
             "name_col": "Name",
@@ -296,7 +320,7 @@ def build_explorer_map(
 
         "Older Persons Facilities": {
             "df": older_person_care,
-            "color": "#8B5CF6",
+            "color": "#055B52",
             "symbol": "◆",
             "source": "Older Persons Facility",
             "name_col": "Name",
@@ -308,7 +332,7 @@ def build_explorer_map(
 
         "Long-Term Care & Rehabilitation": {
             "df": long_term_care,
-            "color": "#A78BFA",
+            "color": "#4C1D95",
             "symbol": "▲",
             "source": "Rehabilitation Facility",
             "name_col": "Name",
@@ -320,7 +344,7 @@ def build_explorer_map(
 
         "Action Offices": {
             "df": satellite_offices,
-            "color": "#DDD6FE",
+            "color": "#055B52",
             "symbol": "⬢",
             "source": "Satellite Office",
             "name_col": "Name",
@@ -332,7 +356,7 @@ def build_explorer_map(
 
         "Migration Resource Centers": {
             "df": migration_centers,
-            "color": "#C084FC",
+            "color": "#C4B5FD",
             "symbol": "✦",
             "source": "Migration Resource Center",
             "name_col": "Name",
@@ -384,7 +408,7 @@ def build_explorer_map(
     folium.GeoJson(
         geo_json,
         style_function=lambda x: {
-            "fillColor": "#7fbf7f",
+            "fillColor": "#A6CFC1",
             "color": "#666666",
             "weight": 1,
             "fillOpacity": 0.10,
@@ -394,6 +418,8 @@ def build_explorer_map(
     # ------------------------------------------
     # CLIMATE OVERLAYS
     # ------------------------------------------
+
+    climate_legend_info = {}
 
     if selected_climate_layers:
 
@@ -405,12 +431,20 @@ def build_explorer_map(
 
             try:
 
-                rgba, folium_bounds, _, _ = raster_to_image_overlay(
-                    climate_layer["path"],
-                    colormap=climate_layer["colormap"],
-                    binary=climate_layer["binary"],
-                    _mask_geometry=qc_boundary_explorer
+                rgba, folium_bounds, layer_vmin, layer_vmax = (
+                    raster_to_image_overlay(
+                        climate_layer["path"],
+                        colormap=climate_layer["colormap"],
+                        binary=climate_layer["binary"],
+                        _mask_geometry=qc_boundary_explorer
+                    )
                 )
+
+                if not climate_layer["binary"]:
+                    climate_legend_info[climate_layer_name] = (
+                        layer_vmin,
+                        layer_vmax
+                    )
 
                 folium.raster_layers.ImageOverlay(
                     image=rgba,
@@ -521,7 +555,7 @@ def build_explorer_map(
                 marker_color_value = district_color(district)
 
             elif layer_name == "Migration Resource Centers":
-                marker_color_value = "#C084FC"
+                marker_color_value = "#C4B5FD"
 
             else:
                 marker_color_value = "#7F47ED"
@@ -558,7 +592,7 @@ def build_explorer_map(
                 )
             ).add_to(m)
 
-    return m._repr_html_()
+    return m._repr_html_(), climate_legend_info
 
 # Default values so variables always exist
 selected_category = "All"
@@ -818,6 +852,13 @@ if st.sidebar.button(
     st.rerun()
 
 if st.sidebar.button(
+    "Accessibility Map",
+    width='stretch'
+):
+    st.session_state.page = "Accessibility Map"
+    st.rerun()
+
+if st.sidebar.button(
     "Accessibility Analysis",
     width='stretch'
 ):
@@ -858,11 +899,11 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#5B21B6;font-size:22px;">●</span>
+        <span style="color:#4C1D95;font-size:22px;">●</span>
         <b>Child Development Center</b><br>
-        <span style="color:#7F47ED;font-size:22px;">●</span>
+        <span style="color:#8869C9;font-size:22px;">●</span>
         <b>Child Learning Center</b><br>
-        <span style="color:#A78BFA;font-size:22px;">●</span>
+        <span style="color:#C4B5FD;font-size:22px;">●</span>
         <b>Day Care Center</b>
         """,
         unsafe_allow_html=True
@@ -873,9 +914,9 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#5B21B6;font-size:22px;">■</span>
+        <span style="color:#055B52;font-size:22px;">■</span>
         <b>Public School</b><br>
-        <span style="color:#A78BFA;font-size:22px;">■</span>
+        <span style="color:#A6CFC1;font-size:22px;">■</span>
         <b>Private School</b>
         """,
         unsafe_allow_html=True
@@ -911,9 +952,9 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#4C1D95;font-size:22px;">◆</span>
+        <span style="color:#055B52;font-size:22px;">◆</span>
         <b>Nursing Care Center</b><br>
-        <span style="color:#A78BFA;font-size:22px;">◆</span>
+        <span style="color:#A6CFC1;font-size:22px;">◆</span>
         <b>Bahay Aruga</b>
         """,
         unsafe_allow_html=True
@@ -941,7 +982,7 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#7F47ED;font-size:22px;">⬢</span>
+        <span style="color:#055B52;font-size:22px;">⬢</span>
         <b>District Offices</b>
         """,
         unsafe_allow_html=True
@@ -952,7 +993,7 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#C084FC;font-size:22px;">✦</span>
+        <span style="color:#C4B5FD;font-size:22px;">✦</span>
         <b>Migration Resource Center</b>
         """,
         unsafe_allow_html=True
@@ -970,20 +1011,8 @@ elif page == "Population Overview":
     import plotly.express as px
     import plotly.graph_objects as go
 
-    st.markdown(
-        """
-        <h2 style="
-            color:#7F47ED;
-            font-size:2.0rem;
-            margin-top:-25px;
-            margin-bottom:10px;
-            padding-top:0px;
-        ">
-            Population Overview
-        </h2>
-        """,
-        unsafe_allow_html=True
-    )
+    st.title("Population Overview")
+
     st.markdown("""
     Demographic profile of Quezon City to support planning,
     resource allocation, and care service delivery decisions.
@@ -1119,21 +1148,22 @@ elif page == "Population Overview":
     st.divider()
 
     st.info(
-        "📍 **Land Use layer pending.** A land use/zoning indicator "
+        "**Land Use layer pending.** A land use/zoning indicator "
         "(e.g., % residential, % open space per barangay) is planned "
         "for this page once Quezon City government shares the data, "
-        "or a public Geoportal Philippines alternative is confirmed. ",
-        icon="ℹ️"
+        "or a public Geoportal Philippines alternative is confirmed. "
+        "See Notebooks 1–2 for status."
     )
 
     # =====================================================
     # TABS
     # =====================================================
 
-    tab1, tab2 = st.tabs(
+    tab1, tab2, tab3 = st.tabs(
         [
             "Barangay Analysis",
-            "District Analysis"
+            "District Analysis",
+            "Socio-Economic Indicators"
         ]
     )
 
@@ -1424,7 +1454,7 @@ elif page == "Population Overview":
                 y="Barangay",
                 orientation="h",
                 title="Top 10 — Highest Density (people/km²)",
-                color_discrete_sequence=["#0D6A4A"]
+                color_discrete_sequence=["#7F47ED"]
             )
             fig_top_den.update_layout(
                 height=400,
@@ -1440,7 +1470,7 @@ elif page == "Population Overview":
                 y="Barangay",
                 orientation="h",
                 title="Top 10 — Lowest Density (people/km²)",
-                color_discrete_sequence=["#8FCBB3"]
+                color_discrete_sequence=["#80AA31"]
             )
             fig_bottom_den.update_layout(
                 height=400,
@@ -1706,7 +1736,7 @@ elif page == "Population Overview":
                 x=[-total_male],
                 name="Male",
                 orientation="h",
-                marker_color="#3B6FA0"
+                marker_color="#7F47ED"
             )
         )
 
@@ -1716,7 +1746,7 @@ elif page == "Population Overview":
                 x=[total_female],
                 name="Female",
                 orientation="h",
-                marker_color="#C0567B"
+                marker_color="#80AA31"
             )
         )
 
@@ -1747,7 +1777,7 @@ elif page == "Population Overview":
                 x="District",
                 y="Sex Ratio",
                 title="Sex Ratio (M/F ×100) by District",
-                color_discrete_sequence=["#3B6FA0"]
+                color_discrete_sequence=["#7F47ED"]
             )
             fig_ratio.add_hline(
                 y=100,
@@ -1806,6 +1836,271 @@ elif page == "Population Overview":
             width="stretch"
         )
 
+    # =====================================================
+    # SOCIO-ECONOMIC TAB
+    # =====================================================
+    with tab3:
+
+        st.markdown("""
+        Contextual socio-economic indicators at the barangay
+        level — household composition, food insecurity, and
+        housing conditions (2024 CBMS), plus sex ratio and the
+        share of working-age women.
+        """)
+
+        st.info(
+            "📋 **CBMS coverage note.** The household-survey "
+            "indicators below (household size, nuclear families "
+            "per household, food insecurity, housing inadequacy) "
+            "come from the 2024 Community-Based Monitoring System, "
+            "which covers roughly 71% of Quezon City's census "
+            "population — not a full count. They should be read "
+            "as indicative of conditions in responding households, "
+            "not as exact citywide totals.",
+            icon="ℹ️"
+        )
+
+        # ---------------------------------------------------
+        # MAP DATA
+        # ---------------------------------------------------
+
+        socio_indicators = {
+            "Sex Ratio (Males per 100 Females)": {
+                "col": "sex_ratio_m_per_100f",
+                "description": (
+                    "Males per 100 females per barangay."
+                )
+            },
+            "Share of Working-Age Women (%)": {
+                "col": "share_women_18_59_pct",
+                "description": (
+                    "Women aged 18–59 as a share of total "
+                    "population — a proxy for female labor "
+                    "available for paid work and unpaid care."
+                )
+            },
+            "Average Household Size": {
+                "col": "cbms_avg_household_size",
+                "description": (
+                    "Average number of persons per household. "
+                    "Context on household dependency load."
+                )
+            },
+            "Average Nuclear Families per Household": {
+                "col": "cbms_avg_nuclear_families_per_hh",
+                "description": (
+                    "Average number of nuclear families per "
+                    "household; values above 1 indicate "
+                    "doubling-up or shared dwellings."
+                )
+            },
+            "Food Insecurity Prevalence (%)": {
+                "col": "cbms_food_insecurity_prevalence_pct",
+                "description": (
+                    "Share of households worried about not "
+                    "having enough food to eat (mild / headline "
+                    "food insecurity)."
+                )
+            },
+            "Severe Food Insecurity (%)": {
+                "col": "cbms_food_severe_wholeday_pct",
+                "description": (
+                    "Share of households that went without "
+                    "eating for a whole day (most severe food "
+                    "insecurity)."
+                )
+            },
+            "Food Insecurity Intensity Score": {
+                "col": "cbms_food_intensity_score",
+                "description": (
+                    "Severity-weighted score across all eight "
+                    "food insecurity items (1 = worried, 8 = "
+                    "whole day without eating)."
+                )
+            },
+            "Housing Inadequacy Index (%)": {
+                "col": "cbms_housing_inadequacy_index_pct",
+                "description": (
+                    "Average share of households with unimproved "
+                    "(natural, light, or salvaged) roof, walls, "
+                    "and floor."
+                )
+            },
+            "Severe Housing Deprivation (%)": {
+                "col": "cbms_housing_makeshift_severe_pct",
+                "description": (
+                    "Share of households using makeshift / "
+                    "salvaged / improvised building materials."
+                )
+            }
+        }
+
+        selected_socio_label = st.selectbox(
+            "Select Socio-Economic Indicator",
+            list(socio_indicators.keys()),
+            key="socio_indicator_select"
+        )
+
+        selected_socio_col = (
+            socio_indicators[selected_socio_label]["col"]
+        )
+
+        st.caption(
+            socio_indicators[selected_socio_label]["description"]
+        )
+
+        # Normalize join keys defensively, same convention used
+        # throughout this dashboard.
+        demographics_socio = demographics[
+            ["barangay", "district", selected_socio_col]
+        ].copy()
+
+        demographics_socio["barangay"] = (
+            demographics_socio["barangay"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+        socio_map = barangay_map.merge(
+            demographics_socio,
+            left_on="barangay_name",
+            right_on="barangay",
+            how="left"
+        )
+
+        socio_map = socio_map.rename(
+            columns={"district": "District"}
+        )
+
+        # ---------------------------------------------------
+        # KPI CARDS
+        # ---------------------------------------------------
+
+        socio_avg = socio_map[selected_socio_col].mean()
+        socio_max_row = socio_map.loc[
+            socio_map[selected_socio_col].idxmax()
+        ]
+        socio_min_row = socio_map.loc[
+            socio_map[selected_socio_col].idxmin()
+        ]
+
+        sc1, sc2, sc3 = st.columns(3)
+
+        sc1.metric(
+            "Citywide Average",
+            f"{socio_avg:,.2f}"
+        )
+
+        sc2.metric(
+            "Highest Barangay",
+            f"{socio_max_row['barangay_name'].title()} "
+            f"({socio_max_row[selected_socio_col]:,.2f})"
+        )
+
+        sc3.metric(
+            "Lowest Barangay",
+            f"{socio_min_row['barangay_name'].title()} "
+            f"({socio_min_row[selected_socio_col]:,.2f})"
+        )
+
+        st.divider()
+
+        # ---------------------------------------------------
+        # MAP
+        # ---------------------------------------------------
+
+        st.subheader(
+            f"Barangay Map — {selected_socio_label}"
+        )
+
+        socio_vmin = socio_map[selected_socio_col].quantile(0.05)
+        socio_vmax = socio_map[selected_socio_col].quantile(0.95)
+
+        socio_map["fill_color"] = (
+            socio_map[selected_socio_col].apply(
+                lambda v: value_to_rgba(v, socio_vmin, socio_vmax)
+            )
+        )
+
+        socio_geojson = json.loads(
+            socio_map.to_json()
+        )
+
+        view_state = pdk.ViewState(
+            latitude=center_lat,
+            longitude=center_lon,
+            zoom=11,
+            pitch=0,
+            min_zoom=11,
+            max_zoom=17,
+        )
+
+        socio_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=socio_geojson,
+            stroked=True,
+            filled=True,
+            get_fill_color="properties.fill_color",
+            get_line_color=[102, 102, 102],
+            line_width_min_pixels=0.5,
+            pickable=True,
+            auto_highlight=True
+        )
+
+        tooltip = {
+            "html": f"""
+            <b>{{barangay_name}}</b><br/>
+            {selected_socio_label}: {{{selected_socio_col}}}
+            """,
+            "style": {
+                "backgroundColor": "white",
+                "color": "black",
+                "fontSize": "12px"
+            }
+        }
+
+        deck = pdk.Deck(
+            layers=[
+                socio_layer
+            ],
+            initial_view_state=view_state,
+            tooltip=tooltip,
+            map_style="light"
+        )
+
+        st.pydeck_chart(
+            deck,
+            height=650,
+            width="stretch"
+        )
+
+        st.divider()
+
+        # ---------------------------------------------------
+        # TOP / BOTTOM BARANGAYS
+        # ---------------------------------------------------
+
+        st.subheader(
+            f"Top 15 Barangays by {selected_socio_label}"
+        )
+
+        st.dataframe(
+            socio_map[
+                ["barangay_name", "District", selected_socio_col]
+            ]
+            .rename(
+                columns={
+                    "barangay_name": "Barangay",
+                    selected_socio_col: selected_socio_label
+                }
+            )
+            .dropna(subset=[selected_socio_label])
+            .sort_values(selected_socio_label, ascending=False)
+            .head(15),
+            width="stretch"
+        )
+
 if page == "Childcare Centers":
 
     st.markdown(
@@ -1827,20 +2122,6 @@ if page == "Childcare Centers":
     Explore the spatial distribution of childcare facilities in Quezon City,
     including public Child Development Centers and private childcare providers.
     """)
-
-    st.markdown(
-        """
-        <span style="color:#5B21B6;font-size:18px;">●</span>
-        <b>Child Development Center</b> — For children aged 3–4 years and supports school readiness.<br>
-
-        <span style="color:#7F47ED;font-size:18px;">●</span>
-        <b>Child Learning Center</b> — Private childcare and early learning services.<br>
-
-        <span style="color:#A78BFA;font-size:18px;">●</span>
-        <b>Day Care Center</b> — Private day care and supervision services.
-        """,
-        unsafe_allow_html=True
-    )
 
     # --------------------------------------------------
     # CHILDCARE KPIs
@@ -2241,16 +2522,6 @@ elif page == "Schools":
     Explore the spatial distribution of schools across Quezon City,
     including both public and private educational institutions.
     """)
-
-    st.markdown(
-        """
-        <span style="color:#5B21B6;">●</span>
-        <b>Public School</b> — Government-operated educational institutions.<br>
-        <span style="color:#A78BFA;">●</span>
-        <b>Private School</b> — Privately operated educational institutions.
-        """,
-        unsafe_allow_html=True
-    )
 
     # KPIS
     total_schools = len(schools)
@@ -2713,29 +2984,6 @@ elif page == "Health Centers Map":
     The map supports the assessment of access to primary healthcare services,
     facility coverage, and the availability of pharmacies across districts.
     """)
-
-    st.markdown(
-        f"""
-        <span style="color:{category_hex('QC LGU')};">●</span>
-        <b>QC LGU</b> — Maternity and lying-in clinics for healthy pregnancies.<br>
-
-        <span style="color:{category_hex('National')};">●</span>
-        <b>National</b> — National government-owned hospitals.<br>
-
-        <span style="color:{category_hex('Super Health')};">●</span>
-        <b>Super Health</b> — Enhanced health centers with laboratory, dental, ambulance, breastfeeding, and lying-in services.<br>
-
-        <span style="color:{category_hex('Health Center')};">●</span>
-        <b>Health Center</b> — Community-based primary healthcare facilities.<br>
-
-        <span style="color:{category_hex('Pharmacy')};">●</span>
-        <b>Pharmacy</b> — Pharmacy services within health facilities.<br>
-
-        <span style="color:{category_hex('Milk Bank')};">●</span>
-        <b>Milk Bank</b> — Safe pasteurized human milk services for infants in need.
-        """,
-        unsafe_allow_html=True
-    )
 
     # --------------------------------------------------
     # HEALTH KPIs
@@ -3201,16 +3449,6 @@ elif page == "Older Persons Center Map":
     including nursing care centers and Bahay Aruga facilities.
     """)
 
-    st.markdown(
-        """
-        <span style="color:#4C1D95;">●</span>
-        <b>Nursing Care Center</b> — Residential facilities providing long-term nursing and care services.<br>
-
-        <span style="color:#A78BFA;">●</span>
-        <b>Bahay Aruga</b> — Temporary residential facility for abandoned, neglected, abused, and indigent QC senior citizens aged 60 years and above.
-        """,
-        unsafe_allow_html=True
-    )
     # --------------------------------------------------
     # SENIOR CITIZEN KPIs
     # --------------------------------------------------
@@ -3774,21 +4012,6 @@ elif page == "Long-Term Care & Rehabilitation":
     recovery services in Quezon City.
     """)
 
-    legend_html = ""
-
-    for cat in ltc_categories:
-        legend_html += (
-            f'<span style="color:{ltc_color(cat)};">●</span> '
-            f'<b>{cat}</b><br>'
-        )
-
-    st.markdown(
-        legend_html,
-        unsafe_allow_html=True
-    )
-
-
-
     # --------------------------------------------------
     # REHABILITATION KPIs
     # --------------------------------------------------
@@ -4251,142 +4474,54 @@ elif page == "Persons with Disabilities":
             margin-bottom:10px;
             padding-top:0px;
         ">
-            Migration Resource Center
+            Persons with Disabilities
         </h2>
         """,
         unsafe_allow_html=True
     )
 
     st.markdown("""
-    Explore facilities providing information, training,
-    referral services, and support for migrant workers
-    and their families in Quezon City.
+    Registered persons with disability (PWD) and senior
+    citizens with disability across Quezon City, by sex,
+    disability type, district, and barangay.
     """)
-
-    st.markdown(
-        """
-        <span style="color:#7F47ED;">●</span>
-        <b>QC Migrants Resource Center</b> — Provides support, information, training, and services for migrant workers and their families.
-        """,
-        unsafe_allow_html=True
-    )
 
     # --------------------------------------------------
     # LOAD DATA
     # --------------------------------------------------
-
-    pwd_sex = pd.read_csv(
-        "processed/persons_with_disability_by_sex.csv"
-    )
-
-    pwd_district = pd.read_csv(
-        "processed/persons_with_disability_by_age_and_sex.csv"
-    )
-
-    pwd_barangay = pd.read_csv(
-        "processed/persons_with_disability_by_barangay.csv"
-    )
-
-    pwd_type = pd.read_csv(
-        "processed/persons_with_disability_per_type.csv"
-    )
-
-    pwd_year = pd.read_csv(
-        "processed/persons_with_disability_per_year.csv"
-    )
-
-    # --------------------------------------------------
-    # CLEANING
+    # demographics, demand_city_context, and
+    # demand_district_context are loaded once at app
+    # startup (see top of file) from
+    # processed/indicators/demographics.csv,
+    # demand_city_context.csv, and
+    # demand_district_context.csv.
     # --------------------------------------------------
 
-    def clean_num(series):
+    pwd_by_type = demand_city_context[
+        demand_city_context["category"] == "PWDs by type"
+    ].copy()
 
-        return (
-            series.astype(str)
-            .str.replace(",", "", regex=False)
-            .str.replace("%", "", regex=False)
-            .astype(float)
-        )
-
-    pwd_sex["Male"] = clean_num(
-        pwd_sex["Male"]
+    pwd_by_type = pwd_by_type.rename(
+        columns={"breakdown": "Type of Disability"}
     )
-
-    pwd_sex["Female"] = clean_num(
-        pwd_sex["Female"]
-    )
-
-    pwd_district["Registered PWDs in QC"] = clean_num(
-        pwd_district["Registered PWDs in QC"]
-    )
-
-    pwd_district["Population (2020 Census)"] = clean_num(
-        pwd_district["Population (2020 Census)"]
-    )
-
-    pwd_barangay["PWDs"] = clean_num(
-        pwd_barangay["PWDs"]
-    )
-
-    pwd_barangay["Population (2020 Census)"] = clean_num(
-        pwd_barangay["Population (2020 Census)"]
-    )
-
-    pwd_year[
-        "persons_with_disability_registered_during_the_year"
-    ] = clean_num(
-        pwd_year[
-            "persons_with_disability_registered_during_the_year"
-        ]
-    )
-
-    for col in [
-        "2021",
-        "2022",
-        "2023",
-        "2024",
-        "2025",
-        "2026"
-    ]:
-
-        pwd_type[col] = clean_num(
-            pwd_type[col]
-        )
 
     # --------------------------------------------------
     # KPIs
     # --------------------------------------------------
 
-    total_pwd = (
-        pwd_district[
-            "Registered PWDs in QC"
-        ].sum()
-    )
+    total_pwd = demographics["pwd_registered"].sum()
 
-    total_male = (
-        pwd_sex["Male"]
-        .sum()
-    )
+    total_male = pwd_by_type["male"].sum()
+    total_female = pwd_by_type["female"].sum()
 
-    total_female = (
-        pwd_sex["Female"]
-        .sum()
-    )
+    disability_types = pwd_by_type["Type of Disability"].nunique()
 
-    disability_types = (
-        pwd_sex[
-            "Type of Disability"
-        ].nunique()
-    )
-
-    rehab_facilities = len(
-        long_term_care
-    )
+    rehab_facilities = len(long_term_care)
 
     barangays_covered = (
-        pwd_barangay[
-            "Barangay"
-        ].nunique()
+        demographics
+        .loc[demographics["pwd_registered"] > 0, "barangay"]
+        .nunique()
     )
 
     k1, k2, k3, k4, k5, k6 = st.columns(6)
@@ -4469,23 +4604,19 @@ elif page == "Persons with Disabilities":
 
     with col2:
 
-        disability_totals = pwd_sex.copy()
-
-        disability_totals["Total"] = (
-            disability_totals["Male"]
-            +
-            disability_totals["Female"]
-        )
-
         fig = px.bar(
-            disability_totals
+            pwd_by_type
             .sort_values(
-                "Total",
+                "total",
                 ascending=False
             ),
             x="Type of Disability",
-            y="Total",
+            y="total",
             title="Disability Types"
+        )
+
+        fig.update_layout(
+            yaxis_title="Registered PWDs"
         )
 
         st.plotly_chart(
@@ -4503,34 +4634,23 @@ elif page == "Persons with Disabilities":
         "PWD Population by District"
     )
 
+    district_display = demand_district_context.copy()
+
+    district_display["District"] = (
+        "District "
+        + district_display["district"].astype(str)
+    )
+
     fig = px.bar(
-        pwd_district,
+        district_display,
         x="District",
-        y="Registered PWDs in QC",
+        y="pwd_registered",
         text_auto=",",
         title="Registered PWDs by District"
     )
 
-    st.plotly_chart(
-        fig,
-        width="stretch"
-    )
-
-    st.divider()
-
-    # --------------------------------------------------
-    # REGISTRATION TREND
-    # --------------------------------------------------
-
-    st.subheader(
-        "PWD Registration Trend"
-    )
-
-    fig = px.line(
-        pwd_year,
-        x="year",
-        y="persons_with_disability_registered_during_the_year",
-        markers=True
+    fig.update_layout(
+        yaxis_title="Registered PWDs"
     )
 
     st.plotly_chart(
@@ -4541,30 +4661,78 @@ elif page == "Persons with Disabilities":
     st.divider()
 
     # --------------------------------------------------
-    # DISABILITY TYPES OVER TIME
+    # SENIORS WITH DISABILITY
+    # (replaces the previous PWD registration trend charts
+    # — no year-by-year registration history is available
+    # in the current data, so this section instead surfaces
+    # the senior-citizen disability context that demand_city
+    # _context.csv carries: the two diverging city-level
+    # counts, by registration basis, for seniors who are also
+    # registered as PWDs, plus the age split of seniors overall)
     # --------------------------------------------------
 
     st.subheader(
-        "Disability Registration Trends"
+        "Seniors with Disability"
     )
 
-    type_long = pwd_type.melt(
-        id_vars="Type of Disability",
-        var_name="Year",
-        value_name="Count"
+    st.caption(
+        "OSCA and PDAO use different registration bases, so "
+        "their counts of seniors also registered as PWD do "
+        "not match. Both figures are shown rather than "
+        "reconciled into one number. City-level only — no "
+        "barangay or district breakdown is available for "
+        "this indicator."
     )
 
-    fig = px.line(
-        type_long,
-        x="Year",
-        y="Count",
-        color="Type of Disability"
-    )
+    seniors_disability = demand_city_context[
+        demand_city_context["category"] == "Seniors with disability"
+    ].copy()
 
-    st.plotly_chart(
-        fig,
-        width="stretch"
-    )
+    seniors_by_age = demand_city_context[
+        demand_city_context["category"] == "Seniors by age"
+    ].copy()
+
+    col3, col4 = st.columns(2)
+
+    with col3:
+
+        fig = px.bar(
+            seniors_disability,
+            x="breakdown",
+            y="total",
+            title="Seniors Also Registered as PWD",
+            text_auto=","
+        )
+
+        fig.update_layout(
+            xaxis_title="",
+            yaxis_title="Count"
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+    with col4:
+
+        fig = px.bar(
+            seniors_by_age,
+            x="breakdown",
+            y="total",
+            title="Registered Seniors by Age Band",
+            text_auto=","
+        )
+
+        fig.update_layout(
+            xaxis_title="",
+            yaxis_title="Registered Seniors"
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
 
     st.divider()
 
@@ -4572,16 +4740,29 @@ elif page == "Persons with Disabilities":
     # TOP BARANGAYS
     # --------------------------------------------------
 
-    col1, col2 = st.columns(2)
+    col5, col6 = st.columns(2)
 
-    with col1:
+    with col5:
 
         st.subheader(
             "Top 10 Barangays by PWD Population"
         )
 
         st.dataframe(
-            pwd_barangay
+            demographics[
+                [
+                    "barangay",
+                    "district",
+                    "pwd_registered"
+                ]
+            ]
+            .rename(
+                columns={
+                    "barangay": "Barangay",
+                    "district": "District",
+                    "pwd_registered": "PWDs"
+                }
+            )
             .sort_values(
                 "PWDs",
                 ascending=False
@@ -4590,28 +4771,30 @@ elif page == "Persons with Disabilities":
             width="stretch"
         )
 
-    with col2:
-
-        coverage_df = pwd_barangay.copy()
-
-        coverage_df["Coverage_Num"] = (
-            coverage_df["Coverage"]
-            .astype(str)
-            .str.replace(
-                "%",
-                ""
-            )
-            .astype(float)
-        )
+    with col6:
 
         st.subheader(
-            "Highest Coverage Barangays"
+            "Highest Disability Prevalence Rate"
         )
 
         st.dataframe(
-            coverage_df
+            demographics[
+                [
+                    "barangay",
+                    "district",
+                    "disability_prevalence_rate_pct"
+                ]
+            ]
+            .rename(
+                columns={
+                    "barangay": "Barangay",
+                    "district": "District",
+                    "disability_prevalence_rate_pct":
+                        "Prevalence Rate (%)"
+                }
+            )
             .sort_values(
-                "Coverage_Num",
+                "Prevalence Rate (%)",
                 ascending=False
             )
             .head(10),
@@ -4640,60 +4823,33 @@ elif page == "Persons with Disabilities":
     rehab_by_district["District"] = (
         rehab_by_district["District"]
         .astype(int)
-        .astype(str)
     )
 
-    district_map = {
-        "I": "1",
-        "II": "2",
-        "III": "3",
-        "IV": "4",
-        "V": "5",
-        "VI": "6"
-    }
-
-    district_coverage = (
-        pwd_district.copy()
+    district_coverage = demand_district_context.merge(
+        rehab_by_district,
+        left_on="district",
+        right_on="District",
+        how="left"
     )
 
-    district_coverage["District_Num"] = (
-        district_coverage["District"]
-        .map(district_map)
-    )
-
-    district_coverage = (
-        district_coverage.merge(
-            rehab_by_district,
-            left_on="District_Num",
-            right_on="District",
-            how="left"
-        )
-    )
-
-    district_coverage[
-        "PWDs per Facility"
-    ] = (
-        district_coverage[
-            "Registered PWDs in QC"
-        ]
+    district_coverage["PWDs per Facility"] = (
+        district_coverage["pwd_registered"]
         /
-        district_coverage[
-            "Facilities"
-        ]
+        district_coverage["Facilities"]
     ).round(0)
 
     st.dataframe(
         district_coverage[
             [
-                "District_x",
-                "Registered PWDs in QC",
+                "district",
+                "pwd_registered",
                 "Facilities",
                 "PWDs per Facility"
             ]
         ].rename(
             columns={
-                "District_x":
-                "District"
+                "district": "District",
+                "pwd_registered": "Registered PWDs in QC"
             }
         ),
         width="stretch"
@@ -5240,7 +5396,7 @@ elif page == "Care Services Explorer":
 
         "Schools": {
             "df": schools,
-            "color": "#5B21B6",
+            "color": "#055B52",
             "symbol": "■",
             "source": "School",
             "name_col": "Name",
@@ -5252,7 +5408,7 @@ elif page == "Care Services Explorer":
 
         "Health Centers": {
             "df": health_centers,
-            "color": "#7F47ED",
+            "color": "#4C1D95",
             "symbol": "★",
             "source": "Health Facility",
             "name_col": "Name",
@@ -5264,7 +5420,7 @@ elif page == "Care Services Explorer":
 
         "Older Persons Facilities": {
             "df": older_person_care,
-            "color": "#8B5CF6",
+            "color": "#055B52",
             "symbol": "◆",
             "source": "Older Persons Facility",
             "name_col": "Name",
@@ -5276,7 +5432,7 @@ elif page == "Care Services Explorer":
 
         "Long-Term Care & Rehabilitation": {
             "df": long_term_care,
-            "color": "#A78BFA",
+            "color": "#4C1D95",
             "symbol": "▲",
             "source": "Rehabilitation Facility",
             "name_col": "Name",
@@ -5288,7 +5444,7 @@ elif page == "Care Services Explorer":
 
         "Action Offices": {
             "df": satellite_offices,
-            "color": "#DDD6FE",
+            "color": "#055B52",
             "symbol": "⬢",
             "source": "Satellite Office",
             "name_col": "Name",
@@ -5300,7 +5456,7 @@ elif page == "Care Services Explorer":
 
         "Migration Resource Centers": {
             "df": migration_centers,
-            "color": "#C084FC",
+            "color": "#C4B5FD",
             "symbol": "✦",
             "source": "Migration Resource Center",
             "name_col": "Name",
@@ -5419,7 +5575,7 @@ elif page == "Care Services Explorer":
     # MAP DISPLAY
     # --------------------------------------------------
 
-    map_html = build_explorer_map(
+    map_html, climate_legend_info = build_explorer_map(
         tuple(selected_layers),
         selected_district,
         tuple(selected_climate_layers)
@@ -5431,14 +5587,363 @@ elif page == "Care Services Explorer":
         width="stretch"
     )
 
+    # --------------------------------------------------
+    # CLIMATE LAYER LEGEND(S)
+    # (folium's rendered HTML is opaque to Streamlit, so any
+    # continuous-scale climate layer overlaid above gets its
+    # color-scale legend rendered here instead, just below the
+    # map. Binary layers like Flood Inundation aren't included
+    # here — they're a flooded/not-flooded mask, not a scale.)
+    # --------------------------------------------------
+
+    if climate_legend_info:
+
+        legend_cols = st.columns(len(climate_legend_info))
+
+        legend_units = {
+            "Land-Surface Temperature": "°C",
+            "Vegetation (NDVI)": ""
+        }
+
+        for col, (layer_name, (layer_vmin, layer_vmax)) in zip(
+            legend_cols,
+            climate_legend_info.items()
+        ):
+
+            with col:
+
+                st.markdown(
+                    render_colormap_legend_html(
+                        climate_overlay_layers[layer_name]["colormap"],
+                        layer_vmin,
+                        layer_vmax,
+                        unit=legend_units.get(layer_name, ""),
+                        label=layer_name
+                    ),
+                    unsafe_allow_html=True
+                )
+
+
+elif page == "Accessibility Map":
+
+    import geopandas as gpd
+
+    st.markdown(
+        """
+        <h2 style="
+            color:#7F47ED;
+            font-size:2.0rem;
+            margin-top:-25px;
+            margin-bottom:10px;
+            padding-top:0px;
+        ">
+            Accessibility Map
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.markdown("""
+    A quick, single-indicator view of care-facility
+    accessibility across Quezon City. Pick an indicator and
+    a level of detail below. For priority rankings, gap
+    tables, and deeper charts, see **Accessibility Analysis**.
+    """)
+
+    map_level = st.radio(
+        "Map Level",
+        ["Barangay", "District"],
+        horizontal=True
+    )
+
+    selected_map_ratio_label = st.selectbox(
+        "Select Accessibility Indicator",
+        list(ACCESSIBILITY_RATIO_INDICATORS.keys()),
+        key="accessibility_map_ratio_select"
+    )
+
+    selected_map_ratio = (
+        ACCESSIBILITY_RATIO_INDICATORS[selected_map_ratio_label]
+    )
+
+    def purd_color_map_page(value, vmin, vmax):
+
+        if pd.isna(value) or vmax == vmin:
+            return [217, 217, 217, 120]
+
+        t = (value - vmin) / (vmax - vmin)
+        t = min(max(t, 0), 1)
+
+        # Light lavender -> deep magenta/purple, approximating
+        # the matplotlib "PuRd" colormap used elsewhere in
+        # this dashboard for accessibility-style indicators.
+        stops = [
+            (0.00, (247, 244, 249)),
+            (0.25, (215, 181, 216)),
+            (0.50, (223, 101, 176)),
+            (0.75, (174, 1, 126)),
+            (1.00, (103, 0, 31))
+        ]
+
+        for i in range(len(stops) - 1):
+
+            t0, c0 = stops[i]
+            t1, c1 = stops[i + 1]
+
+            if t0 <= t <= t1:
+
+                local_t = (
+                    (t - t0) / (t1 - t0)
+                    if t1 > t0 else 0
+                )
+
+                r = c0[0] + (c1[0] - c0[0]) * local_t
+                g = c0[1] + (c1[1] - c0[1]) * local_t
+                b = c0[2] + (c1[2] - c0[2]) * local_t
+
+                return [int(r), int(g), int(b), 205]
+
+        return [103, 0, 31, 205]
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=11,
+        pitch=0,
+        min_zoom=11,
+        max_zoom=17,
+    )
+
+    if map_level == "Barangay":
+
+        # ==================================================
+        # BARANGAY-LEVEL MAP (ratio_* columns already
+        # pre-computed at barangay level in demographics.csv)
+        # ==================================================
+
+        barangay_map_df = demographics.copy()
+
+        barangay_map_df["barangay"] = (
+            barangay_map_df["barangay"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+        barangay_geo = gpd.read_file(
+            "processed/qc_barangays.geojson"
+        )
+
+        barangay_geo["barangay_name"] = (
+            barangay_geo["barangay_name"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+        barangay_geo = barangay_geo.merge(
+            barangay_map_df[
+                ["barangay", selected_map_ratio["ratio_col"]]
+            ],
+            left_on="barangay_name",
+            right_on="barangay",
+            how="left"
+        )
+
+        ratio_min = (
+            barangay_geo[selected_map_ratio["ratio_col"]].min()
+        )
+        ratio_max = (
+            barangay_geo[selected_map_ratio["ratio_col"]].max()
+        )
+
+        barangay_geo["fill_color"] = (
+            barangay_geo[selected_map_ratio["ratio_col"]].apply(
+                lambda v: purd_color_map_page(v, ratio_min, ratio_max)
+            )
+        )
+
+        map_geojson = json.loads(
+            barangay_geo.to_json()
+        )
+
+        map_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=map_geojson,
+            stroked=True,
+            filled=True,
+            get_fill_color="properties.fill_color",
+            get_line_color=[120, 120, 120, 150],
+            line_width_min_pixels=0.6,
+            pickable=True,
+            auto_highlight=True
+        )
+
+        tooltip = {
+            "html": f"""
+            <b>{{barangay_name}}</b><br/>
+            {selected_map_ratio_label}: {{{selected_map_ratio['ratio_col']}}}
+            """,
+            "style": {
+                "backgroundColor": "white",
+                "color": "black",
+                "fontSize": "12px"
+            }
+        }
+
+        deck = pdk.Deck(
+            layers=[map_layer],
+            initial_view_state=view_state,
+            tooltip=tooltip,
+            map_style="light"
+        )
+
+    else:
+
+        # ==================================================
+        # DISTRICT-LEVEL MAP (ratio recomputed from district
+        # totals — per-1,000 ratios don't average correctly
+        # across barangays of different sizes)
+        # ==================================================
+
+        district_map_df = (
+            demographics
+            .groupby("district")
+            .agg(
+                Facility_Type_Count=(
+                    selected_map_ratio["facility_col"], "sum"
+                ),
+                Relevant_Population=(
+                    selected_map_ratio["pop_col"], "sum"
+                )
+            )
+            .reset_index()
+            .rename(columns={"district": "District"})
+        )
+
+        district_map_df[selected_map_ratio_label] = (
+            district_map_df["Facility_Type_Count"]
+            /
+            district_map_df["Relevant_Population"]
+            * 1000
+        )
+
+        district_map_df = district_map_df.replace(
+            [np.inf, -np.inf],
+            np.nan
+        )
+
+        district_geo = gpd.read_file(
+            "processed/qc_districts.geojson"
+        )
+
+        district_geo["district"] = (
+            district_geo["district"]
+            .astype(str)
+            .str.extract(r"(\d+)")[0]
+            .astype(int)
+        )
+
+        district_geo = district_geo.rename(
+            columns={"district": "District"}
+        )
+
+        district_geo = district_geo.merge(
+            district_map_df[["District", selected_map_ratio_label]],
+            on="District",
+            how="left"
+        )
+
+        ratio_min = district_geo[selected_map_ratio_label].min()
+        ratio_max = district_geo[selected_map_ratio_label].max()
+
+        district_geo["fill_color"] = (
+            district_geo[selected_map_ratio_label].apply(
+                lambda v: purd_color_map_page(v, ratio_min, ratio_max)
+            )
+        )
+
+        map_geojson = json.loads(
+            district_geo.to_json()
+        )
+
+        # District label points (centroids), same convention
+        # used on the Accessibility Analysis district map.
+        district_labels = district_geo.copy()
+        district_labels_metric = district_labels.to_crs("EPSG:32651")
+        district_centroids_metric = (
+            district_labels_metric.geometry.centroid
+        )
+
+        district_centroids = (
+            gpd.GeoSeries(district_centroids_metric, crs="EPSG:32651")
+            .to_crs(district_labels.crs)
+        )
+
+        district_labels["lon"] = district_centroids.x
+        district_labels["lat"] = district_centroids.y
+        district_labels["label"] = (
+            "District " + district_labels["District"].astype(str)
+        )
+
+        map_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=map_geojson,
+            stroked=True,
+            filled=True,
+            get_fill_color="properties.fill_color",
+            get_line_color=[55, 65, 81],
+            line_width_min_pixels=2.5,
+            pickable=True,
+            auto_highlight=True
+        )
+
+        label_layer = pdk.Layer(
+            "TextLayer",
+            data=district_labels,
+            get_position="[lon, lat]",
+            get_text="label",
+            get_size=14,
+            get_color=[17, 24, 39],
+            get_background_color=[255, 255, 255, 180],
+            background=True,
+            get_alignment_baseline=String("center"),
+            pickable=False
+        )
+
+        tooltip = {
+            "html": f"""
+            <b>District {{District}}</b><br/>
+            {selected_map_ratio_label}: {{{selected_map_ratio_label}}}
+            """,
+            "style": {
+                "backgroundColor": "white",
+                "color": "black",
+                "fontSize": "12px"
+            }
+        }
+
+        deck = pdk.Deck(
+            layers=[map_layer, label_layer],
+            initial_view_state=view_state,
+            tooltip=tooltip,
+            map_style="light"
+        )
+
+    st.caption(
+        "Darker = higher ratio = more facilities of this type "
+        "relative to the population they serve (better served)."
+    )
+
+    st.pydeck_chart(
+        deck,
+        height=700,
+        width="stretch"
+    )
 
 elif page == "Accessibility Analysis":
     import geopandas as gpd
- 
-    care = pd.read_csv(
-        "processed/care_v3.csv"
-    )
- 
+
     st.markdown(
         """
         <h2 style="
@@ -5455,169 +5960,135 @@ elif page == "Accessibility Analysis":
     )
 
     with st.expander("How are these indicators calculated?"):
- 
+
         st.markdown("""
         The indicators below are the same at both the **District**
         and **Barangay** level — only the level of aggregation
         differs between the two tabs.
- 
+
         | Indicator | What it measures | Direction |
         |---|---|---|
-        | **Facilities** | Count of registered care facilities of any kind (childcare, schools, health centers, elder care, etc.) located in the area | *Higher is better* |
-        | **Facilities per 10k Population** | Facilities scaled to population, so large and small areas can be compared fairly | *Higher is better* |
-        | **Care Gap Index** | Population ÷ Facilities — roughly, how many people each facility would need to serve on average if demand were spread evenly | *Lower is better* |
-        | **Accessibility Index** | Facilities per 10k Population, rescaled 0–100 (0 = the least-served area in the dataset, 100 = the best-served) | *Higher is better* |
- 
-        **Accessibility Index and Care Gap Index point in opposite
-        directions on purpose.** A high Care Gap Index and a *low*
-        Accessibility Index both describe the same underserved area
-        — just measured from opposite ends. Don't read "higher" as
-        good for one and bad for the other without checking which
-        indicator you're looking at.
- 
-        On the map and charts, **"Best Served"** refers to the
-        highest Accessibility Index, and **"Priority"** refers to
-        the lowest — i.e. the area with the fewest facilities
-        relative to its population.
+        | **Facility-specific ratios** (e.g. Childcare per 1,000 Children 0–5) | A facility type's count scaled to the population it actually serves, per 1,000 people in that group | *Higher is better* |
+        | **Accessibility Index** | Facilities of any kind per 10k total population, rescaled 0–100 (0 = the least-served area in the dataset, 100 = the best-served) | *Higher is better* |
+        | **Care Demand per Facility** | Total population ÷ facilities of any kind — roughly, how many people each facility would need to serve on average if demand were spread evenly | *Lower is better* |
+
+        Use the dropdown below to switch between facility-specific
+        ratios (childcare, schools, eldercare, health centers,
+        long-term care) — each compares a facility type only
+        against the population it's meant to serve, e.g. school
+        facilities against school-age children rather than the
+        total population. The **Accessibility Index** at the
+        bottom of each tab summarizes overall coverage across
+        *all* facility types combined.
         """)
- 
+
+    # ==================================================
+    # FACILITY-PER-1,000 RATIO INDICATORS
+    # (shared with the Accessibility Map page — see
+    # ACCESSIBILITY_RATIO_INDICATORS in functions.py)
+    # ==================================================
+
+    ratio_indicators = ACCESSIBILITY_RATIO_INDICATORS
+
+    selected_ratio_label = st.selectbox(
+        "Select Accessibility Ratio",
+        list(ratio_indicators.keys())
+    )
+
+    selected_ratio = ratio_indicators[selected_ratio_label]
+
     tab1, tab2 = st.tabs(
         [
             "District Analysis",
             "Barangay Analysis"
         ]
     )
- 
- 
+
+
     with tab1:
         st.markdown("""
         This section examines the spatial distribution of care-related
         services across Quezon City and identifies districts where
         population needs may exceed available infrastructure.
         """)
- 
+
         # ==================================================
-        # CLEAN POPULATION
+        # DISTRICT AGGREGATION (from demographics.csv)
         # ==================================================
- 
-        pop = population_age.copy()
- 
-        age_cols = [
-            "0-5 (Early Childhood)",
-            "6-17 (School Age Children)",
-            "18-59 (Working Age Adult)",
-            "60+ (Elderly)",
-            "Total"
-        ]
- 
-        for col in age_cols:
- 
-            pop[col] = (
-                pop[col]
-                .astype(str)
-                .str.replace(",", "")
-                .astype(float)
-            )
- 
-        district_population = (
-            pop.groupby("District")[age_cols]
-            .sum()
-            .reset_index()
-        )
- 
-        district_population["District"] = (
-            district_population["District"]
-            .astype(int)
-        )
- 
-        # ==================================================
-        # CARE FACILITIES
-        # ==================================================
- 
-        care_clean = care.copy()
- 
-        care_clean["district"] = (
-            pd.to_numeric(
-                care_clean["district"],
-                errors="coerce"
-            )
-        )
- 
-        care_clean = care_clean.dropna(
-            subset=["district"]
-        )
- 
-        care_clean["district"] = (
-            care_clean["district"]
-            .astype(int)
-        )
- 
-        facility_counts = (
-            care_clean
+
+        district_access = (
+            demographics
             .groupby("district")
-            .size()
-            .reset_index(name="Facilities")
-            .rename(
-                columns={
-                    "district":"District"
-                }
+            .agg(
+                Total=("pop_census", "sum"),
+                Facilities=("Total", "sum"),
+                Facility_Type_Count=(
+                    selected_ratio["facility_col"], "sum"
+                ),
+                Relevant_Population=(
+                    selected_ratio["pop_col"], "sum"
+                )
             )
+            .reset_index()
+            .rename(columns={"district": "District"})
         )
- 
+
         # ==================================================
-        # MERGE
+        # SELECTED RATIO (recomputed at district level —
+        # per-1,000 ratios don't average correctly across
+        # barangays of different sizes, so this is computed
+        # fresh from the district totals rather than averaging
+        # the barangay-level ratio_* column)
         # ==================================================
- 
-        access = district_population.merge(
-            facility_counts,
-            on="District",
-            how="left"
-        )
- 
-        access["Facilities"] = (
-            access["Facilities"]
-            .fillna(0)
-        )
- 
-        # ==================================================
-        # INDICATORS
-        # ==================================================
- 
-        access["Facilities per 10k Population"] = (
-            access["Facilities"]
+
+        district_access[selected_ratio_label] = (
+            district_access["Facility_Type_Count"]
             /
-            access["Total"]
-            * 10000
+            district_access["Relevant_Population"]
+            * 1000
         )
- 
-        access["Care Gap Index"] = (
-            access["Total"]
-            /
-            access["Facilities"]
-        )
- 
-        access = access.replace(
+
+        district_access = district_access.replace(
             [np.inf, -np.inf],
             np.nan
         )
- 
+
         # ==================================================
-        # ACCESSIBILITY INDEX
+        # OVERALL ACCESSIBILITY INDEX (all facility types,
+        # from demographics.csv's Total facility column)
         # ==================================================
- 
+
+        district_access["Facilities per 10k Population"] = (
+            district_access["Facilities"]
+            /
+            district_access["Total"]
+            * 10000
+        )
+
+        district_access["Care Demand per Facility"] = (
+            district_access["Total"]
+            /
+            district_access["Facilities"]
+        )
+
+        district_access = district_access.replace(
+            [np.inf, -np.inf],
+            np.nan
+        )
+
         min_score = (
-            access["Facilities per 10k Population"]
+            district_access["Facilities per 10k Population"]
             .min()
         )
- 
+
         max_score = (
-            access["Facilities per 10k Population"]
+            district_access["Facilities per 10k Population"]
             .max()
         )
- 
-        access["Accessibility Index"] = (
+
+        district_access["Accessibility Index"] = (
             (
-                access["Facilities per 10k Population"]
+                district_access["Facilities per 10k Population"]
                 - min_score
             )
             /
@@ -5626,79 +6097,81 @@ elif page == "Accessibility Analysis":
                 - min_score
             )
         ) * 100
- 
-        access = access.round(2)
- 
+
+        district_access = district_access.round(2)
+
+        access = district_access
+
         # ==================================================
         # KPI CARDS
         # ==================================================
- 
+
         avg_score = round(
             access["Accessibility Index"].mean(),
             1
         )
- 
+
         best_district = int(
             access.loc[
                 access["Accessibility Index"].idxmax(),
                 "District"
             ]
         )
- 
+
         worst_district = int(
             access.loc[
                 access["Accessibility Index"].idxmin(),
                 "District"
             ]
         )
- 
+
         total_facilities = int(
             access["Facilities"].sum()
         )
- 
+
         c1, c2, c3, c4 = st.columns(4)
- 
+
         c1.metric(
             "Accessibility Index",
             avg_score
         )
- 
+
         c2.metric(
             "Total Facilities",
             f"{total_facilities:,}"
         )
- 
+
         c3.metric(
             "Best Served District",
             best_district
         )
- 
+
         c4.metric(
             "Priority District",
             worst_district
         )
- 
+
         st.divider()
- 
+
         # ==================================================
         # DISTRICT GEOMETRY
         # ==================================================
- 
+
         district_geo = gpd.read_file(
             "processed/qc_districts.geojson"
         )
- 
+
         district_geo["district"] = (
             district_geo["district"]
             .astype(str)
             .str.extract(r"(\d+)")[0]
             .astype(int)
         )
- 
+
         district_geo = district_geo.rename(
             columns={"district": "District"}
         )
- 
+
         district_geo = district_geo.merge(
             access[
                 [
@@ -5707,38 +6180,40 @@ elif page == "Accessibility Analysis":
                     "Facilities",
                     "Total",
                     "Facilities per 10k Population",
-                    "Care Gap Index"
+                    "Care Demand per Facility",
+                    selected_ratio_label
                 ]
             ],
             on="District",
             how="left"
         )
- 
+
         # ==================================================
-        # MAP
+        # MAP — driven by the selected facility-specific ratio
         # ==================================================
- 
+
         st.subheader(
-            "District Accessibility Map"
+            f"District Map — {selected_ratio_label}"
         )
- 
+
         st.caption(
-            "Darker = higher Accessibility Index = more facilities "
-            "relative to population (better served)."
+            "Darker = higher ratio = more facilities of this "
+            "type relative to the population they serve "
+            "(better served)."
         )
- 
+
         # ------------------------------------------
-        # Color ramp (PuRd-style) for Accessibility Index
+        # Color ramp (PuRd-style) for the selected ratio
         # ------------------------------------------
- 
+
         def purd_color(value, vmin, vmax):
- 
+
             if pd.isna(value) or vmax == vmin:
                 return [217, 217, 217, 120]
- 
+
             t = (value - vmin) / (vmax - vmin)
             t = min(max(t, 0), 1)
- 
+
             # Light lavender -> deep magenta/purple, approximating
             # the matplotlib "PuRd" colormap used by folium.Choropleth
             stops = [
@@ -5748,44 +6223,44 @@ elif page == "Accessibility Analysis":
                 (0.75, (174, 1, 126)),
                 (1.00, (103, 0, 31))
             ]
- 
+
             for i in range(len(stops) - 1):
- 
+
                 t0, c0 = stops[i]
                 t1, c1 = stops[i + 1]
- 
+
                 if t0 <= t <= t1:
- 
+
                     local_t = (
                         (t - t0) / (t1 - t0)
                         if t1 > t0 else 0
                     )
- 
+
                     r = c0[0] + (c1[0] - c0[0]) * local_t
                     g = c0[1] + (c1[1] - c0[1]) * local_t
                     b = c0[2] + (c1[2] - c0[2]) * local_t
- 
+
                     return [int(r), int(g), int(b), 200]
- 
+
             return [103, 0, 31, 200]
- 
-        access_min = district_geo["Accessibility Index"].min()
-        access_max = district_geo["Accessibility Index"].max()
- 
-        district_geo["fill_color"] = district_geo["Accessibility Index"].apply(
-            lambda v: purd_color(v, access_min, access_max)
+
+        ratio_min = district_geo[selected_ratio_label].min()
+        ratio_max = district_geo[selected_ratio_label].max()
+
+        district_geo["fill_color"] = district_geo[selected_ratio_label].apply(
+            lambda v: purd_color(v, ratio_min, ratio_max)
         )
- 
+
         district_geojson = json.loads(
             district_geo.to_json()
         )
- 
+
         # ------------------------------------------
         # District label points (centroids)
         # ------------------------------------------
- 
+
         district_labels = district_geo.copy()
- 
+
         # Reproject to a metric CRS before computing centroids —
         # centroids computed directly on geographic (lat/lon)
         # coordinates can be skewed for irregular polygons, since
@@ -5794,22 +6269,22 @@ elif page == "Accessibility Analysis":
         # area_km2 calculation on the Barangay Clusters page.
         district_labels_metric = district_labels.to_crs("EPSG:32651")
         district_centroids_metric = district_labels_metric.geometry.centroid
- 
+
         district_centroids = (
             gpd.GeoSeries(district_centroids_metric, crs="EPSG:32651")
             .to_crs(district_labels.crs)
         )
- 
+
         district_labels["lon"] = district_centroids.x
         district_labels["lat"] = district_centroids.y
         district_labels["label"] = (
             "District " + district_labels["District"].astype(str)
         )
- 
+
         # ------------------------------------------
         # VIEW STATE
         # ------------------------------------------
- 
+
         view_state = pdk.ViewState(
             latitude=center_lat,
             longitude=center_lon,
@@ -5818,11 +6293,11 @@ elif page == "Accessibility Analysis":
             min_zoom=11,
             max_zoom=17,
         )
- 
+
         # ------------------------------------------
         # Barangay boundaries (background)
         # ------------------------------------------
- 
+
         barangay_layer = pdk.Layer(
             "GeoJsonLayer",
             data=geo,
@@ -5832,11 +6307,11 @@ elif page == "Accessibility Analysis":
             line_width_min_pixels=0.5,
             pickable=False
         )
- 
+
         # ------------------------------------------
         # District choropleth
         # ------------------------------------------
- 
+
         district_layer = pdk.Layer(
             "GeoJsonLayer",
             data=district_geojson,
@@ -5848,11 +6323,11 @@ elif page == "Accessibility Analysis":
             pickable=True,
             auto_highlight=True
         )
- 
+
         # ------------------------------------------
         # District labels
         # ------------------------------------------
- 
+
         label_layer = pdk.Layer(
             "TextLayer",
             data=district_labels,
@@ -5865,18 +6340,18 @@ elif page == "Accessibility Analysis":
             get_alignment_baseline=String("center"),
             pickable=False
         )
- 
+
         # ------------------------------------------
         # TOOLTIP
         # ------------------------------------------
- 
+
         tooltip = {
-            "html": """
-            <b>District {District}</b><br/>
-            Facilities: {Facilities}<br/>
-            Population: {Total}<br/>
-            Facilities / 10k Population: {Facilities per 10k Population}<br/>
-            Accessibility Index: {Accessibility Index}
+            "html": f"""
+            <b>District {{District}}</b><br/>
+            {selected_ratio_label}: {{{selected_ratio_label}}}<br/>
+            Facilities (any type): {{Facilities}}<br/>
+            Population: {{Total}}<br/>
+            Accessibility Index: {{Accessibility Index}}
             """,
             "style": {
                 "backgroundColor": "white",
@@ -5884,11 +6359,11 @@ elif page == "Accessibility Analysis":
                 "fontSize": "12px"
             }
         }
- 
+
         # ------------------------------------------
         # MAP
         # ------------------------------------------
- 
+
         deck = pdk.Deck(
             layers=[
                 barangay_layer,
@@ -5899,23 +6374,42 @@ elif page == "Accessibility Analysis":
             tooltip=tooltip,
             map_style="light"
         )
- 
+
         st.pydeck_chart(
             deck,
             height=700,
             width='stretch'
         )
- 
+
         st.divider()
- 
+
         # ==================================================
         # CHARTS
         # ==================================================
- 
+
         left, right = st.columns(2)
- 
+
         with left:
- 
+
+            fig = px.bar(
+                access.sort_values(
+                    selected_ratio_label,
+                    ascending=False
+                ),
+                x="District",
+                y=selected_ratio_label,
+                color=selected_ratio_label,
+                color_continuous_scale="Purples",
+                title=f"{selected_ratio_label} by District"
+            )
+
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
+
+        with right:
+
             fig = px.bar(
                 access.sort_values(
                     "Accessibility Index",
@@ -5925,215 +6419,181 @@ elif page == "Accessibility Analysis":
                 y="Accessibility Index",
                 color="Accessibility Index",
                 color_continuous_scale="Purples",
-                title="Accessibility Index by District"
+                title="Overall Accessibility Index by District"
             )
- 
+
             st.plotly_chart(
                 fig,
                 width="stretch"
             )
- 
-        with right:
- 
-            fig = px.bar(
-                access.sort_values(
-                    "Care Gap Index",
-                    ascending=False
-                ),
-                x="District",
-                y="Care Gap Index",
-                color="Care Gap Index",
-                color_continuous_scale="Reds",
-                title="Care Gap Index"
-            )
- 
-            st.plotly_chart(
-                fig,
-                width="stretch"
-            )
- 
+
         st.divider()
- 
+
         # ==================================================
         # POPULATION VS FACILITIES
         # ==================================================
- 
+
         fig = px.scatter(
             access,
-            x="Total",
-            y="Facilities",
-            size="Facilities",
+            x="Relevant_Population",
+            y="Facility_Type_Count",
+            size="Facility_Type_Count",
             text="District",
-            color="Accessibility Index",
+            color=selected_ratio_label,
             color_continuous_scale="Purples",
-            title="Population vs Care Facilities"
+            title=f"Relevant Population vs Facilities — {selected_ratio_label}"
         )
- 
+
+        fig.update_layout(
+            xaxis_title="Relevant Population",
+            yaxis_title="Facilities of this Type"
+        )
+
         fig.update_traces(
             textposition="top center"
         )
- 
+
         st.plotly_chart(
             fig,
             width="stretch"
         )
- 
+
         st.divider()
- 
+
         # ==================================================
         # PRIORITY DISTRICTS
         # ==================================================
- 
+
         st.subheader(
             "Priority Districts for Future Investment"
         )
- 
+
+        st.caption(
+            f"Ranked by lowest {selected_ratio_label}, then by "
+            "lowest overall Accessibility Index."
+        )
+
         priority = (
             access.sort_values(
                 [
-                    "Accessibility Index",
-                    "Care Gap Index"
+                    selected_ratio_label,
+                    "Accessibility Index"
                 ],
                 ascending=[
                     True,
-                    False
+                    True
                 ]
             )
             .head(5)
         )
- 
+
         st.dataframe(
-            priority,
+            priority[
+                [
+                    "District",
+                    selected_ratio_label,
+                    "Facilities",
+                    "Total",
+                    "Accessibility Index",
+                    "Care Demand per Facility"
+                ]
+            ],
             width="stretch"
         )
- 
+
         st.divider()
- 
+
         # ==================================================
         # FULL TABLE
         # ==================================================
- 
+
         st.subheader(
             "District Accessibility Indicators"
         )
- 
+
         st.dataframe(
-            access,
+            access[
+                [
+                    "District",
+                    selected_ratio_label,
+                    "Facilities",
+                    "Total",
+                    "Facilities per 10k Population",
+                    "Accessibility Index",
+                    "Care Demand per Facility"
+                ]
+            ],
             width="stretch"
         )
  
     with tab2:
- 
+
         st.subheader(
-            "Barangay-Level Accessibility"
+            f"Barangay-Level Accessibility — {selected_ratio_label}"
         )
- 
+
         # ==================================================
-        # POPULATION
+        # BARANGAY DATA (from demographics.csv directly —
+        # facility counts, population, and pre-computed
+        # ratio_* columns are all already at barangay level)
         # ==================================================
- 
-        barangay_pop = population_age.copy()
- 
-        age_cols = [
-            "0-5 (Early Childhood)",
-            "6-17 (School Age Children)",
-            "18-59 (Working Age Adult)",
-            "60+ (Elderly)",
-            "Total"
-        ]
- 
-        for col in age_cols:
- 
-            barangay_pop[col] = (
-                barangay_pop[col]
-                .astype(str)
-                .str.replace(",", "")
-                .astype(float)
-            )
- 
-        barangay_pop["Barangay"] = (
-            barangay_pop["Barangay"]
-            .astype(str)
-            .str.strip()
-            .str.upper()
+
+        barangay_access = demographics.copy()
+
+        barangay_access = barangay_access.rename(
+            columns={
+                "barangay": "Barangay",
+                "district": "District",
+                "pop_census": "Total",
+                "Total": "Facilities"
+            }
         )
- 
+
         # ==================================================
-        # CARE FACILITY COUNTS
+        # SELECTED RATIO (already pre-computed in
+        # demographics.csv; pulled in directly rather than
+        # recalculated, since barangay-level ratios don't
+        # need re-aggregation the way district ones do)
         # ==================================================
- 
-        barangay_facilities = (
-            care_clean
-            .groupby("barangay")
-            .size()
-            .reset_index(name="Facilities")
+
+        barangay_access[selected_ratio_label] = (
+            barangay_access[selected_ratio["ratio_col"]]
         )
- 
-        barangay_facilities["barangay"] = (
-            barangay_facilities["barangay"]
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
- 
+
         # ==================================================
-        # MERGE
+        # OVERALL ACCESSIBILITY INDEX (all facility types)
         # ==================================================
- 
-        barangay_access = barangay_pop.merge(
-            barangay_facilities,
-            left_on="Barangay",
-            right_on="barangay",
-            how="left"
-        )
- 
-        barangay_access["Facilities"] = (
-            barangay_access["Facilities"]
-            .fillna(0)
-        )
- 
-        # ==================================================
-        # INDICATORS
-        # ==================================================
- 
-        barangay_access[
-            "Facilities per 10k Population"
-        ] = (
+
+        barangay_access["Facilities per 10k Population"] = (
             barangay_access["Facilities"]
             /
             barangay_access["Total"]
             * 10000
         )
- 
-        barangay_access[
-            "Care Gap Index"
-        ] = (
+
+        barangay_access["Care Demand per Facility"] = (
             barangay_access["Total"]
             /
             barangay_access["Facilities"]
         )
- 
+
         barangay_access = barangay_access.replace(
             [np.inf, -np.inf],
             np.nan
         )
- 
-        # ==================================================
-        # ACCESSIBILITY INDEX
-        # ==================================================
- 
+
         min_score = (
             barangay_access[
                 "Facilities per 10k Population"
             ].min()
         )
- 
+
         max_score = (
             barangay_access[
                 "Facilities per 10k Population"
             ].max()
         )
- 
+
         barangay_access[
             "Accessibility Index"
         ] = (
@@ -6149,26 +6609,27 @@ elif page == "Accessibility Analysis":
                 - min_score
             )
         ) * 100
- 
+
         barangay_access = (
             barangay_access
             .round(2)
-        ) 
+        )
+
         # ==================================================
         # KPI CARDS
         # ==================================================
- 
+
         no_facilities = (
             barangay_access["Facilities"] == 0
         ).sum()
- 
+
         avg_access = round(
             barangay_access[
                 "Accessibility Index"
             ].mean(),
             1
         )
- 
+
         top_barangay = (
             barangay_access.loc[
                 barangay_access[
@@ -6177,72 +6638,82 @@ elif page == "Accessibility Analysis":
                 "Barangay"
             ]
         )
- 
+
         c1, c2, c3 = st.columns(3)
- 
+
         c1.metric(
             "Average Accessibility",
             avg_access
         )
- 
+
         c2.metric(
             "Barangays Without Facilities",
             int(no_facilities)
         )
- 
+
         c3.metric(
             "Best Served Barangay",
             str(top_barangay)
         )
- 
+
         st.divider()
- 
+
         # ==================================================
-        # BARANGAY MAP
+        # BARANGAY MAP — driven by the selected ratio
         # ==================================================
- 
+
         barangay_geo = gpd.read_file(
             "processed/qc_barangays.geojson"
         )
- 
+
         barangay_geo["barangay_name"] = (
             barangay_geo["barangay_name"]
             .astype(str)
             .str.strip()
             .str.upper()
         )
- 
+
+        barangay_access["Barangay_key"] = (
+            barangay_access["Barangay"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
         barangay_geo = barangay_geo.merge(
             barangay_access[
                 [
                     "Barangay",
+                    "Barangay_key",
                     "Facilities",
                     "Total",
-                    "Accessibility Index"
+                    "Accessibility Index",
+                    selected_ratio_label
                 ]
             ],
             left_on="barangay_name",
-            right_on="Barangay",
+            right_on="Barangay_key",
             how="left"
         )
- 
+
         st.subheader(
-            "Barangay Accessibility Map"
+            f"Barangay Map — {selected_ratio_label}"
         )
- 
+
         st.caption(
-            "Darker = higher Accessibility Index = more facilities "
-            "relative to population (better served)."
+            "Darker = higher ratio = more facilities of this "
+            "type relative to the population they serve "
+            "(better served)."
         )
- 
+
         def purd_color(value, vmin, vmax):
- 
+
             if pd.isna(value) or vmax == vmin:
                 return [217, 217, 217, 120]
- 
+
             t = (value - vmin) / (vmax - vmin)
             t = min(max(t, 0), 1)
- 
+
             # Light lavender -> deep magenta/purple, approximating
             # the matplotlib "PuRd" colormap used by folium.Choropleth
             stops = [
@@ -6252,42 +6723,42 @@ elif page == "Accessibility Analysis":
                 (0.75, (174, 1, 126)),
                 (1.00, (103, 0, 31))
             ]
- 
+
             for i in range(len(stops) - 1):
- 
+
                 t0, c0 = stops[i]
                 t1, c1 = stops[i + 1]
- 
+
                 if t0 <= t <= t1:
- 
+
                     local_t = (
                         (t - t0) / (t1 - t0)
                         if t1 > t0 else 0
                     )
- 
+
                     r = c0[0] + (c1[0] - c0[0]) * local_t
                     g = c0[1] + (c1[1] - c0[1]) * local_t
                     b = c0[2] + (c1[2] - c0[2]) * local_t
- 
+
                     return [int(r), int(g), int(b), 215]
- 
+
             return [103, 0, 31, 215]
- 
-        access_min = barangay_geo["Accessibility Index"].min()
-        access_max = barangay_geo["Accessibility Index"].max()
- 
-        barangay_geo["fill_color"] = barangay_geo["Accessibility Index"].apply(
-            lambda v: purd_color(v, access_min, access_max)
+
+        ratio_min = barangay_geo[selected_ratio_label].min()
+        ratio_max = barangay_geo[selected_ratio_label].max()
+
+        barangay_geo["fill_color"] = barangay_geo[selected_ratio_label].apply(
+            lambda v: purd_color(v, ratio_min, ratio_max)
         )
- 
+
         barangay_choropleth_geojson = json.loads(
             barangay_geo.to_json()
         )
- 
+
         # ------------------------------------------
         # VIEW STATE
         # ------------------------------------------
- 
+
         view_state = pdk.ViewState(
             latitude=center_lat,
             longitude=center_lon,
@@ -6296,11 +6767,11 @@ elif page == "Accessibility Analysis":
             min_zoom=11,
             max_zoom=17,
         )
- 
+
         # ------------------------------------------
         # Barangay choropleth
         # ------------------------------------------
- 
+
         barangay_choropleth_layer = pdk.Layer(
             "GeoJsonLayer",
             data=barangay_choropleth_geojson,
@@ -6312,17 +6783,18 @@ elif page == "Accessibility Analysis":
             pickable=True,
             auto_highlight=True
         )
- 
+
         # ------------------------------------------
         # TOOLTIP
         # ------------------------------------------
- 
+
         tooltip = {
-            "html": """
-            <b>{Barangay}</b><br/>
-            Facilities: {Facilities}<br/>
-            Population: {Total}<br/>
-            Accessibility Index: {Accessibility Index}
+            "html": f"""
+            <b>{{Barangay}}</b><br/>
+            {selected_ratio_label}: {{{selected_ratio_label}}}<br/>
+            Facilities (any type): {{Facilities}}<br/>
+            Population: {{Total}}<br/>
+            Accessibility Index: {{Accessibility Index}}
             """,
             "style": {
                 "backgroundColor": "white",
@@ -6330,11 +6802,11 @@ elif page == "Accessibility Analysis":
                 "fontSize": "12px"
             }
         }
- 
+
         # ------------------------------------------
         # MAP
         # ------------------------------------------
- 
+
         deck = pdk.Deck(
             layers=[
                 barangay_choropleth_layer
@@ -6343,46 +6815,47 @@ elif page == "Accessibility Analysis":
             tooltip=tooltip,
             map_style="light"
         )
- 
+
         st.pydeck_chart(
             deck,
             height=750,
             width='stretch'
         )
- 
+
         st.divider()
- 
+
         # ==================================================
-        # MOST UNDERSERVED BARANGAYS
+        # MOST UNDERSERVED BARANGAYS (by the selected ratio)
         # ==================================================
- 
+
         underserved = (
             barangay_access
+            .dropna(subset=[selected_ratio_label])
             .sort_values(
-                "Accessibility Index"
+                selected_ratio_label
             )
             .head(20)
         )
- 
+
         fig = px.bar(
             underserved,
-            x="Accessibility Index",
+            x=selected_ratio_label,
             y="Barangay",
             orientation="h",
-            color="Accessibility Index",
+            color=selected_ratio_label,
             color_continuous_scale="Reds",
-            title="Most Underserved Barangays"
+            title=f"Most Underserved Barangays — {selected_ratio_label}"
         )
- 
+
         st.plotly_chart(
             fig,
             width="stretch"
         )
- 
+
         # ==================================================
         # POPULATION VS FACILITIES
         # ==================================================
- 
+
         fig = px.scatter(
             barangay_access,
             x="Total",
@@ -6391,29 +6864,36 @@ elif page == "Accessibility Analysis":
             hover_name="Barangay",
             color="Accessibility Index",
             color_continuous_scale="Purples",
-            title="Population vs Facilities"
+            title="Population vs Facilities (All Types)"
         )
- 
+
         st.plotly_chart(
             fig,
             width="stretch"
         )
- 
+
         st.divider()
- 
+
         # ==================================================
         # PRIORITY BARANGAYS
         # ==================================================
- 
+
         st.subheader(
             "Priority Barangays"
         )
- 
+
+        st.caption(
+            f"Ranked by lowest {selected_ratio_label}, then by "
+            "highest population (areas where the gap affects "
+            "the most people)."
+        )
+
         priority_barangays = (
             barangay_access
+            .dropna(subset=[selected_ratio_label])
             .sort_values(
                 [
-                    "Accessibility Index",
+                    selected_ratio_label,
                     "Total"
                 ],
                 ascending=[
@@ -6423,7 +6903,7 @@ elif page == "Accessibility Analysis":
             )
             .head(25)
         )
- 
+
         st.dataframe(
             priority_barangays[
                 [
@@ -6431,35 +6911,42 @@ elif page == "Accessibility Analysis":
                     "District",
                     "Total",
                     "Facilities",
-                    "Facilities per 10k Population",
+                    selected_ratio_label,
                     "Accessibility Index"
                 ]
             ],
             width="stretch"
         )
- 
+
         st.divider()
- 
+
         # ==================================================
         # FULL TABLE
         # ==================================================
- 
+
         st.subheader(
             "Barangay Accessibility Indicators"
         )
- 
+
         st.dataframe(
-            barangay_access,
+            barangay_access[
+                [
+                    "Barangay",
+                    "District",
+                    "Total",
+                    "Facilities",
+                    selected_ratio_label,
+                    "Facilities per 10k Population",
+                    "Accessibility Index",
+                    "Care Demand per Facility"
+                ]
+            ],
             width="stretch"
         )
 
 elif page == "Care Planning & Investment Priorities":
 
     import geopandas as gpd
-
-    care = pd.read_csv(
-        "processed/care_v3.csv"
-    )
 
     st.markdown(
         """
@@ -6481,7 +6968,7 @@ elif page == "Care Planning & Investment Priorities":
     care-related investments may have the greatest impact.
 
     The analysis combines population demand,
-    existing infrastructure, care burden,
+    existing infrastructure, care demand,
     and service diversity to prioritize
     areas for intervention.
     """)
@@ -6501,7 +6988,7 @@ elif page == "Care Planning & Investment Priorities":
         | Indicator | What it measures | Direction | Weight |
         |---|---|---|---|
         | **Population** | Total residents in the barangay | Larger population → higher priority | 35% |
-        | **Care Burden** | Children (0–5) + older persons (60+) — the age groups that rely most on care services | Larger care burden → higher priority | 35% |
+        | **Care Demand** | Children (0–5) + older persons (60+) — the age groups that rely most on care services | Larger care demand → higher priority | 35% |
         | **Facilities** | Number of registered care facilities of any kind (childcare, schools, health centers, elder care, etc.) | Fewer facilities → higher priority | 20% |
         | **Service Diversity** | Number of *distinct types* of care service present (e.g. having both a school and a health center counts as more diverse than two schools) | Less diversity → higher priority | 10% |
 
@@ -6513,7 +7000,7 @@ elif page == "Care Planning & Investment Priorities":
         - **Facilities per 10k Population** — facility count normalized
           by population, so large and small barangays can be compared
           fairly. *Higher is better* (more facilities relative to people).
-        - **Care Burden per Facility** — how many children + older
+        - **Care Demand per Facility** — how many children + older
           persons each facility would need to serve on average if
           demand were spread evenly. *Lower is better.*
         - **Children per Facility / Elderly per Facility** — the same
@@ -6523,122 +7010,70 @@ elif page == "Care Planning & Investment Priorities":
           + Long-Term Care for the elderly). *Lower is better* for both.
         - **Care Desert** — a barangay with **zero** registered care
           facilities of any kind. This is a flag, not a score.
+
+        **Does this include climate risk?** No. The only climate/flood
+        data available (processed/indicators/climate.csv) is a
+        city-wide WorldPop estimate with no barangay or district
+        breakdown, so it cannot be incorporated into a barangay-level
+        score — there's nothing at that resolution to rank barangays
+        against. If barangay-level flood or heat exposure data becomes
+        available, it could be added as a fifth weighted indicator
+        here; until then, "underserved" on this page reflects
+        population and facility supply only, not hazard exposure.
         """)
 
     # ==================================================
-    # CLEAN POPULATION
+    # BARANGAY DATA (from demographics.csv — facility
+    # counts by type, age/sex population, and PWD/senior
+    # registrations are all already at barangay level, so
+    # no merge against care_v3.csv or population_age is
+    # needed for this page anymore)
     # ==================================================
 
-    pop = population_age.copy()
+    barangay_access = demographics.copy()
 
-    # apply_barangay_mapping() pulls the final "Barangay"
-    # value from barangay_district_mapping.csv's BARANGAY
-    # column, which is title-case (e.g. "Greater Lagro"),
-    # not uppercase. Every merge key on this page (care_clean,
-    # barangay_geo["barangay_name"]) is uppercased, so this
-    # must be normalized too or barangays like Greater Lagro
-    # silently fail to match and show as 0 facilities.
-    pop["Barangay"] = (
-        pop["Barangay"]
-        .astype(str)
-        .str.strip()
-        .str.upper()
+    barangay_access = barangay_access.rename(
+        columns={
+            "barangay": "Barangay",
+            "district": "District",
+            "pop_census": "Total",
+            "Total": "Facilities"
+        }
     )
 
-    age_cols = [
-        "0-5 (Early Childhood)",
-        "6-17 (School Age Children)",
-        "18-59 (Working Age Adult)",
-        "60+ (Elderly)",
-        "Total"
+    # ==================================================
+    # SERVICE DIVERSITY
+    # (count of distinct facility types present — Childcare,
+    # Health centers, Long-term care and rehabilitation
+    # services, Older persons care, Quezon City satellite
+    # offices for services, Schools, Trainings — mirrors the
+    # old major_division.nunique() from care_v3.csv, since
+    # these are the same seven categories)
+    # ==================================================
+
+    facility_type_cols = [
+        "Childcare",
+        "Health centers",
+        "Long-term care and rehabilitation services",
+        "Older persons care",
+        "Quezon City satellite offices for services",
+        "Schools",
+        "Trainings"
     ]
-
-    for col in age_cols:
-
-        pop[col] = (
-            pop[col]
-            .astype(str)
-            .str.replace(",", "")
-            .astype(float)
-        )
-
-    # ==================================================
-    # CLEAN CARE DATA
-    # ==================================================
-
-    care_clean = care.copy()
-
-    care_clean["barangay"] = (
-        care_clean["barangay"]
-        .astype(str)
-        .str.strip()
-        .str.upper()
-    )
-
-    care_clean = care_clean[
-        care_clean["barangay"].notna()
-    ]
-
-    # ==================================================
-    # FACILITY COUNTS
-    # ==================================================
-
-    facility_counts = (
-        care_clean
-        .groupby("barangay")
-        .size()
-        .reset_index(name="Facilities")
-    )
-
-    # ==================================================
-    # DIVERSITY INDEX
-    # ==================================================
-
-    diversity = (
-        care_clean
-        .groupby("barangay")["major_division"]
-        .nunique()
-        .reset_index(name="Service Diversity")
-    )
-
-    # ==================================================
-    # POPULATION
-    # ==================================================
-
-    barangay_access = (
-        pop.merge(
-            facility_counts,
-            left_on="Barangay",
-            right_on="barangay",
-            how="left"
-        )
-    )
-
-    barangay_access = barangay_access.merge(
-        diversity,
-        left_on="Barangay",
-        right_on="barangay",
-        how="left"
-    )
-
-    barangay_access["Facilities"] = (
-        barangay_access["Facilities"]
-        .fillna(0)
-    )
 
     barangay_access["Service Diversity"] = (
-        barangay_access["Service Diversity"]
-        .fillna(0)
+        (barangay_access[facility_type_cols] > 0)
+        .sum(axis=1)
     )
 
     # ==================================================
-    # CARE BURDEN
+    # CARE DEMAND
     # ==================================================
 
-    barangay_access["Care Burden"] = (
-        barangay_access["0-5 (Early Childhood)"]
+    barangay_access["Care Demand"] = (
+        barangay_access["age_0_5"]
         +
-        barangay_access["60+ (Elderly)"]
+        barangay_access["age_60plus"]
     )
 
     barangay_access["Facilities per 10k Population"] = (
@@ -6648,8 +7083,8 @@ elif page == "Care Planning & Investment Priorities":
         * 10000
     )
 
-    barangay_access["Care Burden per Facility"] = (
-        barangay_access["Care Burden"]
+    barangay_access["Care Demand per Facility"] = (
+        barangay_access["Care Demand"]
         /
         barangay_access["Facilities"]
     )
@@ -6661,17 +7096,40 @@ elif page == "Care Planning & Investment Priorities":
 
     # ==================================================
     # CHILDREN / ELDERLY PER FACILITY
-    # (adapted from the supply & cluster indicator
-    # notebooks, which compute child_per_facility and
-    # elderly_per_facility separately rather than as
-    # a single combined "Care Burden" — useful to see
-    # whether a barangay's gap is specifically in
-    # childcare/school capacity or in elder care capacity)
+    # (split out from the combined "Care Demand" figure —
+    # useful to see whether a barangay's gap is specifically
+    # in childcare/school capacity or in elder care capacity.
+    # Computed directly from demographics.csv's per-type
+    # facility columns rather than via
+    # compute_population_per_facility(), which needed a
+    # major_division column from care_v3.csv that no longer
+    # backs this page.)
     # ==================================================
 
-    barangay_access = compute_population_per_facility(
-        barangay_access,
-        care_clean
+    barangay_access["Child-Serving Facilities"] = (
+        barangay_access["Childcare"]
+        +
+        barangay_access["Schools"]
+    )
+
+    barangay_access["Elderly-Serving Facilities"] = (
+        barangay_access["Older persons care"]
+        +
+        barangay_access["Long-term care and rehabilitation services"]
+    )
+
+    barangay_access["Children per Facility"] = np.where(
+        barangay_access["Child-Serving Facilities"] != 0,
+        barangay_access["age_0_5"]
+        / barangay_access["Child-Serving Facilities"],
+        np.nan
+    )
+
+    barangay_access["Elderly per Facility"] = np.where(
+        barangay_access["Elderly-Serving Facilities"] != 0,
+        barangay_access["age_60plus"]
+        / barangay_access["Elderly-Serving Facilities"],
+        np.nan
     )
 
     # ==================================================
@@ -6685,8 +7143,8 @@ elif page == "Care Planning & Investment Priorities":
         )
     )
 
-    barangay_access["Burden Rank"] = (
-        barangay_access["Care Burden"]
+    barangay_access["Demand Rank"] = (
+        barangay_access["Care Demand"]
         .rank(
             ascending=False
         )
@@ -6711,7 +7169,7 @@ elif page == "Care Planning & Investment Priorities":
     # ==================================================
 
     # Each *_Rank column above uses rank 1 = "worst off" on that
-    # metric (rank(ascending=False) for Population/Burden puts
+    # metric (rank(ascending=False) for Population/Demand puts
     # the largest value at rank 1; rank(ascending=True) for
     # Facilities/Diversity puts the smallest value, e.g. 0
     # facilities, at rank 1). Summing those raw ranks directly
@@ -6725,7 +7183,7 @@ elif page == "Care Planning & Investment Priorities":
     barangay_access["Priority Score"] = (
         (n_barangays + 1 - barangay_access["Population Rank"]) * 0.35
         +
-        (n_barangays + 1 - barangay_access["Burden Rank"]) * 0.35
+        (n_barangays + 1 - barangay_access["Demand Rank"]) * 0.35
         +
         (n_barangays + 1 - barangay_access["Facility Rank"]) * 0.20
         +
@@ -6900,7 +7358,7 @@ elif page == "Care Planning & Investment Priorities":
     tooltip_fields = [
         "Barangay",
         "Facilities",
-        "Care Burden",
+        "Care Demand",
         "Service Diversity",
         "Priority Score"
     ]
@@ -6918,7 +7376,7 @@ elif page == "Care Planning & Investment Priorities":
 
     # Round numeric fields and substitute a clear placeholder
     # for missing values so the tooltip never shows blank.
-    for col in ["Facilities", "Care Burden", "Service Diversity", "Priority Score"]:
+    for col in ["Facilities", "Care Demand", "Service Diversity", "Priority Score"]:
         priority_map[col] = priority_map[col].round(1)
 
     priority_map[tooltip_fields] = priority_map[tooltip_fields].fillna("No data")
@@ -6964,7 +7422,7 @@ elif page == "Care Planning & Investment Priorities":
         "html": """
         <b>{Barangay}</b><br/>
         Facilities: {Facilities}<br/>
-        Care Burden: {Care Burden}<br/>
+        Care Demand: {Care Demand}<br/>
         Service Diversity: {Service Diversity}<br/>
         Priority Score: {Priority Score}
         """,
@@ -7011,7 +7469,7 @@ elif page == "Care Planning & Investment Priorities":
                 "District",
                 "Total",
                 "Facilities",
-                "Care Burden",
+                "Care Demand",
                 "Service Diversity",
                 "Priority Score"
             ]
@@ -7056,7 +7514,7 @@ elif page == "Care Planning & Investment Priorities":
             barangay_access["Facilities"] == 0
         ]
         .sort_values(
-            "Care Burden",
+            "Care Demand",
             ascending=False
         )
     )
@@ -7079,7 +7537,7 @@ elif page == "Care Planning & Investment Priorities":
                 "Barangay",
                 "District",
                 "Total",
-                "Care Burden",
+                "Care Demand",
                 "Priority Score"
             ]
         ],
@@ -7102,10 +7560,10 @@ elif page == "Care Planning & Investment Priorities":
 
         fig = px.scatter(
             barangay_access,
-            x="Care Burden",
+            x="Care Demand",
             y="Priority Score",
             hover_name="Barangay",
-            title="Care Burden vs Priority Score",
+            title="Care Demand vs Priority Score",
             color="Priority Score"
         )
 
@@ -7178,7 +7636,7 @@ elif page == "Care Planning & Investment Priorities":
     )
 
     st.markdown("""
-    "Care Burden" above combines young children and
+    "Care Demand" above combines young children and
     older persons into a single figure. The indicators
     below separate the two groups, dividing each
     population by the number of facilities that
@@ -7278,14 +7736,19 @@ elif page == "Care Planning & Investment Priorities":
             [
                 "Barangay",
                 "District",
-                "0-5 (Early Childhood)",
+                "age_0_5",
                 "Child-Serving Facilities",
                 "Children per Facility",
-                "60+ (Elderly)",
+                "age_60plus",
                 "Elderly-Serving Facilities",
                 "Elderly per Facility"
             ]
-        ].sort_values("Children per Facility", ascending=False),
+        ].rename(
+            columns={
+                "age_0_5": "Children (0-5)",
+                "age_60plus": "Older Persons (60+)"
+            }
+        ).sort_values("Children per Facility", ascending=False),
         width="stretch"
     )
 
@@ -7314,10 +7777,6 @@ elif page == "Barangay Clusters":
     import geopandas as gpd
     import plotly.graph_objects as go
 
-    care = pd.read_csv(
-        "processed/care_v3.csv"
-    )
-
     st.markdown(
         """
         <h2 style="
@@ -7335,23 +7794,30 @@ elif page == "Barangay Clusters":
 
     st.markdown("""
     This page groups barangays into clusters that share
-    similar demographic and care-service profiles —
-    adapted from the project's clustering methodology
-    (K-means on standardized indicators). Clustering
-    helps surface neighborhoods that face comparable
-    pressures (e.g. dense and young vs. sparse and
-    older, or service-rich vs. service-poor) so that
-    interventions can be tailored by *type* of
-    barangay rather than one at a time.
+    similar demographic, accessibility, and socio-economic
+    profiles — adapted from the project's clustering
+    methodology (K-means on standardized indicators).
+    Clustering helps surface neighborhoods that face
+    comparable pressures (e.g. dense and young vs. sparse
+    and older, well-served vs. underserved, or higher vs.
+    lower deprivation) so that interventions can be
+    tailored by *type* of barangay rather than one at a
+    time.
 
-    **Features used:** population density, share of
-    children (0-17), share of older persons (60+),
-    and the mix of care services present locally (e.g.
-    share of facilities that are Childcare, Schools,
-    Health centers, Older Persons Care, etc.) — standing
-    in for the land-use mix used in the original
-    notebooks, since Quezon City's data is facility-based
-    rather than raster-based.
+    **Features used:**
+    - **Demographic** — population density, share of
+      children (0–17), share of older persons (60+), sex
+      ratio (males per 100 females)
+    - **Accessibility** — facilities of any kind per 10,000
+      residents, plus the mix of facility types present
+      locally (share that are Childcare, Health centers,
+      Long-Term Care & Rehabilitation, or Schools — the
+      four types common enough across barangays to carry
+      real signal)
+    - **Socio-economic** — disability prevalence rate, food
+      insecurity prevalence, housing inadequacy index
+      (all from the 2024 CBMS), and registered migrant
+      workers per 1,000 residents
     """)
 
     # ==================================================
@@ -7470,22 +7936,6 @@ elif page == "Barangay Clusters":
     )
 
     # ==================================================
-    # CARE DATA
-    # ==================================================
-
-    care_clean = care.copy()
-
-    care_clean["barangay"] = (
-        care_clean["barangay"]
-        .astype(str)
-        .str.strip()
-    )
-
-    care_clean = care_clean[
-        care_clean["barangay"].notna()
-    ]
-
-    # ==================================================
     # BUILD FEATURES & RUN CLUSTERING
     # ==================================================
 
@@ -7502,7 +7952,7 @@ elif page == "Barangay Clusters":
 
     cluster_features_df, feature_cols = build_cluster_features(
         pop_geo,
-        care_clean
+        demographics
     )
 
     clustered, scaled_features = run_barangay_clustering(
@@ -7615,7 +8065,8 @@ elif page == "Barangay Clusters":
         Population: {Total}<br/>
         Density (per km²): {population_density}<br/>
         Children Share (%): {children_pct}<br/>
-        Older Persons Share (%): {elderly_pct}
+        Older Persons Share (%): {elderly_pct}<br/>
+        Facilities per 10k Pop.: {facilities_per_10k}
         """,
         "style": {
             "backgroundColor": "white",
@@ -7683,8 +8134,28 @@ elif page == "Barangay Clusters":
         .mean()
     )
 
+    feature_label_map = {
+        "population_density": "Population Density",
+        "children_pct": "% Children (0-17)",
+        "elderly_pct": "% Older Persons (60+)",
+        "facilities_per_10k": "Facilities per 10k Pop.",
+        "share_childcare": "% Facilities: Childcare",
+        "share_health_centers": "% Facilities: Health",
+        "share_long-term_care_and_rehabilitation_services":
+            "% Facilities: Long-Term Care",
+        "share_schools": "% Facilities: Schools",
+        "sex_ratio_m_per_100f": "Sex Ratio (M/100F)",
+        "disability_prevalence_rate_pct": "Disability Prevalence",
+        "cbms_food_insecurity_prevalence_pct": "Food Insecurity",
+        "cbms_housing_inadequacy_index_pct": "Housing Inadequacy",
+        "migrant_per_1000": "Migrant Workers per 1,000"
+    }
+
     radar_labels = [
-        c.replace("share_", "% ").replace("_", " ")
+        feature_label_map.get(
+            c,
+            c.replace("share_", "% ").replace("_", " ")
+        )
         for c in feature_cols
     ]
 
@@ -7731,7 +8202,12 @@ elif page == "Barangay Clusters":
         "Total",
         "population_density",
         "children_pct",
-        "elderly_pct"
+        "elderly_pct",
+        "facilities_per_10k",
+        "disability_prevalence_rate_pct",
+        "cbms_food_insecurity_prevalence_pct",
+        "cbms_housing_inadequacy_index_pct",
+        "migrant_per_1000"
     ]
 
     cluster_summary = (
@@ -7752,7 +8228,12 @@ elif page == "Barangay Clusters":
             "Total": "Avg. Population",
             "population_density": "Avg. Density (per km²)",
             "children_pct": "Avg. Children Share (%)",
-            "elderly_pct": "Avg. Elderly Share (%)"
+            "elderly_pct": "Avg. Elderly Share (%)",
+            "facilities_per_10k": "Avg. Facilities per 10k Pop.",
+            "disability_prevalence_rate_pct": "Avg. Disability Prevalence (%)",
+            "cbms_food_insecurity_prevalence_pct": "Avg. Food Insecurity (%)",
+            "cbms_housing_inadequacy_index_pct": "Avg. Housing Inadequacy (%)",
+            "migrant_per_1000": "Avg. Migrant Workers per 1,000"
         }
     )
 
@@ -7786,9 +8267,22 @@ elif page == "Barangay Clusters":
                 "Total",
                 "population_density",
                 "children_pct",
-                "elderly_pct"
+                "elderly_pct",
+                "facilities_per_10k",
+                "disability_prevalence_rate_pct",
+                "cbms_food_insecurity_prevalence_pct"
             ]
-        ].rename(columns={"barangay_name": "Barangay"})
+        ].rename(
+            columns={
+                "barangay_name": "Barangay",
+                "population_density": "Density (per km²)",
+                "children_pct": "Children Share (%)",
+                "elderly_pct": "Elderly Share (%)",
+                "facilities_per_10k": "Facilities per 10k Pop.",
+                "disability_prevalence_rate_pct": "Disability Prevalence (%)",
+                "cbms_food_insecurity_prevalence_pct": "Food Insecurity (%)"
+            }
+        )
         .sort_values("Total", ascending=False),
         width="stretch"
     )
@@ -7811,6 +8305,7 @@ elif page == "Barangay Clusters":
         "barangay_clusters.csv",
         "text/csv"
     )
+
 elif page == "Climate & Hazard Exposure":
 
     st.markdown(
@@ -7835,6 +8330,157 @@ elif page == "Climate & Hazard Exposure":
         100-year flood inundation. Select a layer below.
         """
     )
+
+    # --------------------------------------------------
+    # CITY-WIDE FLOOD RISK CONTEXT (WorldPop)
+    # --------------------------------------------------
+
+    st.subheader(
+        "Citywide Flood Risk by Population Group (WorldPop)"
+    )
+
+    st.warning(
+        "**Preliminary — pending verification.** These "
+        "flood-risk estimates are still being reviewed "
+        "and have not yet been confirmed."
+    )
+
+    st.markdown("""
+    These figures come from a separate WorldPop-based
+    analysis estimating what share of each population group lives inside the
+    high flood-risk zone shown in the "Flood Inundation
+    (100-yr)" layer below.
+
+    **This is city-wide only — there is no barangay or
+    district breakdown for these specific figures.** They
+    can't be added to the barangay/district maps elsewhere
+    in this dashboard, or to the Care Planning Priority
+    Score, until a barangay-level version of this analysis
+    exists (see the note in Care Planning & Investment
+    Priorities for what that would require).
+
+    Every population group shows almost exactly the same
+    ~25% flood-risk share. This isn't a coincidence in the
+    data — WorldPop's age/sex breakdowns are built by
+    applying the same demographic ratios across the
+    population grid, so each subgroup inherits nearly the
+    same spatial distribution as the total population,
+    and therefore nearly the same exposure rate.
+    """)
+
+    # Official indicator names from indicators_codebook.csv —
+    # the "(2020, constrained)" qualifier refers to WorldPop's
+    # constrained population product (population restricted to
+    # known built-up areas) for the total/female/male rows;
+    # the elderly rows don't carry that qualifier in the
+    # codebook, so it's intentionally omitted for those three.
+    climate_label_map = {
+        "Total Population under High Flood Risk (%)":
+            "Total Population (2020, constrained) "
+            "under High Flood Risk (%)",
+        "Female Population under High Flood Risk (%)":
+            "Female Population (2020, constrained) "
+            "under High Flood Risk (%)",
+        "Male Population under High Flood Risk (%)":
+            "Male Population (2020, constrained) "
+            "under High Flood Risk (%)",
+        "Children (0-4) under High Flood Risk (%)":
+            "Children (0-4) under High Flood Risk (%)",
+        "Female Children (0-4) under High Flood Risk (%)":
+            "Female Children (0-4) under High Flood Risk (%)",
+        "Male Children (0-4) under High Flood Risk (%)":
+            "Male Children (0-4) under High Flood Risk (%)",
+        "Elderly (60+) under High Flood Risk (%)":
+            "Elderly Population (60+) under High Flood Risk (%)",
+        "Female Elderly (60+) under High Flood Risk (%)":
+            "Female Elderly (60+) under High Flood Risk (%)",
+        "Male Elderly (60+) under High Flood Risk (%)":
+            "Male Elderly (60+) under High Flood Risk (%)"
+    }
+
+    climate_context_display = climate_context.copy()
+
+    climate_context_display["Indicator"] = (
+        climate_context_display["Indicator"]
+        .map(climate_label_map)
+        .fillna(climate_context_display["Indicator"])
+    )
+
+    flood_total = climate_context[
+        climate_context["Indicator"]
+        == "Total Population under High Flood Risk (%)"
+    ].iloc[0]
+
+    fc1, fc2, fc3 = st.columns(3)
+
+    fc1.metric(
+        "Total Population in High Flood Risk Zone",
+        f"{flood_total['Population in Flood Zone']:,.0f}"
+    )
+
+    fc2.metric(
+        "Share of Citywide Population",
+        f"{flood_total['% under flood risk']:.1f}%"
+    )
+
+    fc3.metric(
+        "Total Population (WorldPop)",
+        f"{flood_total['Total (WorldPop)']:,.0f}"
+    )
+
+    st.divider()
+
+    flood_chart_df = climate_context_display.copy()
+
+    flood_chart_df["Population Group"] = (
+        flood_chart_df["Indicator"]
+        .str.replace(
+            " under High Flood Risk (%)",
+            "",
+            regex=False
+        )
+        .str.replace(
+            " (2020, constrained)",
+            "",
+            regex=False
+        )
+    )
+
+    fig = px.bar(
+        flood_chart_df.sort_values(
+            "Population in Flood Zone",
+            ascending=False
+        ),
+        x="Population Group",
+        y="Population in Flood Zone",
+        color="% under flood risk",
+        color_continuous_scale="Blues",
+        title="Population in High Flood Risk Zone, by Group"
+    )
+
+    fig.update_layout(
+        xaxis_title="",
+        yaxis_title="Population in Flood Zone"
+    )
+
+    st.plotly_chart(
+        fig,
+        width="stretch"
+    )
+
+    st.dataframe(
+        climate_context_display.rename(
+            columns={
+                "Total (WorldPop)": "Total Population",
+                "Population in Flood Zone":
+                    "Population in High Flood Risk Zone",
+                "% under flood risk": "% Under Flood Risk"
+            }
+        ),
+        width="stretch"
+    )
+
+    st.divider()
 
     # --------------------------------------------------
     # LAYER CONFIGURATION
@@ -7991,11 +8637,21 @@ elif page == "Climate & Hazard Exposure":
 
         else:
 
+            st.markdown(
+                render_colormap_legend_html(
+                    active_layer["colormap"],
+                    vmin,
+                    vmax,
+                    unit=active_layer["unit"],
+                    label=active_layer["legend_label"]
+                ),
+                unsafe_allow_html=True
+            )
+
             st.caption(
-                f"Legend: {active_layer['legend_label']} — "
-                f"color scale spans {vmin:.1f} to {vmax:.1f} "
-                f"{active_layer['unit']} (2nd-98th percentile "
-                "of this layer's data)."
+                "Color scale is clipped to the 2nd-98th percentile "
+                "of this layer's data, to avoid a handful of "
+                "extreme pixels flattening the rest of the map."
             )
 
     except Exception as e:
