@@ -788,6 +788,283 @@ def load_demand_context():
     return city_context, district_context
 
 
+@st.cache_data(show_spinner=False)
+def sample_raster_at_points(path, lats, lons):
+    """
+    Samples a single-band GeoTIFF (any CRS) at a list of point
+    coordinates given in EPSG:4326 (lat/lon — the CRS every
+    facility dataframe in this dashboard already uses).
+
+    Returns a numpy array of raw raster values, one per point,
+    in the same order as lats/lons. Points outside the raster's
+    extent, or that land on a nodata pixel, come back as np.nan.
+
+    This is built for exposure-flagging a few hundred facility
+    points against a hazard layer (e.g. "is this health center
+    in the flood zone?") — NOT for sampling a population raster
+    pixel-by-pixel across millions of points, which would need a
+    different (zonal-stats style) approach.
+
+    Implementation notes:
+    - All points are reprojected to the raster's native CRS in
+      one batched pyproj transform, then read via rasterio's
+      src.sample(), which streams values without loading the
+      full raster into memory. This is the "supply-side"
+      counterpart to raster_to_bitmap_layer/raster_to_image_overlay
+      (which render the raster), and to the city-wide WorldPop
+      population-in-flood-zone figures in climate.csv (which are
+      the "demand-side" / population equivalent at a coarser,
+      pre-aggregated level) — this function is what's new:
+      per-facility point exposure.
+    - lats/lons are accepted as tuples (not raw lists/Series) by
+      the caller so this stays hashable for @st.cache_data; see
+      flag_facilities_at_risk below, which handles that
+      conversion.
+    """
+
+    import rasterio
+    from pyproj import Transformer
+
+    with rasterio.open(path) as src:
+
+        src_crs = src.crs
+        nodata = src.nodata
+
+        if src_crs.to_epsg() != 4326:
+
+            transformer = Transformer.from_crs(
+                "EPSG:4326",
+                src_crs,
+                always_xy=True
+            )
+
+            xs, ys = transformer.transform(
+                np.array(lons),
+                np.array(lats)
+            )
+
+        else:
+            xs, ys = np.array(lons), np.array(lats)
+
+        sampled = np.array(
+            [
+                val[0]
+                for val in src.sample(zip(xs, ys))
+            ],
+            dtype="float64"
+        )
+
+        if nodata is not None and not np.isnan(nodata):
+            sampled = np.where(sampled == nodata, np.nan, sampled)
+
+        # Points that fall outside the raster's own bounding box
+        # come back from rasterio as the band's fill value rather
+        # than raising, so they're already covered by the nodata
+        # check above in the normal case. Belt-and-suspenders
+        # bounds check in case nodata is undefined on the source:
+        left, bottom, right, top = src.bounds
+
+        out_of_bounds = (
+            (xs < left) | (xs > right) |
+            (ys < bottom) | (ys > top)
+        )
+
+        sampled = np.where(out_of_bounds, np.nan, sampled)
+
+    return sampled
+
+
+def flag_facilities_at_risk(
+    df,
+    raster_path="processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+    lat_col="latitude",
+    lon_col="longitude",
+    out_col="flood_risk"
+):
+    """
+    Supply-side climate exposure flag: adds a boolean column to
+    a facility dataframe marking which rows sit inside the given
+    hazard raster's "at risk" footprint.
+
+    Built around the flood layer (binary: 1 = >30cm inundation
+    in a 100-yr event, see climate_layers config on the Climate
+    & Hazard Exposure page) since that's the only *binary*
+    raster — a clean yes/no per facility. The continuous layers
+    (LST, NDVI) don't have a single natural risk threshold, so
+    they're intentionally left out of this flag; if a heat
+    threshold is wanted later, sample_raster_at_points already
+    returns raw values, so a cutoff (e.g. "top decile LST") could
+    be added as a second flag column without changing this
+    function's signature.
+
+    Rows with missing/invalid coordinates, or that fall outside
+    the raster extent, get False rather than NaN — "not known to
+    be at risk" — so the column stays a clean boolean usable
+    directly for filtering/counting (df[out_col].sum()).
+
+    Returns a copy of df with out_col added; does not mutate the
+    input.
+    """
+
+    df = df.copy()
+
+    valid = (
+        df[lat_col].notna()
+        & df[lon_col].notna()
+    )
+
+    df[out_col] = False
+
+    if valid.any():
+
+        sampled = sample_raster_at_points(
+            raster_path,
+            tuple(df.loc[valid, lat_col]),
+            tuple(df.loc[valid, lon_col])
+        )
+
+        df.loc[valid, out_col] = (sampled == 1)
+
+    return df
+
+
+@st.cache_data(show_spinner=False)
+def compute_barangay_flood_exposure(
+    raster_path="processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+    barangay_path="processed/qc_barangays.geojson",
+    name_col="barangay_name"
+):
+    """
+    Demand-side, *land-area* counterpart to flag_facilities_at_risk
+    above: for every barangay polygon, computes what share of its
+    land area falls inside the binary flood-inundation mask
+    (>30cm depth, 100-yr event).
+
+    Returns a DataFrame with one row per barangay:
+        [name_col, "flood_area_pct", "barangay_area_km2",
+         "flood_area_km2"]
+
+    IMPORTANT — this is an AREA metric, not a population metric.
+    "60% flood_area_pct" means 60% of that barangay's land area
+    is in the flood footprint; it says nothing on its own about
+    how many people live on that land vs. the dry 40%. Where this
+    is combined with pop_census to estimate an exposed headcount
+    (see the Climate & Hazard Exposure page), that calculation
+    assumes population is spread evenly across the barangay —
+    a simplification made explicit wherever it's displayed, since
+    real settlement patterns are essentially never uniform
+    (e.g. dense housing on high ground, open low-lying fields).
+    A true population-weighted figure would need a population
+    raster (e.g. WorldPop) sampled the same way; none was
+    available at the time this was written, so this area-based
+    proxy is what's wired into the dashboard for now.
+
+    Implementation: for each barangay geometry, rasterio.mask
+    clips the flood raster to that polygon (same masking
+    mechanism as raster_to_bitmap_layer/raster_to_image_overlay
+    use for the whole-city boundary), then flood_area_pct is the
+    clipped pixel count where the mask == 1, divided by total
+    valid pixel count in that clip. Barangays are looped one at a
+    time — a few hundred small clips against an already-binary
+    raster — rather than vectorized, since rasterio.mask works
+    geometry-by-geometry and this only runs once per app session
+    thanks to @st.cache_data.
+    """
+
+    import rasterio
+    from rasterio.warp import transform_geom
+    from rasterio.mask import mask as rio_mask
+
+    barangay_gdf = gpd.read_file(
+        barangay_path,
+        engine="pyogrio"
+    )
+
+    # Land area in km^2 from the polygon geometry itself (not
+    # demographics.csv's area_km2) so this stays self-contained
+    # and usable even if that column's CRS/precision differs —
+    # reproject to a metric CRS (EPSG:3123, the same Philippine
+    # projected CRS the climate rasters already use) purely for
+    # an accurate area calculation, not for the raster clipping
+    # below (which reprojects the geometry per-row instead).
+    barangay_area_km2 = (
+        barangay_gdf.geometry
+        .to_crs("EPSG:3123")
+        .area
+        / 1_000_000
+    )
+
+    results = []
+
+    with rasterio.open(raster_path) as src:
+
+        src_crs = src.crs
+        nodata = src.nodata
+
+        for idx, row in barangay_gdf.iterrows():
+
+            geom_native = transform_geom(
+                "EPSG:4326",
+                src_crs,
+                row.geometry.__geo_interface__
+            )
+
+            try:
+
+                clipped, _ = rio_mask(
+                    src,
+                    [geom_native],
+                    crop=True,
+                    nodata=(
+                        nodata if nodata is not None else -9999
+                    ),
+                    filled=True
+                )
+
+                arr = clipped[0].astype("float64")
+
+                fill_value = (
+                    nodata if nodata is not None else -9999
+                )
+
+                valid = arr != fill_value
+
+                total_valid = valid.sum()
+
+                if total_valid > 0:
+                    flood_pct = (
+                        100
+                        * (arr[valid] == 1).sum()
+                        / total_valid
+                    )
+                else:
+                    flood_pct = np.nan
+
+            except ValueError:
+                # rio_mask raises ValueError when the geometry
+                # doesn't overlap the raster extent at all
+                # (e.g. a barangay fully outside the flood
+                # layer's coverage) — treat as 0% rather than
+                # letting the whole computation fail.
+                flood_pct = 0.0
+
+            results.append({
+                name_col: row[name_col],
+                "flood_area_pct": flood_pct,
+                "barangay_area_km2": barangay_area_km2.loc[idx]
+            })
+
+    result_df = pd.DataFrame(results)
+
+    result_df["flood_area_km2"] = (
+        result_df["barangay_area_km2"]
+        * result_df["flood_area_pct"]
+        / 100
+    )
+
+    return result_df
+
+
 def hex_to_rgb(hex_color):
 
     hex_color = hex_color.lstrip("#")
