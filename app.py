@@ -7992,6 +7992,7 @@ elif page == "Barangay Clusters":
         "text/csv"
     )
 
+
 elif page == "Population Vulnerability":
 
 
@@ -8014,10 +8015,10 @@ elif page == "Population Vulnerability":
         """
         Which segments of the population are most at risk, and
         where. Combines barangay-level flood exposure with one
-        or more vulnerable population groups you choose below
-        into a single Climate Vulnerability Index — the
-        demand-side counterpart to the facility-level flood
-        flagging on the Care Services Explorer page.
+        vulnerable population group you choose below into a
+        single Climate Vulnerability Index — the demand-side
+        counterpart to the facility-level flood flagging on the
+        Care Services Explorer page.
         """
     )
 
@@ -8090,449 +8091,441 @@ elif page == "Population Vulnerability":
             }
         }
 
-        selected_groups = st.multiselect(
-            "Vulnerable population groups to include in the index",
+        selected_group = st.selectbox(
+            "Vulnerable population group to combine with flood "
+            "exposure",
             list(VULNERABILITY_GROUPS.keys()),
-            default=[
-                "Seniors (registered, per 1,000)",
-                "Registered PWDs (per 1,000)"
-            ],
+            index=0,
             help=(
-                "The index always includes flood exposure, plus an "
-                "equal-weighted average of whichever groups you "
-                "select here. A barangay with high flood exposure "
-                "and a high concentration of the selected groups "
-                "will score higher than one with flood exposure "
-                "alone."
+                "The index is an equal-weighted average of flood "
+                "exposure and this one group, so a high score has "
+                "one clear explanation: high flood exposure, a "
+                "high concentration of this group, or both — "
+                "rather than several groups blended into a single "
+                "number you'd have to unpack."
             )
         )
 
-        if not selected_groups:
+        selected_groups = [selected_group]
 
-            st.info(
-                "Select at least one population group above to "
-                "build the vulnerability index."
+        try:
+
+            # ==================================================
+            # BARANGAY FLOOD EXPOSURE (AREA-BASED)
+            # ==================================================
+
+            flood_exposure = compute_barangay_flood_exposure()
+
+            flood_exposure["barangay_key"] = (
+                flood_exposure["barangay_name"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
             )
 
-        else:
+            vuln_barangay = demographics.copy()
 
-            try:
+            vuln_barangay["barangay_key"] = (
+                vuln_barangay["barangay"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
 
-                # ==================================================
-                # BARANGAY FLOOD EXPOSURE (AREA-BASED)
-                # ==================================================
+            vuln_barangay = vuln_barangay.merge(
+                flood_exposure[
+                    ["barangay_key", "flood_area_pct"]
+                ],
+                on="barangay_key",
+                how="left"
+            )
 
-                flood_exposure = compute_barangay_flood_exposure()
+            # --------------------------------------------------
+            # ESTIMATED POPULATION EXPOSED
+            # (area% x pop_census — uniform-density assumption;
+            # see compute_barangay_flood_exposure's docstring.
+            # Repeated as a visible caption below, not just here
+            # in code, since it reads like a precise headcount
+            # if seen on its own.)
+            # --------------------------------------------------
 
-                flood_exposure["barangay_key"] = (
-                    flood_exposure["barangay_name"]
-                    .astype(str)
-                    .str.strip()
-                    .str.upper()
+            vuln_barangay["est_population_exposed"] = (
+                vuln_barangay["pop_census"]
+                * vuln_barangay["flood_area_pct"]
+                / 100
+            )
+
+            # --------------------------------------------------
+            # DERIVE ANY ON-THE-FLY RATE COLUMNS
+            # (only for groups the user actually selected, so
+            # an unused derive doesn't risk a divide-by-zero or
+            # NaN column nobody asked for)
+            # --------------------------------------------------
+
+            for label in selected_groups:
+
+                group = VULNERABILITY_GROUPS[label]
+
+                if group["derive"] is not None:
+
+                    count_col, denom_col = group["derive"]
+
+                    vuln_barangay[group["rate_col"]] = (
+                        vuln_barangay[count_col]
+                        / vuln_barangay[denom_col]
+                        * 1000
+                    )
+
+            # --------------------------------------------------
+            # VULNERABILITY INDEX
+            # (flood area% rescaled 0-100, averaged with the one
+            # selected group's rate — also rescaled 0-100 — so
+            # both components contribute equally regardless of
+            # their raw units, and the index updates live as the
+            # group selection changes above. Simple, transparent
+            # average of exactly two components (not a weighted/
+            # PCA-based index of many), so a high score always has
+            # one clear explanation: "this barangay scores high
+            # because of high flood exposure, a high concentration
+            # of the selected group, or both" — not a blended
+            # number that needs unpacking to interpret.)
+            # --------------------------------------------------
+
+            def rescale_0_100(series):
+
+                min_v = series.min()
+                max_v = series.max()
+
+                if (
+                    pd.isna(min_v)
+                    or pd.isna(max_v)
+                    or max_v == min_v
+                ):
+                    return pd.Series(0, index=series.index)
+
+                return (
+                    (series - min_v)
+                    / (max_v - min_v)
+                    * 100
                 )
 
-                vuln_barangay = demographics.copy()
+            score_cols = ["exposure_score"]
 
-                vuln_barangay["barangay_key"] = (
-                    vuln_barangay["barangay"]
-                    .astype(str)
-                    .str.strip()
-                    .str.upper()
+            vuln_barangay["exposure_score"] = rescale_0_100(
+                vuln_barangay["flood_area_pct"]
+            )
+
+            for label in selected_groups:
+
+                group = VULNERABILITY_GROUPS[label]
+                score_col = f"score__{group['rate_col']}"
+
+                vuln_barangay[score_col] = rescale_0_100(
+                    vuln_barangay[group["rate_col"]]
                 )
 
-                vuln_barangay = vuln_barangay.merge(
-                    flood_exposure[
-                        ["barangay_key", "flood_area_pct"]
-                    ],
-                    on="barangay_key",
-                    how="left"
+                score_cols.append(score_col)
+
+            vuln_barangay["vulnerability_index"] = (
+                vuln_barangay[score_cols].sum(
+                    axis=1,
+                    skipna=False
                 )
+                / len(score_cols)
+            )
 
-                # --------------------------------------------------
-                # ESTIMATED POPULATION EXPOSED
-                # (area% x pop_census — uniform-density assumption;
-                # see compute_barangay_flood_exposure's docstring.
-                # Repeated as a visible caption below, not just here
-                # in code, since it reads like a precise headcount
-                # if seen on its own.)
-                # --------------------------------------------------
+            st.caption(
+                "⚠ \"Estimated population exposed\" assumes each "
+                "barangay's population is spread evenly across "
+                "its land area — a planning estimate, not a "
+                "measured headcount. The Vulnerability Index is "
+                "an equal-weighted average of flood exposure and "
+                f"\"{selected_group}\", each rescaled 0-100; it is "
+                "a relative ranking tool, not an absolute risk "
+                "score."
+            )
 
-                vuln_barangay["est_population_exposed"] = (
-                    vuln_barangay["pop_census"]
-                    * vuln_barangay["flood_area_pct"]
-                    / 100
+            # ==================================================
+            # KPIs
+            # ==================================================
+
+            total_exposed_est = int(
+                vuln_barangay["est_population_exposed"].sum()
+            )
+
+            top_exposed_barangay = (
+                vuln_barangay
+                .dropna(subset=["est_population_exposed"])
+                .sort_values(
+                    "est_population_exposed",
+                    ascending=False
                 )
+                .iloc[0]
+            )
 
-                # --------------------------------------------------
-                # DERIVE ANY ON-THE-FLY RATE COLUMNS
-                # (only for groups the user actually selected, so
-                # an unused derive doesn't risk a divide-by-zero or
-                # NaN column nobody asked for)
-                # --------------------------------------------------
+            top_vulnerable_barangay = (
+                vuln_barangay
+                .dropna(subset=["vulnerability_index"])
+                .sort_values(
+                    "vulnerability_index",
+                    ascending=False
+                )
+                .iloc[0]
+            )
 
-                for label in selected_groups:
+            v1, v2, v3 = st.columns(3)
 
-                    group = VULNERABILITY_GROUPS[label]
+            v1.metric(
+                "Est. Citywide Population Exposed",
+                f"{total_exposed_est:,}"
+            )
 
-                    if group["derive"] is not None:
+            v2.metric(
+                "Most Exposed Barangay",
+                str(top_exposed_barangay["barangay"]),
+                f"{top_exposed_barangay['est_population_exposed']:,.0f} est. residents"
+            )
 
-                        count_col, denom_col = group["derive"]
+            v3.metric(
+                "Most Vulnerable Barangay",
+                str(top_vulnerable_barangay["barangay"]),
+                f"Index: {top_vulnerable_barangay['vulnerability_index']:.0f}/100"
+            )
 
-                        vuln_barangay[group["rate_col"]] = (
-                            vuln_barangay[count_col]
-                            / vuln_barangay[denom_col]
-                            * 1000
+            st.divider()
+
+            # ==================================================
+            # CHOROPLETH MAP
+            # ==================================================
+
+            barangay_geo_vuln = gpd.read_file(
+                "processed/qc_barangays.geojson",
+                engine="pyogrio"
+            )
+
+            barangay_geo_vuln["barangay_name"] = (
+                barangay_geo_vuln["barangay_name"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
+            merge_cols = (
+                [
+                    "barangay_key",
+                    "barangay",
+                    "flood_area_pct",
+                    "est_population_exposed",
+                    "vulnerability_index"
+                ]
+                + [
+                    VULNERABILITY_GROUPS[label]["rate_col"]
+                    for label in selected_groups
+                ]
+            )
+
+            barangay_geo_vuln = barangay_geo_vuln.merge(
+                vuln_barangay[merge_cols],
+                left_on="barangay_name",
+                right_on="barangay_key",
+                how="left"
+            )
+
+            def reds_color(value, vmin, vmax):
+
+                if pd.isna(value) or vmax == vmin:
+                    return [217, 217, 217, 120]
+
+                t = (value - vmin) / (vmax - vmin)
+                t = min(max(t, 0), 1)
+
+                stops = [
+                    (0.00, (255, 245, 240)),
+                    (0.25, (252, 187, 161)),
+                    (0.50, (252, 146, 114)),
+                    (0.75, (222, 45, 38)),
+                    (1.00, (103, 0, 13))
+                ]
+
+                for i in range(len(stops) - 1):
+
+                    t0, c0 = stops[i]
+                    t1, c1 = stops[i + 1]
+
+                    if t0 <= t <= t1:
+
+                        local_t = (
+                            (t - t0) / (t1 - t0)
+                            if t1 > t0 else 0
                         )
 
-                # --------------------------------------------------
-                # VULNERABILITY INDEX
-                # (flood area% rescaled 0-100, averaged with each
-                # selected group's rate — also rescaled 0-100 — so
-                # every component contributes equally regardless of
-                # its raw units, and the index updates live as
-                # groups are added/removed above. Simple, transparent
-                # average rather than a weighted/PCA-based index, so
-                # the result stays easy to explain: "this barangay
-                # scores high because it combines high flood exposure
-                # with a high [selected groups] share," not a black
-                # box.)
-                # --------------------------------------------------
+                        r = c0[0] + (c1[0] - c0[0]) * local_t
+                        g = c0[1] + (c1[1] - c0[1]) * local_t
+                        b = c0[2] + (c1[2] - c0[2]) * local_t
 
-                def rescale_0_100(series):
+                        return [int(r), int(g), int(b), 215]
 
-                    min_v = series.min()
-                    max_v = series.max()
+                return [103, 0, 13, 215]
 
-                    if (
-                        pd.isna(min_v)
-                        or pd.isna(max_v)
-                        or max_v == min_v
-                    ):
-                        return pd.Series(0, index=series.index)
+            metric_min = barangay_geo_vuln["vulnerability_index"].min()
+            metric_max = barangay_geo_vuln["vulnerability_index"].max()
 
-                    return (
-                        (series - min_v)
-                        / (max_v - min_v)
-                        * 100
-                    )
-
-                score_cols = ["exposure_score"]
-
-                vuln_barangay["exposure_score"] = rescale_0_100(
-                    vuln_barangay["flood_area_pct"]
+            barangay_geo_vuln["fill_color"] = (
+                barangay_geo_vuln["vulnerability_index"]
+                .apply(
+                    lambda v: reds_color(v, metric_min, metric_max)
                 )
+            )
 
-                for label in selected_groups:
+            vuln_choropleth_geojson = json.loads(
+                barangay_geo_vuln.to_json()
+            )
 
-                    group = VULNERABILITY_GROUPS[label]
-                    score_col = f"score__{group['rate_col']}"
+            vuln_view_state = pdk.ViewState(
+                latitude=center_lat,
+                longitude=center_lon,
+                zoom=11,
+                pitch=0,
+                min_zoom=11,
+                max_zoom=17,
+            )
 
-                    vuln_barangay[score_col] = rescale_0_100(
-                        vuln_barangay[group["rate_col"]]
-                    )
+            vuln_choropleth_layer = pdk.Layer(
+                "GeoJsonLayer",
+                data=vuln_choropleth_geojson,
+                stroked=True,
+                filled=True,
+                get_fill_color="properties.fill_color",
+                get_line_color=[120, 120, 120, 150],
+                line_width_min_pixels=0.6,
+                pickable=True,
+                auto_highlight=True
+            )
 
-                    score_cols.append(score_col)
+            group_tooltip_lines = "<br/>".join(
+                f"{label}: {{{VULNERABILITY_GROUPS[label]['rate_col']}}}"
+                for label in selected_groups
+            )
 
-                vuln_barangay["vulnerability_index"] = (
-                    vuln_barangay[score_cols].sum(
-                        axis=1,
-                        skipna=False
-                    )
-                    / len(score_cols)
-                )
+            vuln_tooltip = {
+                "html": f"""
+                <b>{{barangay}}</b><br/>
+                Vulnerability Index: {{vulnerability_index}}<br/>
+                Flood Area: {{flood_area_pct}}%<br/>
+                {group_tooltip_lines}
+                """,
+                "style": {
+                    "backgroundColor": "white",
+                    "color": "black",
+                    "fontSize": "12px"
+                }
+            }
 
-                st.caption(
-                    "⚠ \"Estimated population exposed\" assumes each "
-                    "barangay's population is spread evenly across "
-                    "its land area — a planning estimate, not a "
-                    "measured headcount. The Vulnerability Index is "
-                    "an equal-weighted average of flood exposure and "
-                    "the groups selected above, each rescaled 0-100; "
-                    "it is a relative ranking tool, not an absolute "
-                    "risk score."
-                )
+            vuln_deck = pdk.Deck(
+                layers=[vuln_choropleth_layer],
+                initial_view_state=vuln_view_state,
+                tooltip=vuln_tooltip,
+                map_style="light"
+            )
 
-                # ==================================================
-                # KPIs
-                # ==================================================
+            st.pydeck_chart(
+                vuln_deck,
+                height=700,
+                width="stretch"
+            )
 
-                total_exposed_est = int(
-                    vuln_barangay["est_population_exposed"].sum()
-                )
+            st.caption(
+                "Darker red = higher Climate Vulnerability Index."
+            )
 
-                top_exposed_barangay = (
-                    vuln_barangay
-                    .dropna(subset=["est_population_exposed"])
-                    .sort_values(
-                        "est_population_exposed",
-                        ascending=False
-                    )
-                    .iloc[0]
-                )
+            st.divider()
 
-                top_vulnerable_barangay = (
-                    vuln_barangay
-                    .dropna(subset=["vulnerability_index"])
-                    .sort_values(
-                        "vulnerability_index",
-                        ascending=False
-                    )
-                    .iloc[0]
-                )
+            # ==================================================
+            # TOP 15 BARANGAYS BY VULNERABILITY INDEX
+            # ==================================================
 
-                v1, v2, v3 = st.columns(3)
+            top15 = (
+                vuln_barangay
+                .dropna(subset=["vulnerability_index"])
+                .sort_values("vulnerability_index", ascending=False)
+                .head(15)
+            )
 
-                v1.metric(
-                    "Est. Citywide Population Exposed",
-                    f"{total_exposed_est:,}"
-                )
+            fig_vuln = px.bar(
+                top15,
+                x="vulnerability_index",
+                y="barangay",
+                orientation="h",
+                color="vulnerability_index",
+                color_continuous_scale="Reds",
+                title="Top 15 Barangays — Climate Vulnerability Index"
+            )
 
-                v2.metric(
-                    "Most Exposed Barangay",
-                    str(top_exposed_barangay["barangay"]),
-                    f"{top_exposed_barangay['est_population_exposed']:,.0f} est. residents"
-                )
+            fig_vuln.update_layout(
+                yaxis_title="",
+                xaxis_title="Vulnerability Index (0-100)",
+                yaxis=dict(autorange="reversed")
+            )
 
-                v3.metric(
-                    "Most Vulnerable Barangay",
-                    str(top_vulnerable_barangay["barangay"]),
-                    f"Index: {top_vulnerable_barangay['vulnerability_index']:.0f}/100"
-                )
+            st.plotly_chart(
+                fig_vuln,
+                width="stretch"
+            )
 
-                st.divider()
+            with st.expander(
+                "Full barangay table (exposure & vulnerability)"
+            ):
 
-                # ==================================================
-                # CHOROPLETH MAP
-                # ==================================================
-
-                barangay_geo_vuln = gpd.read_file(
-                    "processed/qc_barangays.geojson",
-                    engine="pyogrio"
-                )
-
-                barangay_geo_vuln["barangay_name"] = (
-                    barangay_geo_vuln["barangay_name"]
-                    .astype(str)
-                    .str.strip()
-                    .str.upper()
-                )
-
-                merge_cols = (
+                display_cols = (
                     [
-                        "barangay_key",
                         "barangay",
+                        "district",
+                        "pop_census",
                         "flood_area_pct",
-                        "est_population_exposed",
-                        "vulnerability_index"
+                        "est_population_exposed"
                     ]
                     + [
                         VULNERABILITY_GROUPS[label]["rate_col"]
                         for label in selected_groups
                     ]
+                    + ["vulnerability_index"]
                 )
 
-                barangay_geo_vuln = barangay_geo_vuln.merge(
-                    vuln_barangay[merge_cols],
-                    left_on="barangay_name",
-                    right_on="barangay_key",
-                    how="left"
-                )
-
-                def reds_color(value, vmin, vmax):
-
-                    if pd.isna(value) or vmax == vmin:
-                        return [217, 217, 217, 120]
-
-                    t = (value - vmin) / (vmax - vmin)
-                    t = min(max(t, 0), 1)
-
-                    stops = [
-                        (0.00, (255, 245, 240)),
-                        (0.25, (252, 187, 161)),
-                        (0.50, (252, 146, 114)),
-                        (0.75, (222, 45, 38)),
-                        (1.00, (103, 0, 13))
-                    ]
-
-                    for i in range(len(stops) - 1):
-
-                        t0, c0 = stops[i]
-                        t1, c1 = stops[i + 1]
-
-                        if t0 <= t <= t1:
-
-                            local_t = (
-                                (t - t0) / (t1 - t0)
-                                if t1 > t0 else 0
-                            )
-
-                            r = c0[0] + (c1[0] - c0[0]) * local_t
-                            g = c0[1] + (c1[1] - c0[1]) * local_t
-                            b = c0[2] + (c1[2] - c0[2]) * local_t
-
-                            return [int(r), int(g), int(b), 215]
-
-                    return [103, 0, 13, 215]
-
-                metric_min = barangay_geo_vuln["vulnerability_index"].min()
-                metric_max = barangay_geo_vuln["vulnerability_index"].max()
-
-                barangay_geo_vuln["fill_color"] = (
-                    barangay_geo_vuln["vulnerability_index"]
-                    .apply(
-                        lambda v: reds_color(v, metric_min, metric_max)
-                    )
-                )
-
-                vuln_choropleth_geojson = json.loads(
-                    barangay_geo_vuln.to_json()
-                )
-
-                vuln_view_state = pdk.ViewState(
-                    latitude=center_lat,
-                    longitude=center_lon,
-                    zoom=11,
-                    pitch=0,
-                    min_zoom=11,
-                    max_zoom=17,
-                )
-
-                vuln_choropleth_layer = pdk.Layer(
-                    "GeoJsonLayer",
-                    data=vuln_choropleth_geojson,
-                    stroked=True,
-                    filled=True,
-                    get_fill_color="properties.fill_color",
-                    get_line_color=[120, 120, 120, 150],
-                    line_width_min_pixels=0.6,
-                    pickable=True,
-                    auto_highlight=True
-                )
-
-                group_tooltip_lines = "<br/>".join(
-                    f"{label}: {{{VULNERABILITY_GROUPS[label]['rate_col']}}}"
-                    for label in selected_groups
-                )
-
-                vuln_tooltip = {
-                    "html": f"""
-                    <b>{{barangay}}</b><br/>
-                    Vulnerability Index: {{vulnerability_index}}<br/>
-                    Flood Area: {{flood_area_pct}}%<br/>
-                    {group_tooltip_lines}
-                    """,
-                    "style": {
-                        "backgroundColor": "white",
-                        "color": "black",
-                        "fontSize": "12px"
-                    }
+                rename_map = {
+                    "barangay": "Barangay",
+                    "district": "District",
+                    "pop_census": "Population (Census)",
+                    "flood_area_pct": "Flood Area (%)",
+                    "est_population_exposed":
+                        "Est. Population Exposed",
+                    "vulnerability_index":
+                        "Vulnerability Index (0-100)"
                 }
 
-                vuln_deck = pdk.Deck(
-                    layers=[vuln_choropleth_layer],
-                    initial_view_state=vuln_view_state,
-                    tooltip=vuln_tooltip,
-                    map_style="light"
-                )
+                for label in selected_groups:
+                    rename_map[
+                        VULNERABILITY_GROUPS[label]["rate_col"]
+                    ] = label
 
-                st.pydeck_chart(
-                    vuln_deck,
-                    height=700,
+                st.dataframe(
+                    vuln_barangay[display_cols]
+                    .rename(columns=rename_map)
+                    .round(1)
+                    .sort_values(
+                        "Vulnerability Index (0-100)",
+                        ascending=False
+                    ),
                     width="stretch"
                 )
 
-                st.caption(
-                    "Darker red = higher Climate Vulnerability Index."
-                )
+        except Exception as e:
 
-                st.divider()
-
-                # ==================================================
-                # TOP 15 BARANGAYS BY VULNERABILITY INDEX
-                # ==================================================
-
-                top15 = (
-                    vuln_barangay
-                    .dropna(subset=["vulnerability_index"])
-                    .sort_values("vulnerability_index", ascending=False)
-                    .head(15)
-                )
-
-                fig_vuln = px.bar(
-                    top15,
-                    x="vulnerability_index",
-                    y="barangay",
-                    orientation="h",
-                    color="vulnerability_index",
-                    color_continuous_scale="Reds",
-                    title="Top 15 Barangays — Climate Vulnerability Index"
-                )
-
-                fig_vuln.update_layout(
-                    yaxis_title="",
-                    xaxis_title="Vulnerability Index (0-100)",
-                    yaxis=dict(autorange="reversed")
-                )
-
-                st.plotly_chart(
-                    fig_vuln,
-                    width="stretch"
-                )
-
-                with st.expander(
-                    "Full barangay table (exposure & vulnerability)"
-                ):
-
-                    display_cols = (
-                        [
-                            "barangay",
-                            "district",
-                            "pop_census",
-                            "flood_area_pct",
-                            "est_population_exposed"
-                        ]
-                        + [
-                            VULNERABILITY_GROUPS[label]["rate_col"]
-                            for label in selected_groups
-                        ]
-                        + ["vulnerability_index"]
-                    )
-
-                    rename_map = {
-                        "barangay": "Barangay",
-                        "district": "District",
-                        "pop_census": "Population (Census)",
-                        "flood_area_pct": "Flood Area (%)",
-                        "est_population_exposed":
-                            "Est. Population Exposed",
-                        "vulnerability_index":
-                            "Vulnerability Index (0-100)"
-                    }
-
-                    for label in selected_groups:
-                        rename_map[
-                            VULNERABILITY_GROUPS[label]["rate_col"]
-                        ] = label
-
-                    st.dataframe(
-                        vuln_barangay[display_cols]
-                        .rename(columns=rename_map)
-                        .round(1)
-                        .sort_values(
-                            "Vulnerability Index (0-100)",
-                            ascending=False
-                        ),
-                        width="stretch"
-                    )
-
-            except Exception as e:
-
-                st.error(
-                    f"Could not build the vulnerability index: {e}. "
-                    "Check that processed/qc_barangays.geojson and "
-                    "the flood raster both exist and share "
-                    "overlapping coverage."
-                )
+            st.error(
+                f"Could not build the vulnerability index: {e}. "
+                "Check that processed/qc_barangays.geojson and "
+                "the flood raster both exist and share "
+                "overlapping coverage."
+            )
 
     with tab2:
 
@@ -8942,7 +8935,6 @@ elif page == "Population Vulnerability":
                 exposure_df,
                 width="stretch"
             )
-
 
 
 elif page == "Climate & Hazard Exposure":
