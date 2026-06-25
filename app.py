@@ -1849,15 +1849,14 @@ elif page == "Population Overview":
         """)
 
         st.info(
-            "📋 **CBMS coverage note.** The household-survey "
+            "**CBMS coverage note.** The household-survey "
             "indicators below (household size, nuclear families "
             "per household, food insecurity, housing inadequacy) "
             "come from the 2024 Community-Based Monitoring System, "
             "which covers roughly 71% of Quezon City's census "
             "population — not a full count. They should be read "
             "as indicative of conditions in responding households, "
-            "not as exact citywide totals.",
-            icon="ℹ️"
+            "not as exact citywide totals."
         )
 
         # ---------------------------------------------------
