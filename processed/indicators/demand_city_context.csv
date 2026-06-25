@@ -1,0 +1,17 @@
+category,breakdown,total,male,female,source,note
+Seniors with disability,Seniors also registered as PWD (OSCA overlap),4677,,,"OSCA Table 9 (administrative, 2026)",Senior citizens whose registration is also tagged PWD. City-level only; no barangay or district breakdown.
+Seniors with disability,Registered PWDs aged 60+ (PDAO age tabulation),6429,3082,3347,"PDAO Table 15 (administrative, 2026)",PWDs in the 60-79 and 80+ bands. City-level only. Differs from OSCA figure (different registration basis).
+Seniors by sex,Female seniors,233014,,233014,"OSCA Table 7 (administrative, 2026)",City-level only.
+Seniors by sex,Male seniors,164647,164647,,"OSCA Table 7 (administrative, 2026)",City-level only.
+Seniors by age,Seniors 60-79,354648,,,"OSCA Table 8 (administrative, 2026)",City-level only.
+Seniors by age,Seniors 80+,43013,,,"OSCA Table 8 (administrative, 2026)",City-level only.
+PWDs by type,Physical disability,37211,19601,17610,"PDAO Table 14 (administrative, 2026)",City-level only.
+PWDs by type,Psychosocial,20292,10816,9476,"PDAO Table 14 (administrative, 2026)",City-level only.
+PWDs by type,Cancer,10244,2089,8155,"PDAO Table 14 (administrative, 2026)",City-level only.
+PWDs by type,Visual,6816,3500,3316,"PDAO Table 14 (administrative, 2026)",City-level only.
+PWDs by type,Deaf / Hard of hearing,6199,2925,3274,"PDAO Table 14 (administrative, 2026)",City-level only.
+PWDs by type,Speech and language,5840,3897,1943,"PDAO Table 14 (administrative, 2026)",City-level only.
+PWDs by type,Learning,5805,4303,1502,"PDAO Table 14 (administrative, 2026)",City-level only.
+PWDs by type,Mental,5392,2985,2407,"PDAO Table 14 (administrative, 2026)",City-level only.
+PWDs by type,Intellectual,4630,3018,1612,"PDAO Table 14 (administrative, 2026)",City-level only.
+PWDs by type,Rare disease,1755,505,1250,"PDAO Table 14 (administrative, 2026)",City-level only.

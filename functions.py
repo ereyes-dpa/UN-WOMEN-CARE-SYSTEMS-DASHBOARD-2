@@ -8,6 +8,150 @@ import folium
 import numpy as np
 from PIL import Image
 
+# --------------------------------------------------
+# ACCESSIBILITY RATIO INDICATORS
+# (facility-per-1,000 ratios from demographics.csv's
+# pre-computed ratio_* columns — facility count for the
+# relevant type, divided by the population it serves, per
+# 1,000. See indicators_codebook.csv, "Accesibility"
+# category. Shared between the Accessibility Map page and
+# the Accessibility Analysis page so both stay in sync —
+# update this dict once, not in two places.)
+# --------------------------------------------------
+
+ACCESSIBILITY_RATIO_INDICATORS = {
+    "Childcare per 1,000 Children (0-5)": {
+        "facility_col": "Childcare",
+        "pop_col": "age_0_5",
+        "ratio_col": "ratio_childcare"
+    },
+    "Childcare per 1,000 Female Children (0-5)": {
+        "facility_col": "Childcare",
+        "pop_col": "age_0_5_f",
+        "ratio_col": "ratio_childcare_f"
+    },
+    "Childcare per 1,000 Male Children (0-5)": {
+        "facility_col": "Childcare",
+        "pop_col": "age_0_5_m",
+        "ratio_col": "ratio_childcare_m"
+    },
+    "School Facilities per 1,000 Children (3-5)": {
+        "facility_col": "Schools",
+        "pop_col": "age_3_5",
+        "ratio_col": "ratio_school_3_5"
+    },
+    "School Facilities per 1,000 Female Children (3-5)": {
+        "facility_col": "Schools",
+        "pop_col": "age_3_5_f",
+        "ratio_col": "ratio_school_3_5_f"
+    },
+    "School Facilities per 1,000 Male Children (3-5)": {
+        "facility_col": "Schools",
+        "pop_col": "age_3_5_m",
+        "ratio_col": "ratio_school_3_5_m"
+    },
+    "School Facilities per 1,000 Children (6-17)": {
+        "facility_col": "Schools",
+        "pop_col": "age_6_17",
+        "ratio_col": "ratio_school_6_17"
+    },
+    "School Facilities per 1,000 Female Children (6-17)": {
+        "facility_col": "Schools",
+        "pop_col": "age_6_17_f",
+        "ratio_col": "ratio_school_6_17_f"
+    },
+    "School Facilities per 1,000 Male Children (6-17)": {
+        "facility_col": "Schools",
+        "pop_col": "age_6_17_m",
+        "ratio_col": "ratio_school_6_17_m"
+    },
+    "Eldercare Facilities per 1,000 Older Persons (60+)": {
+        "facility_col": "Older persons care",
+        "pop_col": "age_60plus",
+        "ratio_col": "ratio_old_60"
+    },
+    "Eldercare Facilities per 1,000 Female Older Persons (60+)": {
+        "facility_col": "Older persons care",
+        "pop_col": "age_60plus_f",
+        "ratio_col": "ratio_old_60_f"
+    },
+    "Eldercare Facilities per 1,000 Male Older Persons (60+)": {
+        "facility_col": "Older persons care",
+        "pop_col": "age_60plus_m",
+        "ratio_col": "ratio_old_60_m"
+    },
+    "Eldercare Facilities per 1,000 Older Persons (80+)": {
+        "facility_col": "Older persons care",
+        "pop_col": "age_80plus",
+        "ratio_col": "ratio_old_80"
+    },
+    "Eldercare Facilities per 1,000 Female Older Persons (80+)": {
+        "facility_col": "Older persons care",
+        "pop_col": "age_80plus_f",
+        "ratio_col": "ratio_old_80_f"
+    },
+    "Eldercare Facilities per 1,000 Male Older Persons (80+)": {
+        "facility_col": "Older persons care",
+        "pop_col": "age_80plus_m",
+        "ratio_col": "ratio_old_80_m"
+    },
+    "Health Centers per 1,000 People": {
+        "facility_col": "Health centers",
+        "pop_col": "pop_census",
+        "ratio_col": "ratio_pop_health"
+    },
+    "Health Centers per 1,000 Females": {
+        "facility_col": "Health centers",
+        "pop_col": "pop_female",
+        "ratio_col": "ratio_pop_health_f"
+    },
+    "Health Centers per 1,000 Males": {
+        "facility_col": "Health centers",
+        "pop_col": "pop_male",
+        "ratio_col": "ratio_pop_health_m"
+    },
+    "Health Centers per 1,000 Children (0-5)": {
+        "facility_col": "Health centers",
+        "pop_col": "age_0_5",
+        "ratio_col": "ratio_child_health"
+    },
+    "Health Centers per 1,000 Female Children (0-5)": {
+        "facility_col": "Health centers",
+        "pop_col": "age_0_5_f",
+        "ratio_col": "ratio_child_health_f"
+    },
+    "Health Centers per 1,000 Male Children (0-5)": {
+        "facility_col": "Health centers",
+        "pop_col": "age_0_5_m",
+        "ratio_col": "ratio_child_health_m"
+    },
+    "Health Centers per 1,000 Older Persons (60+)": {
+        "facility_col": "Health centers",
+        "pop_col": "age_60plus",
+        "ratio_col": "ratio_old_health"
+    },
+    "Health Centers per 1,000 Female Older Persons (60+)": {
+        "facility_col": "Health centers",
+        "pop_col": "age_60plus_f",
+        "ratio_col": "ratio_old_health_f"
+    },
+    "Health Centers per 1,000 Male Older Persons (60+)": {
+        "facility_col": "Health centers",
+        "pop_col": "age_60plus_m",
+        "ratio_col": "ratio_old_health_m"
+    },
+    "Health Centers per 1,000 PWDs": {
+        "facility_col": "Health centers",
+        "pop_col": "pwd_registered",
+        "ratio_col": "ratio_pwd_health"
+    },
+    "Long-Term Care & Rehabilitation per 1,000 PWDs": {
+        "facility_col": "Long-term care and rehabilitation services",
+        "pop_col": "pwd_registered",
+        "ratio_col": "ratio_pwd"
+    }
+}
+
 @st.cache_data
 def get_base64(img_path):
     with open(img_path, "rb") as f:
@@ -22,15 +166,15 @@ def childcare_color(category):
     category = str(category).upper()
 
     if "CHILD DEVELOPMENT" in category:
-        return "#5B21B6"
+        return "#4C1D95"   # purple gradient — darkest
 
     elif "CHILD LEARNING" in category:
-        return "#7F47ED"
+        return "#8869C9"   # purple gradient — mid
 
     elif "DAY CARE" in category:
-        return "#A78BFA"
+        return "#C4B5FD"   # purple gradient — lightest (still visible on map)
 
-    return "#DDD6FE"
+    return "#C4B5FD"
 
 
 # --------------------------------------------------
@@ -41,12 +185,12 @@ def school_color(category):
     category = str(category).upper()
 
     if "PUBLIC SCHOOL" in category:
-        return "#5B21B6"
+        return "#055B52"   # green gradient — darkest
 
     elif "PRIVATE SCHOOL" in category:
-        return "#A78BFA"
+        return "#A6CFC1"   # green gradient — lightest (still visible on map)
 
-    return "#DDD6FE"
+    return "#A6CFC1"
 
 # --------------------------------------------------
 # OLDERS CARE FUCNTIONS
@@ -56,12 +200,12 @@ def opc_color(category):
     category = str(category).upper()
 
     if "NURSING" in category:
-        return "#5B21B6"
+        return "#055B52"   # green gradient — darkest
 
     elif "BAHAY ARUGA" in category:
-        return "#A78BFA"
+        return "#A6CFC1"   # green gradient — lightest (still visible on map)
 
-    return "#DDD6FE"
+    return "#A6CFC1"
 
 
 # --------------------------------------------------
@@ -82,24 +226,24 @@ def marker_color(category):
     category = str(category).upper()
 
     if "QC LGU" in category:
-        return "#4C1D95"   # dark purple
+        return "#4C1D95"   # purple gradient — darkest
 
     elif "NATIONAL" in category:
-        return "#5B21B6"
+        return "#643BAA"   # purple gradient
 
     elif "SUPER HEALTH" in category:
-        return "#6D28D9"
+        return "#7C5ABF"   # purple gradient
 
     elif "HEALTH CENTER" in category:
-        return "#7C3AED"
+        return "#9478D3"   # purple gradient
 
     elif "PHARMACY" in category:
-        return "#8B5CF6"
+        return "#AC97E8"   # purple gradient
 
     elif "MILK BANK" in category:
-        return "#9333EA"   # much darker
+        return "#C4B5FD"   # purple gradient — lightest (still visible on map)
 
-    return "#6D28D9"
+    return "#7C5ABF"
 
 # --------------------------------------------------
 # LONGTERM CARE FUNCTIONS
@@ -110,29 +254,29 @@ def ltc_color(category):
 
     # Rehabilitation-focused
     if "REHABILITATION" in category:
-        return "#5B21B6"
+        return "#4C1D95"   # purple gradient — darkest
 
     # Physical therapy
     elif "PHYSICAL THERAPY" in category:
-        return "#7F47ED"
+        return "#643BAA"   # purple gradient
 
     # Occupational therapy / schools
     elif "OCCUPATIONAL" in category:
-        return "#A78BFA"
+        return "#7C5ABF"   # purple gradient
 
     # Psychological services
     elif "PSYCHOLOGICAL" in category:
-        return "#C4B5FD"
+        return "#9478D3"   # purple gradient
 
     # Psychiatric rehabilitation
     elif "PSYCHIATRIC" in category:
-        return "#8B5CF6"
+        return "#AC97E8"   # purple gradient
 
     # Disability support center
     elif "KABAHAGI" in category:
-        return "#DDD6FE"
+        return "#C4B5FD"   # purple gradient — lightest (still visible on map)
 
-    return "#EDE9FE"
+    return "#C4B5FD"
 
 def ltc_hex(category):
     return ltc_color(category)
@@ -141,12 +285,12 @@ def ltc_hex(category):
 # SATELLITE OFFICES FUNCTIONS
 # --------------------------------------------------
 DISTRICT_COLORS = {
-    1: "#5B21B6",
-    2: "#6D28D9",
-    3: "#7F47ED",
-    4: "#8B5CF6",
-    5: "#A78BFA",
-    6: "#C4B5FD"
+    1: "#055B52",   # green gradient — darkest
+    2: "#257268",   # green gradient
+    3: "#45897E",   # green gradient
+    4: "#66A195",   # green gradient
+    5: "#86B8AB",   # green gradient
+    6: "#A6CFC1"    # green gradient — lightest (still visible on map)
 }
 
 def district_color(district):
@@ -166,24 +310,24 @@ def category_color(cat):
     cat = str(cat).upper()
 
     if "QC LGU" in cat:
-        return [76, 29, 149]
+        return [76, 29, 149]     # #4C1D95 purple gradient — darkest
 
     elif "NATIONAL" in cat:
-        return [91, 33, 182]
+        return [100, 59, 170]    # #643BAA purple gradient
 
     elif "SUPER HEALTH" in cat:
-        return [109, 40, 217]
+        return [124, 90, 191]    # #7C5ABF purple gradient
 
     elif "HEALTH CENTER" in cat:
-        return [124, 58, 237]
+        return [148, 120, 211]   # #9478D3 purple gradient
 
     elif "PHARMACY" in cat:
-        return [139, 92, 246]
+        return [172, 151, 232]   # #AC97E8 purple gradient
 
     elif "MILK BANK" in cat:
-        return [147, 51, 234]
+        return [196, 181, 253]   # #C4B5FD purple gradient — lightest
 
-    return [109, 40, 217]
+    return [124, 90, 191]
 
 
 def health_category_mapper(cat):
@@ -329,7 +473,7 @@ def get_boundary_geojson(geo_json):
     return folium.GeoJson(
         geo_json,
         style_function=lambda x: {
-            "fillColor": "#7fbf7f",
+            "fillColor": "#A6CFC1",   # secondary light green
             "color": "#666666",
             "weight": 1,
             "fillOpacity": 0.15,
@@ -431,166 +575,101 @@ def load_data():
 
 @st.cache_data
 def load_data_for_kpis():
+    """
+    Loads the consolidated barangay-level demographics table
+    (processed/indicators/demographics.csv) and reshapes it into
+    the same three dataframes this function has always returned
+    — population_summary, population_sex, population_age — so
+    every downstream page (Population Overview, Schools, Health
+    Centers, Older Persons, Long-Term Care, Accessibility
+    Analysis, Care Planning & Investment Priorities, Barangay
+    Clusters) keeps working unchanged.
+
+    demographics.csv replaces the four legacy files this used to
+    read (population_summary.csv, population_2024_by_sex.csv,
+    population_2024_by_age_group.csv,
+    barangay_district_mapping.csv) with a single, richer,
+    barangay-level source that also carries the new accessibility,
+    disability, and CBMS socio-economic indicators (consumed by
+    other parts of the dashboard via load_demographics() below).
+
+    Unlike the legacy pipeline, demographics.csv already carries
+    a clean integer "district" per barangay, so no separate
+    barangay-to-district mapping/merge step is needed here.
+    """
 
     import pandas as pd
 
     # ==================================================
-    # LOAD FILES
+    # LOAD FILE
     # ==================================================
 
-    population_summary = pd.read_csv(
-        "processed/population_summary.csv"
-    )
-
-    population_sex = pd.read_csv(
-        "processed/population_2024_by_sex.csv"
-    )
-
-    population_age = pd.read_csv(
-        "processed/population_2024_by_age_group.csv"
-    )
-
-    mapping = pd.read_csv(
-        "processed/barangay_district_mapping.csv"
+    demographics = pd.read_csv(
+        "processed/indicators/demographics.csv"
     )
 
     # ==================================================
-    # CLEAN MAPPING
+    # POPULATION SUMMARY (city-wide total — kept for
+    # backward compatibility; not consumed elsewhere in
+    # the dashboard today, but other code may still
+    # unpack it from this function's return value)
     # ==================================================
 
-    mapping.columns = mapping.columns.str.strip()
+    population_summary = pd.DataFrame({
+        "Total": [demographics["pop_census"].sum()],
+        "Male": [demographics["pop_male"].sum()],
+        "Female": [demographics["pop_female"].sum()]
+    })
 
-    mapping["BARANGAY_original"] = (
-        mapping["BARANGAY_original"]
-        .astype(str)
-        .str.strip()
-        .str.upper()
-    )
+    # ==================================================
+    # POPULATION BY SEX (one row per barangay)
+    # ==================================================
 
-    mapping["BARANGAY"] = (
-        mapping["BARANGAY"]
-        .astype(str)
-        .str.strip()
-    )
-
-    mapping["DISTRICT"] = (
-        mapping["DISTRICT"]
-        .astype(str)
-        .str.extract(r"(\d+)", expand=False)
-        .astype(int)
+    population_sex = demographics[
+        [
+            "barangay",
+            "district",
+            "pop_male",
+            "pop_female",
+            "pop_census"
+        ]
+    ].rename(
+        columns={
+            "barangay": "Barangay",
+            "district": "District",
+            "pop_male": "Male",
+            "pop_female": "Female",
+            "pop_census": "Total"
+        }
     )
 
     # ==================================================
-    # CLEAN NUMERIC COLUMNS
+    # POPULATION BY AGE GROUP (one row per barangay)
+    # Column names match the four bands the rest of the
+    # dashboard already expects.
     # ==================================================
 
-    for col in ["Male", "Female", "Total"]:
-
-        if col in population_sex.columns:
-
-            population_sex[col] = (
-                population_sex[col]
-                .astype(str)
-                .str.replace(",", "", regex=False)
-                .astype(int)
-            )
-
-    age_cols = [
-        "0-5 (Early Childhood)",
-        "6-17 (School Age Children)",
-        "18-59 (Working Age Adult)",
-        "60+ (Elderly)",
-        "Total"
-    ]
-
-    for col in age_cols:
-
-        if col in population_age.columns:
-
-            population_age[col] = (
-                population_age[col]
-                .astype(str)
-                .str.replace(",", "", regex=False)
-                .astype(int)
-            )
-
-    # ==================================================
-    # APPLY BARANGAY MAPPING
-    # ==================================================
-
-    def apply_barangay_mapping(df, name=""):
-
-        df = df.copy()
-
-        df["Barangay_key"] = (
-            df["Barangay"]
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
-
-        df = df.merge(
-            mapping,
-            left_on="Barangay_key",
-            right_on="BARANGAY_original",
-            how="left"
-        )
-
-        # ------------------------------------
-        # SHOW UNMATCHED BARANGAYS
-        # ------------------------------------
-
-        missing = (
-            df[df["BARANGAY"].isna()]
-            [["Barangay", "Barangay_key"]]
-            .drop_duplicates()
-            .sort_values("Barangay")
-        )
-
-        if len(missing) > 0:
-
-            print(f"\n{name} - UNMATCHED BARANGAYS")
-            print("-" * 50)
-
-            for b in missing["Barangay"]:
-                print(b)
-
-            print(f"\nTotal missing: {len(missing)}")
-
-        # ------------------------------------
-        # REPLACE VALUES
-        # ------------------------------------
-
-        df["Barangay"] = (
-            df["BARANGAY"]
-            .fillna(df["Barangay"])
-        )
-
-        df["District"] = (
-            df["DISTRICT"]
-            .fillna(df["District"])
-        )
-
-        df = df.drop(
-            columns=[
-                "Barangay_key",
-                "BARANGAY_original",
-                "BARANGAY",
-                "DISTRICT"
-            ],
-            errors="ignore"
-        )
-
-        return df
-
-    population_age = apply_barangay_mapping(
-        population_age
+    population_age = demographics[
+        [
+            "barangay",
+            "district",
+            "age_0_5",
+            "age_6_17",
+            "age_18_59",
+            "age_60plus",
+            "pop_census"
+        ]
+    ].rename(
+        columns={
+            "barangay": "Barangay",
+            "district": "District",
+            "age_0_5": "0-5 (Early Childhood)",
+            "age_6_17": "6-17 (School Age Children)",
+            "age_18_59": "18-59 (Working Age Adult)",
+            "age_60plus": "60+ (Elderly)",
+            "pop_census": "Total"
+        }
     )
-
-    population_sex = apply_barangay_mapping(
-        population_sex
-    )
-
 
     # ==================================================
     # RETURN
@@ -601,7 +680,113 @@ def load_data_for_kpis():
         population_sex,
         population_age
     )
-    
+
+
+@st.cache_data
+def load_demographics():
+    """
+    Loads the full consolidated barangay-level indicators table
+    (processed/indicators/demographics.csv) with all 87 columns
+    intact — facility counts, age/sex breakdowns, registered
+    seniors/PWDs, CBMS socio-economic indicators, migrant worker
+    counts, and the pre-computed demand/accessibility ratio
+    columns (ratio_*).
+
+    Use this (rather than re-deriving figures from population_age
+    /population_sex) wherever a page needs the newer indicators
+    that aren't part of the legacy population_summary/sex/age
+    shape — e.g. registered PWDs, CBMS food insecurity, or the
+    facilities-per-1,000 ratio columns.
+    """
+
+    import pandas as pd
+
+    demographics = pd.read_csv(
+        "processed/indicators/demographics.csv"
+    )
+
+    demographics["barangay"] = (
+        demographics["barangay"]
+        .astype(str)
+        .str.strip()
+    )
+
+    demographics["district"] = (
+        pd.to_numeric(demographics["district"], errors="coerce")
+        .astype("Int64")
+    )
+
+    return demographics
+
+
+@st.cache_data
+def load_climate_context():
+    """
+    Loads the city-wide (non-barangay) flood risk indicators
+    from processed/indicators/climate.csv. These figures are
+    WorldPop-based and only available at the Quezon City total
+    level — there is no per-barangay breakdown — so they're
+    meant for KPI cards/context on the Climate & Hazard Exposure
+    page, not for a choropleth map.
+    """
+
+    import pandas as pd
+
+    climate = pd.read_csv(
+        "processed/indicators/climate.csv"
+    )
+
+    return climate
+
+
+@st.cache_data
+def load_demand_context():
+    """
+    Loads the two city/district-level administrative context
+    tables that sit alongside demographics.csv:
+
+    - processed/indicators/demand_city_context.csv — city-wide
+      breakdowns (seniors by sex/age, seniors also registered
+      as PWD, PWDs by disability type with male/female splits).
+      No barangay or district breakdown; OSCA and PDAO figures
+      for "seniors with disability" are kept as two separate
+      rows since they use different registration bases and
+      disagree (4,677 vs 6,429) — this is documented in the
+      "note" column rather than reconciled.
+    - processed/indicators/demand_district_context.csv —
+      registered seniors and PWDs per district (roman numeral
+      districts I-VI, converted here to integers 1-6 to match
+      the "district" column used elsewhere in the dashboard).
+
+    Returns (city_context, district_context).
+    """
+
+    import pandas as pd
+
+    city_context = pd.read_csv(
+        "processed/indicators/demand_city_context.csv"
+    )
+
+    district_context = pd.read_csv(
+        "processed/indicators/demand_district_context.csv"
+    )
+
+    roman_to_int = {
+        "I": 1,
+        "II": 2,
+        "III": 3,
+        "IV": 4,
+        "V": 5,
+        "VI": 6
+    }
+
+    district_context["district"] = (
+        district_context["district"]
+        .map(roman_to_int)
+    )
+
+    return city_context, district_context
+
 
 def hex_to_rgb(hex_color):
 
@@ -740,75 +925,117 @@ def compute_population_per_facility(
 # --------------------------------------------------
 def build_cluster_features(
     barangay_df,
-    care_clean,
+    demographics,
     feature_cols=None
 ):
     """
     Builds the standardized feature matrix used for
-    barangay clustering.
+    barangay clustering, spanning three dimensions:
 
-    barangay_df is expected to already carry, per
-    barangay: Total, population_density, children_pct,
-    elderly_pct (as produced on the Population Overview
-    page).
+    - Demographic: population_density, children_pct,
+      elderly_pct (passed in via barangay_df, computed on
+      the Population Overview page), plus sex_ratio_m_per_100f
+      from demographics.
+    - Accessibility: facilities_per_10k (facilities of any
+      kind per 10,000 residents) plus a facility-type mix
+      (share of local facilities that are Childcare, Health
+      centers, Long-term care and rehabilitation services, or
+      Schools — the four facility types with enough barangays
+      to carry real signal; Older persons care, satellite
+      offices, and Trainings are each present in well under
+      5% of barangays and were dropped as near-constant/
+      zero-inflated, which would otherwise dominate distance
+      calculations with noise rather than signal).
+    - Socio-economic: disability_prevalence_rate_pct,
+      cbms_food_insecurity_prevalence_pct,
+      cbms_housing_inadequacy_index_pct, and migrant workers
+      per 1,000 population (registered OFWs, normalized by
+      population since raw counts aren't comparable across
+      barangays of different sizes).
 
-    care_clean must contain "barangay" and "major_division"
-    so a facility-mix share can be added per barangay
-    (share of local facilities that are Childcare, Schools,
-    Health centers, Older persons care, etc.) — this stands
-    in for the land-use mix used in the original notebooks,
-    since QC's data is facility-based rather than raster-based.
+    barangay_df is expected to already carry, per barangay:
+    Total, population_density, children_pct, elderly_pct (as
+    produced on the Population Overview page).
+
+    demographics must be the full indicators table loaded by
+    load_demographics() (processed/indicators/demographics.csv).
     """
 
-    care_clean = care_clean.copy()
+    facility_type_cols = [
+        "Childcare",
+        "Health centers",
+        "Long-term care and rehabilitation services",
+        "Schools"
+    ]
 
-    care_clean["barangay"] = (
-        care_clean["barangay"]
+    demo = demographics.copy()
+
+    demo["barangay"] = (
+        demo["barangay"]
         .astype(str)
         .str.strip()
         .str.upper()
     )
 
-    facility_mix = (
-        care_clean
-        .groupby(["barangay", "major_division"])
-        .size()
-        .reset_index(name="count")
+    # ----------------------------------------------------
+    # ACCESSIBILITY: overall facilities per 10k population
+    # ----------------------------------------------------
+
+    demo["facilities_per_10k"] = (
+        demo["Total"]
+        /
+        demo["pop_census"]
+        * 10000
     )
 
-    facility_totals = (
-        facility_mix
-        .groupby("barangay")["count"]
-        .sum()
-        .reset_index(name="total")
-    )
+    # ----------------------------------------------------
+    # ACCESSIBILITY: facility-type mix shares (the four
+    # types with enough barangays present to carry signal)
+    # ----------------------------------------------------
 
-    facility_mix = facility_mix.merge(
-        facility_totals,
-        on="barangay",
-        how="left"
-    )
+    facility_totals = demo[facility_type_cols].sum(axis=1)
 
-    facility_mix["share"] = (
-        facility_mix["count"] / facility_mix["total"]
-    )
+    share_cols = []
 
-    mix_wide = (
-        facility_mix
-        .pivot(
-            index="barangay",
-            columns="major_division",
-            values="share"
+    for col in facility_type_cols:
+
+        share_col = f"share_{col.lower().replace(' ', '_')}"
+        share_cols.append(share_col)
+
+        demo[share_col] = np.where(
+            facility_totals > 0,
+            demo[col] / facility_totals,
+            0
         )
-        .fillna(0)
-        .reset_index()
+
+    # ----------------------------------------------------
+    # SOCIO-ECONOMIC: migrant workers per 1,000 population
+    # (registry has a handful of barangays with no entry;
+    # treated as 0 registered migrant workers, not missing)
+    # ----------------------------------------------------
+
+    demo["migrant_per_1000"] = (
+        demo["migrant_workers_total"].fillna(0)
+        /
+        demo["pop_census"]
+        * 1000
     )
 
-    mix_wide.columns = [
-        "barangay"
-    ] + [
-        f"share_{str(c).lower().replace(' ', '_')}"
-        for c in mix_wide.columns[1:]
+    socioeconomic_cols = [
+        "sex_ratio_m_per_100f",
+        "disability_prevalence_rate_pct",
+        "cbms_food_insecurity_prevalence_pct",
+        "cbms_housing_inadequacy_index_pct",
+        "migrant_per_1000"
+    ]
+
+    demo_features = demo[
+        [
+            "barangay",
+            "facilities_per_10k"
+        ]
+        + share_cols
+        + socioeconomic_cols
     ]
 
     out = barangay_df.copy()
@@ -821,30 +1048,34 @@ def build_cluster_features(
     )
 
     out = out.merge(
-        mix_wide,
+        demo_features,
         left_on="Barangay",
         right_on="barangay",
         how="left"
     ).drop(columns=["barangay"], errors="ignore")
 
-    share_cols = [
-        c for c in out.columns if c.startswith("share_")
-    ]
+    new_numeric_cols = (
+        ["facilities_per_10k"]
+        + share_cols
+        + socioeconomic_cols
+    )
 
-    out[share_cols] = out[share_cols].fillna(0)
+    out[new_numeric_cols] = out[new_numeric_cols].fillna(0)
 
     if feature_cols is None:
         feature_cols = [
             "population_density",
             "children_pct",
-            "elderly_pct"
-        ] + share_cols
+            "elderly_pct",
+            "facilities_per_10k"
+        ] + share_cols + socioeconomic_cols
 
     feature_cols = [
         c for c in feature_cols if c in out.columns
     ]
 
     return out, feature_cols
+
 
 
 def run_barangay_clustering(
@@ -895,12 +1126,12 @@ def run_barangay_clustering(
 
 
 CLUSTER_PALETTE = [
-    "#5B21B6",
-    "#7F47ED",
-    "#A78BFA",
-    "#C4B5FD",
-    "#DDD6FE",
-    "#EDE9FE"
+    "#7F47ED",   # primary purple
+    "#055B52",   # secondary dark green
+    "#682680",   # accent purple
+    "#80AA31",   # secondary green
+    "#A78BFA",   # light purple
+    "#A6CFC1"    # secondary light green
 ]
 
 
@@ -1013,6 +1244,82 @@ def value_to_rgba(
     r, g, b = _lerp_color(COLORMAPS[colormap], t)
 
     return [r, g, b, alpha]
+
+
+def render_colormap_legend_html(
+    colormap,
+    vmin,
+    vmax,
+    unit="",
+    label=None,
+    n_stops=20
+):
+    """
+    Builds a small HTML/CSS horizontal gradient bar for one of
+    the COLORMAPS ramps, with vmin/vmax labels at each end —
+    the same kind of color-scale legend shown on the static
+    reference PNGs (Heatwaves.png, Flood_QC.png), recreated here
+    as inline HTML so it can sit directly under a raster layer
+    in the Streamlit UI (folium's rendered HTML and pydeck's
+    BitmapLayer don't carry their own legend, so this fills that
+    gap for continuous layers like Land-Surface Temperature and
+    NDVI).
+
+    n_stops controls how many color samples make up the CSS
+    gradient — 20 is enough to look smooth without generating an
+    excessively long style string.
+
+    Returns a raw HTML string; pass it to st.markdown(...,
+    unsafe_allow_html=True).
+    """
+
+    stops = COLORMAPS[colormap]
+
+    gradient_stops = []
+
+    for i in range(n_stops + 1):
+
+        t = i / n_stops
+        r, g, b = _lerp_color(stops, t)
+        pct = t * 100
+
+        gradient_stops.append(
+            f"rgb({r},{g},{b}) {pct:.1f}%"
+        )
+
+    gradient_css = ", ".join(gradient_stops)
+
+    label_html = (
+        f'<div style="font-size:13px;font-weight:600;'
+        f'margin-bottom:4px;">{label}</div>'
+        if label else ""
+    )
+
+    vmin_display = 0.0 if round(vmin, 1) == 0 else vmin
+    vmax_display = 0.0 if round(vmax, 1) == 0 else vmax
+
+    return f"""
+    <div style="margin-top:8px;margin-bottom:8px;">
+        {label_html}
+        <div style="
+            width:100%;
+            height:16px;
+            border-radius:3px;
+            background:linear-gradient(to right, {gradient_css});
+            border:1px solid #999;
+        "></div>
+        <div style="
+            display:flex;
+            justify-content:space-between;
+            font-size:12px;
+            color:#444;
+            margin-top:2px;
+        ">
+            <span>{vmin_display:.1f} {unit}</span>
+            <span>{vmax_display:.1f} {unit}</span>
+        </div>
+    </div>
+    """
 
 
 def _render_raster_rgba(
