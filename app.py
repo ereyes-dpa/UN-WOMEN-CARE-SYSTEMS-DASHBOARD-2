@@ -5422,7 +5422,9 @@ elif page == "Migration Resource Center":
         width="stretch"
     )
 
-elif page == "Care Services Explorer":
+
+elif page == "Population Vulnerability":
+
 
     st.markdown(
         """
@@ -5433,7 +5435,7 @@ elif page == "Care Services Explorer":
             margin-bottom:10px;
             padding-top:0px;
         ">
-            Care Services Explorer
+            Population Vulnerability
         </h2>
         """,
         unsafe_allow_html=True
@@ -5441,262 +5443,928 @@ elif page == "Care Services Explorer":
 
     st.caption(
         """
-        Explore childcare centers, schools, health facilities,
-        older persons facilities, rehabilitation centers,
-        migration resource centers, and Quezon City
-        satellite offices on a single map — optionally overlaid
-        with land-surface temperature, vegetation, or flood
-        exposure layers.
+        Which segments of the population are most at risk, and
+        where. Combines barangay-level flood exposure with one
+        vulnerable population group you choose below into a
+        single Climate Vulnerability Index — the demand-side
+        counterpart to the facility-level flood flagging on the
+        Care Services Explorer page.
         """
     )
 
-    # --------------------------------------------------
-    # SERVICE CONFIGURATION
-    # --------------------------------------------------
 
-    service_layers = {
+    tab1, tab2 = st.tabs([
+        "Vulnerability Index",
+        "Care Services Explorer"
+    ])
 
-        "Childcare Centers": {
-            "df": childcare_centers,
-            "color": "#4C1D95",
-            "symbol": "●",
-            "source": "Childcare Center",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
-        },
+    with tab1:
 
-        "Schools": {
-            "df": schools,
-            "color": "#055B52",
-            "symbol": "■",
-            "source": "School",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
-        },
+        # --------------------------------------------------
+        # SELECTABLE VULNERABLE GROUPS
+        # (each entry maps a dropdown label to a real column in
+        # demographics.csv. "rate_col" is what actually goes into
+        # the index — already a rate/share, not a raw count, so
+        # combining groups doesn't just reward populous barangays.
+        # Raw-count columns (e.g. age_60plus, age_0_5) are
+        # deliberately not offered directly for this reason; where
+        # demographics.csv didn't already have a per-1,000 or %
+        # version of a group, one is derived on the fly below from
+        # the raw count and pop_census instead of being precomputed
+        # here, since that derivation is a single line either way.
+        # --------------------------------------------------
 
-        "Health Centers": {
-            "df": health_centers,
-            "color": "#4C1D95",
-            "symbol": "★",
-            "source": "Health Facility",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
-        },
+        VULNERABILITY_GROUPS = {
+            "Seniors (registered, per 1,000)": {
+                "rate_col": "seniors_per_1000_census",
+                "derive": None
+            },
+            "Seniors (census 60+, % of population)": {
+                "rate_col": "_pct_age_60plus",
+                "derive": ("age_60plus", "pop_census")
+            },
+            "Oldest old (80+, % of population)": {
+                "rate_col": "_pct_age_80plus",
+                "derive": ("age_80plus", "pop_census")
+            },
+            "Registered PWDs (per 1,000)": {
+                "rate_col": "pwd_per_1000_census",
+                "derive": None
+            },
+            "Disability prevalence (% of population)": {
+                "rate_col": "disability_prevalence_rate_pct",
+                "derive": None
+            },
+            "Young children (0-5, % of population)": {
+                "rate_col": "_pct_age_0_5",
+                "derive": ("age_0_5", "pop_census")
+            },
+            "Food insecurity (CBMS, %)": {
+                "rate_col": "cbms_food_insecurity_prevalence_pct",
+                "derive": None
+            },
+            "Severe food insecurity (CBMS, %)": {
+                "rate_col": "cbms_food_severe_wholeday_pct",
+                "derive": None
+            },
+            "Housing inadequacy (CBMS, %)": {
+                "rate_col": "cbms_housing_inadequacy_index_pct",
+                "derive": None
+            },
+            "Severe housing deprivation (CBMS, %)": {
+                "rate_col": "cbms_housing_makeshift_severe_pct",
+                "derive": None
+            },
+            "Migrant worker households (per 1,000)": {
+                "rate_col": "_per1000_migrant_workers",
+                "derive": ("migrant_workers_total", "pop_census")
+            }
+        }
 
-        "Older Persons Facilities": {
-            "df": older_person_care,
-            "color": "#055B52",
-            "symbol": "◆",
-            "source": "Older Persons Facility",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
-        },
+        selected_group = st.selectbox(
+            "Vulnerable population group to combine with flood "
+            "exposure",
+            list(VULNERABILITY_GROUPS.keys()),
+            index=0,
+            help=(
+                "The index is an equal-weighted average of flood "
+                "exposure and this one group, so a high score has "
+                "one clear explanation: high flood exposure, a "
+                "high concentration of this group, or both — "
+                "rather than several groups blended into a single "
+                "number you'd have to unpack."
+            )
+        )
 
-        "Long-Term Care & Rehabilitation": {
-            "df": long_term_care,
-            "color": "#4C1D95",
-            "symbol": "▲",
-            "source": "Rehabilitation Facility",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
-        },
+        selected_groups = [selected_group]
 
-        "Action Offices": {
-            "df": satellite_offices,
-            "color": "#055B52",
-            "symbol": "⬢",
-            "source": "Satellite Office",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
-        },
+        try:
 
-        "Migration Resource Centers": {
-            "df": migration_centers,
-            "color": "#C4B5FD",
-            "symbol": "✦",
-            "source": "Migration Resource Center",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
-        },
-    }
+            # ==================================================
+            # BARANGAY FLOOD EXPOSURE (AREA-BASED)
+            # ==================================================
 
-    # --------------------------------------------------
-    # LEGEND
-    # --------------------------------------------------
+            flood_exposure = compute_barangay_flood_exposure()
 
-    st.markdown("### Service Categories")
+            flood_exposure["barangay_key"] = (
+                flood_exposure["barangay_name"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
 
-    cols = st.columns(7)
+            vuln_barangay = demographics.copy()
 
-    for i, (layer_name, layer) in enumerate(service_layers.items()):
+            vuln_barangay["barangay_key"] = (
+                vuln_barangay["barangay"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
 
-        cols[i].markdown(
-            f"""
-            <span style="
-                color:{layer['color']};
-                font-size:25px;
+            vuln_barangay = vuln_barangay.merge(
+                flood_exposure[
+                    ["barangay_key", "flood_area_pct"]
+                ],
+                on="barangay_key",
+                how="left"
+            )
+
+            # --------------------------------------------------
+            # ESTIMATED POPULATION EXPOSED
+            # (area% x pop_census — uniform-density assumption;
+            # see compute_barangay_flood_exposure's docstring.
+            # Repeated as a visible caption below, not just here
+            # in code, since it reads like a precise headcount
+            # if seen on its own.)
+            # --------------------------------------------------
+
+            vuln_barangay["est_population_exposed"] = (
+                vuln_barangay["pop_census"]
+                * vuln_barangay["flood_area_pct"]
+                / 100
+            )
+
+            # --------------------------------------------------
+            # DERIVE ANY ON-THE-FLY RATE COLUMNS
+            # (only for groups the user actually selected, so
+            # an unused derive doesn't risk a divide-by-zero or
+            # NaN column nobody asked for)
+            # --------------------------------------------------
+
+            for label in selected_groups:
+
+                group = VULNERABILITY_GROUPS[label]
+
+                if group["derive"] is not None:
+
+                    count_col, denom_col = group["derive"]
+
+                    vuln_barangay[group["rate_col"]] = (
+                        vuln_barangay[count_col]
+                        / vuln_barangay[denom_col]
+                        * 1000
+                    )
+
+            # --------------------------------------------------
+            # VULNERABILITY INDEX
+            # (flood area% rescaled 0-100, averaged with the one
+            # selected group's rate — also rescaled 0-100 — so
+            # both components contribute equally regardless of
+            # their raw units, and the index updates live as the
+            # group selection changes above. Simple, transparent
+            # average of exactly two components (not a weighted/
+            # PCA-based index of many), so a high score always has
+            # one clear explanation: "this barangay scores high
+            # because of high flood exposure, a high concentration
+            # of the selected group, or both" — not a blended
+            # number that needs unpacking to interpret.)
+            # --------------------------------------------------
+
+            def rescale_0_100(series):
+
+                min_v = series.min()
+                max_v = series.max()
+
+                if (
+                    pd.isna(min_v)
+                    or pd.isna(max_v)
+                    or max_v == min_v
+                ):
+                    return pd.Series(0, index=series.index)
+
+                return (
+                    (series - min_v)
+                    / (max_v - min_v)
+                    * 100
+                )
+
+            score_cols = ["exposure_score"]
+
+            vuln_barangay["exposure_score"] = rescale_0_100(
+                vuln_barangay["flood_area_pct"]
+            )
+
+            for label in selected_groups:
+
+                group = VULNERABILITY_GROUPS[label]
+                score_col = f"score__{group['rate_col']}"
+
+                vuln_barangay[score_col] = rescale_0_100(
+                    vuln_barangay[group["rate_col"]]
+                )
+
+                score_cols.append(score_col)
+
+            vuln_barangay["vulnerability_index"] = (
+                vuln_barangay[score_cols].sum(
+                    axis=1,
+                    skipna=False
+                )
+                / len(score_cols)
+            )
+
+            st.caption(
+                "⚠ \"Estimated population exposed\" assumes each "
+                "barangay's population is spread evenly across "
+                "its land area — a planning estimate, not a "
+                "measured headcount. The Vulnerability Index is "
+                "an equal-weighted average of flood exposure and "
+                f"\"{selected_group}\", each rescaled 0-100; it is "
+                "a relative ranking tool, not an absolute risk "
+                "score."
+            )
+
+            # ==================================================
+            # KPIs
+            # ==================================================
+
+            total_exposed_est = int(
+                vuln_barangay["est_population_exposed"].sum()
+            )
+
+            top_exposed_barangay = (
+                vuln_barangay
+                .dropna(subset=["est_population_exposed"])
+                .sort_values(
+                    "est_population_exposed",
+                    ascending=False
+                )
+                .iloc[0]
+            )
+
+            top_vulnerable_barangay = (
+                vuln_barangay
+                .dropna(subset=["vulnerability_index"])
+                .sort_values(
+                    "vulnerability_index",
+                    ascending=False
+                )
+                .iloc[0]
+            )
+
+            v1, v2, v3 = st.columns(3)
+
+            v1.metric(
+                "Est. Citywide Population Exposed",
+                f"{total_exposed_est:,}"
+            )
+
+            v2.metric(
+                "Most Exposed Barangay",
+                str(top_exposed_barangay["barangay"]),
+                f"{top_exposed_barangay['est_population_exposed']:,.0f} est. residents"
+            )
+
+            v3.metric(
+                "Most Vulnerable Barangay",
+                str(top_vulnerable_barangay["barangay"]),
+                f"Index: {top_vulnerable_barangay['vulnerability_index']:.0f}/100"
+            )
+
+            st.divider()
+
+            # ==================================================
+            # CHOROPLETH MAP
+            # ==================================================
+
+            barangay_geo_vuln = gpd.read_file(
+                "processed/qc_barangays.geojson",
+                engine="pyogrio"
+            )
+
+            barangay_geo_vuln["barangay_name"] = (
+                barangay_geo_vuln["barangay_name"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
+            merge_cols = (
+                [
+                    "barangay_key",
+                    "barangay",
+                    "flood_area_pct",
+                    "est_population_exposed",
+                    "vulnerability_index"
+                ]
+                + [
+                    VULNERABILITY_GROUPS[label]["rate_col"]
+                    for label in selected_groups
+                ]
+            )
+
+            barangay_geo_vuln = barangay_geo_vuln.merge(
+                vuln_barangay[merge_cols],
+                left_on="barangay_name",
+                right_on="barangay_key",
+                how="left"
+            )
+
+            def reds_color(value, vmin, vmax):
+
+                if pd.isna(value) or vmax == vmin:
+                    return [217, 217, 217, 120]
+
+                t = (value - vmin) / (vmax - vmin)
+                t = min(max(t, 0), 1)
+
+                stops = [
+                    (0.00, (255, 245, 240)),
+                    (0.25, (252, 187, 161)),
+                    (0.50, (252, 146, 114)),
+                    (0.75, (222, 45, 38)),
+                    (1.00, (103, 0, 13))
+                ]
+
+                for i in range(len(stops) - 1):
+
+                    t0, c0 = stops[i]
+                    t1, c1 = stops[i + 1]
+
+                    if t0 <= t <= t1:
+
+                        local_t = (
+                            (t - t0) / (t1 - t0)
+                            if t1 > t0 else 0
+                        )
+
+                        r = c0[0] + (c1[0] - c0[0]) * local_t
+                        g = c0[1] + (c1[1] - c0[1]) * local_t
+                        b = c0[2] + (c1[2] - c0[2]) * local_t
+
+                        return [int(r), int(g), int(b), 215]
+
+                return [103, 0, 13, 215]
+
+            metric_min = barangay_geo_vuln["vulnerability_index"].min()
+            metric_max = barangay_geo_vuln["vulnerability_index"].max()
+
+            barangay_geo_vuln["fill_color"] = (
+                barangay_geo_vuln["vulnerability_index"]
+                .apply(
+                    lambda v: reds_color(v, metric_min, metric_max)
+                )
+            )
+
+            vuln_choropleth_geojson = json.loads(
+                barangay_geo_vuln.to_json()
+            )
+
+            vuln_view_state = pdk.ViewState(
+                latitude=center_lat,
+                longitude=center_lon,
+                zoom=11,
+                pitch=0,
+                min_zoom=11,
+                max_zoom=17,
+            )
+
+            vuln_choropleth_layer = pdk.Layer(
+                "GeoJsonLayer",
+                data=vuln_choropleth_geojson,
+                stroked=True,
+                filled=True,
+                get_fill_color="properties.fill_color",
+                get_line_color=[120, 120, 120, 150],
+                line_width_min_pixels=0.6,
+                pickable=True,
+                auto_highlight=True
+            )
+
+            group_tooltip_lines = "<br/>".join(
+                f"{label}: {{{VULNERABILITY_GROUPS[label]['rate_col']}}}"
+                for label in selected_groups
+            )
+
+            vuln_tooltip = {
+                "html": f"""
+                <b>{{barangay}}</b><br/>
+                Vulnerability Index: {{vulnerability_index}}<br/>
+                Flood Area: {{flood_area_pct}}%<br/>
+                {group_tooltip_lines}
+                """,
+                "style": {
+                    "backgroundColor": "white",
+                    "color": "black",
+                    "fontSize": "12px"
+                }
+            }
+
+            vuln_deck = pdk.Deck(
+                layers=[vuln_choropleth_layer],
+                initial_view_state=vuln_view_state,
+                tooltip=vuln_tooltip,
+                map_style="light"
+            )
+
+            st.pydeck_chart(
+                vuln_deck,
+                height=700,
+                width="stretch"
+            )
+
+            st.caption(
+                "Darker red = higher Climate Vulnerability Index."
+            )
+
+            st.divider()
+
+            # ==================================================
+            # TOP 15 BARANGAYS BY VULNERABILITY INDEX
+            # ==================================================
+
+            top15 = (
+                vuln_barangay
+                .dropna(subset=["vulnerability_index"])
+                .sort_values("vulnerability_index", ascending=False)
+                .head(15)
+            )
+
+            fig_vuln = px.bar(
+                top15,
+                x="vulnerability_index",
+                y="barangay",
+                orientation="h",
+                color="vulnerability_index",
+                color_continuous_scale="Reds",
+                title="Top 15 Barangays — Climate Vulnerability Index"
+            )
+
+            fig_vuln.update_layout(
+                yaxis_title="",
+                xaxis_title="Vulnerability Index (0-100)",
+                yaxis=dict(autorange="reversed")
+            )
+
+            st.plotly_chart(
+                fig_vuln,
+                width="stretch"
+            )
+
+            with st.expander(
+                "Full barangay table (exposure & vulnerability)"
+            ):
+
+                display_cols = (
+                    [
+                        "barangay",
+                        "district",
+                        "pop_census",
+                        "flood_area_pct",
+                        "est_population_exposed"
+                    ]
+                    + [
+                        VULNERABILITY_GROUPS[label]["rate_col"]
+                        for label in selected_groups
+                    ]
+                    + ["vulnerability_index"]
+                )
+
+                rename_map = {
+                    "barangay": "Barangay",
+                    "district": "District",
+                    "pop_census": "Population (Census)",
+                    "flood_area_pct": "Flood Area (%)",
+                    "est_population_exposed":
+                        "Est. Population Exposed",
+                    "vulnerability_index":
+                        "Vulnerability Index (0-100)"
+                }
+
+                for label in selected_groups:
+                    rename_map[
+                        VULNERABILITY_GROUPS[label]["rate_col"]
+                    ] = label
+
+                st.dataframe(
+                    vuln_barangay[display_cols]
+                    .rename(columns=rename_map)
+                    .round(1)
+                    .sort_values(
+                        "Vulnerability Index (0-100)",
+                        ascending=False
+                    ),
+                    width="stretch"
+                )
+
+        except Exception as e:
+
+            st.error(
+                f"Could not build the vulnerability index: {e}. "
+                "Check that processed/qc_barangays.geojson and "
+                "the flood raster both exist and share "
+                "overlapping coverage."
+            )
+
+    with tab2:
+
+        st.markdown(
+            """
+            <h3 style="
+                color:#7F47ED;
+                font-size:1.6rem;
+                margin-top:-10px;
+                margin-bottom:10px;
+                padding-top:0px;
             ">
-            {layer['symbol']}
-            </span>
-            <span style="color:#7F47ED;">
-            {layer_name}
-            </span>
+                Care Services Explorer
+            </h3>
             """,
             unsafe_allow_html=True
         )
 
-    st.divider()
-
-    # --------------------------------------------------
-    # CLIMATE LAYER CONFIGURATION
-    # --------------------------------------------------
-
-    climate_overlay_layers = {
-        "Land-Surface Temperature": {
-            "path": "processed/climate/landsat_lst_summer_avg_7yr_EPSG3123_filled.tif",
-            "colormap": "YlOrRd",
-            "binary": False
-        },
-        "Vegetation (NDVI)": {
-            "path": "processed/climate/ndvi_mean_2025_EPSG3123.tif",
-            "colormap": "Greens",
-            "binary": False
-        },
-        "Flood Inundation (100-yr)": {
-            "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
-            "colormap": "Blues",
-            "binary": True
-        }
-    }
-
-    # --------------------------------------------------
-    # FILTERS
-    # --------------------------------------------------
-
-    col1, col2 = st.columns([2, 1])
-
-    with col1:
-
-        selected_layers = st.multiselect(
-            "Services to Display",
-            list(service_layers.keys()),
-            default=list(service_layers.keys())[:3]
+        st.caption(
+            """
+            Same map and flood-exposure filtering as the Care
+            Services Explorer page, shown here alongside the
+            population vulnerability view so supply (facilities)
+            and demand (at-risk population) can be compared
+            side by side without leaving this page.
+            """
         )
 
-    with col2:
+        # --------------------------------------------------
+        # SERVICE CONFIGURATION
+        # --------------------------------------------------
 
-        district_values = sorted(
-            health_centers["District"]
-            .dropna()
-            .astype(int)
-            .unique()
-        )
+        service_layers = {
 
-        district_options = {
-            "All": "All"
+            "Childcare Centers": {
+                "df": childcare_centers,
+                "color": "#4C1D95",
+                "symbol": "●",
+                "source": "Childcare Center",
+                "name_col": "Name",
+                "district_col": "District",
+                "address_col": "Address",
+                "lat_col": "latitude",
+                "lon_col": "longitude"
+            },
+
+            "Schools": {
+                "df": schools,
+                "color": "#055B52",
+                "symbol": "■",
+                "source": "School",
+                "name_col": "Name",
+                "district_col": "District",
+                "address_col": "Address",
+                "lat_col": "latitude",
+                "lon_col": "longitude"
+            },
+
+            "Health Centers": {
+                "df": health_centers,
+                "color": "#4C1D95",
+                "symbol": "★",
+                "source": "Health Facility",
+                "name_col": "Name",
+                "district_col": "District",
+                "address_col": "Address",
+                "lat_col": "latitude",
+                "lon_col": "longitude"
+            },
+
+            "Older Persons Facilities": {
+                "df": older_person_care,
+                "color": "#055B52",
+                "symbol": "◆",
+                "source": "Older Persons Facility",
+                "name_col": "Name",
+                "district_col": "District",
+                "address_col": "Address",
+                "lat_col": "latitude",
+                "lon_col": "longitude"
+            },
+
+            "Long-Term Care & Rehabilitation": {
+                "df": long_term_care,
+                "color": "#4C1D95",
+                "symbol": "▲",
+                "source": "Rehabilitation Facility",
+                "name_col": "Name",
+                "district_col": "District",
+                "address_col": "Address",
+                "lat_col": "latitude",
+                "lon_col": "longitude"
+            },
+
+            "Action Offices": {
+                "df": satellite_offices,
+                "color": "#055B52",
+                "symbol": "⬢",
+                "source": "Satellite Office",
+                "name_col": "Name",
+                "district_col": "District",
+                "address_col": "Address",
+                "lat_col": "latitude",
+                "lon_col": "longitude"
+            },
+
+            "Migration Resource Centers": {
+                "df": migration_centers,
+                "color": "#C4B5FD",
+                "symbol": "✦",
+                "source": "Migration Resource Center",
+                "name_col": "Name",
+                "district_col": "District",
+                "address_col": "Address",
+                "lat_col": "latitude",
+                "lon_col": "longitude"
+            },
         }
 
-        district_options.update(
-            {
-                f"District {d}": d
-                for d in district_values
+        # --------------------------------------------------
+        # LEGEND
+        # --------------------------------------------------
+
+        st.markdown("### Service Categories")
+
+        cols = st.columns(7)
+
+        for i, (layer_name, layer) in enumerate(service_layers.items()):
+
+            cols[i].markdown(
+                f"""
+                <span style="
+                    color:{layer['color']};
+                    font-size:25px;
+                ">
+                {layer['symbol']}
+                </span>
+                <span style="color:#7F47ED;">
+                {layer_name}
+                </span>
+                """,
+                unsafe_allow_html=True
+            )
+
+        st.divider()
+
+        # --------------------------------------------------
+        # CLIMATE LAYER CONFIGURATION
+        # --------------------------------------------------
+
+        climate_overlay_layers = {
+            "Land-Surface Temperature": {
+                "path": "processed/climate/landsat_lst_summer_avg_7yr_EPSG3123_filled.tif",
+                "colormap": "YlOrRd",
+                "binary": False
+            },
+            "Vegetation (NDVI)": {
+                "path": "processed/climate/ndvi_mean_2025_EPSG3123.tif",
+                "colormap": "Greens",
+                "binary": False
+            },
+            "Flood Inundation (100-yr)": {
+                "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+                "colormap": "Blues",
+                "binary": True
             }
-        )
-
-        selected_district_label = st.selectbox(
-            "District",
-            list(district_options.keys())
-        )
-
-        selected_district = district_options[
-            selected_district_label
-        ]
-
-    selected_climate_layers = st.multiselect(
-        "Climate & Hazard Layers (optional)",
-        list(climate_overlay_layers.keys()),
-        default=[],
-        help=(
-            "Overlay land-surface temperature, vegetation, or "
-            "flood extent under the service markers above. See "
-            "the Climate & Hazard Exposure page for a closer look "
-            "at each layer individually."
-        )
-    )
-
-    # --------------------------------------------------
-    # MAP DISPLAY
-    # --------------------------------------------------
-
-    map_html, climate_legend_info = build_explorer_map(
-        tuple(selected_layers),
-        selected_district,
-        tuple(selected_climate_layers)
-    )
-
-    st.iframe(
-        map_html,
-        height=850,
-        width="stretch"
-    )
-
-    # --------------------------------------------------
-    # CLIMATE LAYER LEGEND(S)
-    # (folium's rendered HTML is opaque to Streamlit, so any
-    # continuous-scale climate layer overlaid above gets its
-    # color-scale legend rendered here instead, just below the
-    # map. Binary layers like Flood Inundation aren't included
-    # here — they're a flooded/not-flooded mask, not a scale.)
-    # --------------------------------------------------
-
-    if climate_legend_info:
-
-        legend_cols = st.columns(len(climate_legend_info))
-
-        legend_units = {
-            "Land-Surface Temperature": "°C",
-            "Vegetation (NDVI)": ""
         }
 
-        for col, (layer_name, (layer_vmin, layer_vmax)) in zip(
-            legend_cols,
-            climate_legend_info.items()
-        ):
+        # --------------------------------------------------
+        # FILTERS
+        # --------------------------------------------------
 
-            with col:
+        col1, col2 = st.columns([2, 1])
 
-                st.markdown(
-                    render_colormap_legend_html(
-                        climate_overlay_layers[layer_name]["colormap"],
-                        layer_vmin,
-                        layer_vmax,
-                        unit=legend_units.get(layer_name, ""),
-                        label=layer_name
-                    ),
-                    unsafe_allow_html=True
+        with col1:
+
+            selected_layers = st.multiselect(
+                "Services to Display",
+                list(service_layers.keys()),
+                default=list(service_layers.keys())[:3],
+                key="popvuln_explorer_services"
+            )
+
+        with col2:
+
+            district_values = sorted(
+                health_centers["District"]
+                .dropna()
+                .astype(int)
+                .unique()
+            )
+
+            district_options = {
+                "All": "All"
+            }
+
+            district_options.update(
+                {
+                    f"District {d}": d
+                    for d in district_values
+                }
+            )
+
+            selected_district_label = st.selectbox(
+                "District",
+                list(district_options.keys()),
+                key="popvuln_explorer_district"
+            )
+
+            selected_district = district_options[
+                selected_district_label
+            ]
+
+        selected_climate_layers = st.multiselect(
+            "Climate & Hazard Layers (optional)",
+            list(climate_overlay_layers.keys()),
+            default=[],
+            help=(
+                "Overlay land-surface temperature, vegetation, or "
+                "flood extent under the service markers above. See "
+                "the Climate & Hazard Exposure page for a closer look "
+                "at each layer individually."
+            ),
+            key="popvuln_explorer_climate_layers"
+        )
+
+        flood_risk_only = st.checkbox(
+            "⚠ Show only facilities at risk of flooding",
+            value=False,
+            help=(
+                "Filters the map to facilities whose location falls "
+                "inside the 100-year flood inundation footprint "
+                "(>30cm depth). Flood-exposed facilities are also "
+                "ringed in red on the map even when this filter is "
+                "off, as long as their service layer is selected "
+                "above."
+            ),
+            key="popvuln_explorer_flood_only"
+        )
+
+        # --------------------------------------------------
+        # MAP DISPLAY
+        # --------------------------------------------------
+
+        map_html, climate_legend_info = build_explorer_map(
+            tuple(selected_layers),
+            selected_district,
+            tuple(selected_climate_layers),
+            flood_risk_only
+        )
+
+        st.iframe(
+            map_html,
+            height=850,
+            width="stretch"
+        )
+
+        # --------------------------------------------------
+        # CLIMATE LAYER LEGEND(S)
+        # (folium's rendered HTML is opaque to Streamlit, so any
+        # continuous-scale climate layer overlaid above gets its
+        # color-scale legend rendered here instead, just below the
+        # map. Binary layers like Flood Inundation aren't included
+        # here — they're a flooded/not-flooded mask, not a scale.)
+        # --------------------------------------------------
+
+        if climate_legend_info:
+
+            legend_cols = st.columns(len(climate_legend_info))
+
+            legend_units = {
+                "Land-Surface Temperature": "°C",
+                "Vegetation (NDVI)": ""
+            }
+
+            for col, (layer_name, (layer_vmin, layer_vmax)) in zip(
+                legend_cols,
+                climate_legend_info.items()
+            ):
+
+                with col:
+
+                    st.markdown(
+                        render_colormap_legend_html(
+                            climate_overlay_layers[layer_name]["colormap"],
+                            layer_vmin,
+                            layer_vmax,
+                            unit=legend_units.get(layer_name, ""),
+                            label=layer_name
+                        ),
+                        unsafe_allow_html=True
+                    )
+
+        st.divider()
+
+        # --------------------------------------------------
+        # SUPPLY-SIDE FLOOD EXPOSURE SUMMARY
+        # (counts, across the *currently selected* service layers
+        # and district, how many facilities sit inside the 100-yr
+        # flood footprint — see flag_facilities_at_risk in
+        # functions.py. Independent of flood_risk_only: shown
+        # whether or not the map is currently filtered to at-risk
+        # facilities only, so the counts are visible even when
+        # browsing the full set of markers.)
+        # --------------------------------------------------
+
+        st.markdown("### Facilities at Risk of Flooding")
+
+        st.caption(
+            """
+            Facilities whose location falls inside the 100-year
+            flood inundation footprint (>30cm depth), among the
+            service layers and district currently selected above.
+            """
+        )
+
+        if not selected_layers:
+
+            st.info(
+                "Select at least one service layer above to see "
+                "flood exposure counts."
+            )
+
+        else:
+
+            exposure_rows = []
+
+            for layer_name in selected_layers:
+
+                layer_df = service_layers[layer_name]["df"]
+
+                if selected_district != "All":
+
+                    layer_df = layer_df[
+                        layer_df[
+                            service_layers[layer_name]["district_col"]
+                        ]
+                        .astype(int)
+                        == selected_district
+                    ]
+
+                total_n = len(layer_df)
+
+                at_risk_n = int(
+                    layer_df.get(
+                        "flood_risk",
+                        pd.Series(False, index=layer_df.index)
+                    ).sum()
                 )
 
+                exposure_rows.append({
+                    "Service Type": layer_name,
+                    "Total Facilities": total_n,
+                    "In Flood Zone": at_risk_n,
+                    "% At Risk": (
+                        round(100 * at_risk_n / total_n, 1)
+                        if total_n > 0 else 0.0
+                    )
+                })
+
+            exposure_df = pd.DataFrame(exposure_rows)
+
+            total_facilities = exposure_df["Total Facilities"].sum()
+            total_at_risk = exposure_df["In Flood Zone"].sum()
+
+            kpi1, kpi2, kpi3 = st.columns(3)
+
+            kpi1.metric(
+                "Facilities Selected",
+                f"{total_facilities:,}"
+            )
+
+            kpi2.metric(
+                "In Flood Zone",
+                f"{total_at_risk:,}"
+            )
+
+            kpi3.metric(
+                "% At Risk",
+                f"{(100 * total_at_risk / total_facilities):.1f}%"
+                if total_facilities > 0 else "0.0%"
+            )
+
+            fig_exposure = px.bar(
+                exposure_df.sort_values(
+                    "In Flood Zone",
+                    ascending=False
+                ),
+                x="Service Type",
+                y="In Flood Zone",
+                color="% At Risk",
+                color_continuous_scale="Reds",
+                title="Facilities in 100-yr Flood Zone, by Service Type"
+            )
+
+            fig_exposure.update_layout(
+                xaxis_title="",
+                yaxis_title="Facilities in Flood Zone"
+            )
+
+            st.plotly_chart(
+                fig_exposure,
+                width="stretch"
+            )
+
+            st.dataframe(
+                exposure_df,
+                width="stretch"
+            )
 
 elif page == "Accessibility Analysis":
     import geopandas as gpd
@@ -7992,7 +8660,6 @@ elif page == "Barangay Clusters":
         "text/csv"
     )
 
-
 elif page == "Population Vulnerability":
 
 
@@ -8935,7 +9602,6 @@ elif page == "Population Vulnerability":
                 exposure_df,
                 width="stretch"
             )
-
 
 elif page == "Climate & Hazard Exposure":
 
