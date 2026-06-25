@@ -39,6 +39,109 @@ h1, h2, h3, h4 {
     color: #7F47ED;
 }
 
+/* --------------------------------------------------
+   HOMEPAGE COMPONENTS
+   (same tokens as the private dashboard's Home page —
+   soft purple-tinted neutrals for card surfaces, the
+   same #7F47ED/#4C1D95 used everywhere else for accents
+   and headings, so both versions share one visual system.)
+   -------------------------------------------------- */
+
+.qcd-hero {
+    background: linear-gradient(135deg, #4C1D95 0%, #7F47ED 100%);
+    border-radius: 14px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.qcd-hero h2 {
+    color: #FFFFFF !important;
+    margin: 0 0 8px 0;
+    font-size: 1.7rem;
+}
+
+.qcd-hero p {
+    color: #E4DEF7;
+    margin: 0;
+    max-width: 640px;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.qcd-hero-badge {
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 10px;
+    padding: 12px 22px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.qcd-hero-badge .qcd-badge-value {
+    color: #FFFFFF;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 1.9rem;
+    line-height: 1.1;
+}
+
+.qcd-hero-badge .qcd-badge-label {
+    color: #E4DEF7;
+    font-size: 0.78rem;
+    line-height: 1.3;
+}
+
+.qcd-card {
+    background: #F7F5FC;
+    border: 1px solid #E4DEF7;
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+}
+
+.qcd-card-accent {
+    border-left: 4px solid #7F47ED;
+    background: #F7F5FC;
+    border-top: 1px solid #E4DEF7;
+    border-right: 1px solid #E4DEF7;
+    border-bottom: 1px solid #E4DEF7;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+}
+
+.qcd-card-title {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 0.98rem;
+    color: #2B2A33;
+    margin-bottom: 2px;
+}
+
+.qcd-card-body {
+    font-size: 0.86rem;
+    color: #5B5868;
+    line-height: 1.45;
+    margin: 0;
+}
+
+.qcd-section-label {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #7F47ED;
+    border-bottom: 2px solid #E4DEF7;
+    padding-bottom: 6px;
+    margin-bottom: 14px;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -150,6 +253,16 @@ st.divider()
 geo, bounds = load_geo()
 
 # --------------------------------------------------
+# POPULATION DATA
+# (only the citywide total is used on this public build —
+# for the Home page's headline stat badge — since the
+# detailed barangay-level demographic breakdown lives on
+# Population Overview, which isn't part of this version.)
+# --------------------------------------------------
+
+population_summary, _, _ = load_data_for_kpis()
+
+# --------------------------------------------------
 # QC CENTER
 # --------------------------------------------------
 minx, miny, maxx, maxy = bounds
@@ -210,7 +323,7 @@ st.markdown("""
 # --------------------------------------------------
 
 if "page" not in st.session_state:
-    st.session_state.page = "Childcare Centers"
+    st.session_state.page = "Home"
 
 
 @st.cache_data(show_spinner="Building map...")
@@ -507,6 +620,14 @@ selected_ltc_category = "All"
 # --------------------------------------------------
 
 st.sidebar.title("Navigation")
+
+if st.sidebar.button(
+    "Home",
+    width="stretch"
+):
+    st.session_state.page = "Home"
+    st.rerun()
+
 st.sidebar.subheader("Care Maps")
 
 # --------------------------------------------------
@@ -850,7 +971,127 @@ if page == "Care Services Explorer":
 # PAGES
 # --------------------------------------------------
 
-if page == "Childcare Centers":
+if page == "Home":
+
+    # =====================================================
+    # HERO
+    # =====================================================
+
+    citywide_population = population_summary["Total"].iloc[0]
+
+    st.markdown(
+        f"""
+        <div class="qcd-hero">
+            <div>
+                <h2>Quezon Caring City Dashboard</h2>
+                <p>
+                    Public reference for Quezon City's
+                    care-service network — childcare, schools,
+                    health centers, older persons' facilities,
+                    long-term care, action offices, and
+                    migration resource centers.
+                </p>
+            </div>
+            <div class="qcd-hero-badge">
+                <div class="qcd-badge-value">
+                    {citywide_population:,.0f}
+                </div>
+                <div class="qcd-badge-label">
+                    residents citywide
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # =====================================================
+    # HOW TO NAVIGATE  /  WHAT'S INSIDE
+    # =====================================================
+
+    nav_col, contents_col = st.columns([1, 1.3])
+
+    with nav_col:
+
+        st.markdown(
+            '<div class="qcd-section-label">How to Navigate</div>',
+            unsafe_allow_html=True
+        )
+
+        nav_steps = [
+            (
+                "Explore",
+                "Use the sidebar to open a care-service map, "
+                "or the Care Services Explorer to see several "
+                "service types on one map."
+            ),
+            (
+                "Filter",
+                "Each map offers filters above it — by "
+                "provider type, district, or category."
+            ),
+            (
+                "Find",
+                "Click any marker on a map for the facility's "
+                "name, address, and hours."
+            )
+        ]
+
+        for step_title, step_body in nav_steps:
+
+            st.markdown(
+                f"""
+                <div class="qcd-card">
+                    <div class="qcd-card-title">{step_title}</div>
+                    <p class="qcd-card-body">{step_body}</p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+    with contents_col:
+
+        st.markdown(
+            '<div class="qcd-section-label">What\'s Inside</div>',
+            unsafe_allow_html=True
+        )
+
+        st.markdown(
+            """
+            <div class="qcd-card-accent"
+                 style="border-left-color:#055B52;">
+                <div class="qcd-card-title">Care Services</div>
+                <p class="qcd-card-body">
+                    Childcare centers, schools, health centers,
+                    older persons' facilities, long-term care
+                    and rehabilitation, action offices, and
+                    migration resource centers — each on its
+                    own map under "Care Maps" in the sidebar.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown(
+            """
+            <div class="qcd-card-accent"
+                 style="border-left-color:#7F47ED;">
+                <div class="qcd-card-title">
+                    Care Services Explorer
+                </div>
+                <p class="qcd-card-body">
+                    See several service types together on a
+                    single map, filterable by service and
+                    district — useful for comparing coverage
+                    across facility types in one place.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+elif page == "Childcare Centers":
 
     st.markdown(
         """
