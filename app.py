@@ -43,6 +43,150 @@ h1, h2, h3, h4 {
     color: #7F47ED;
 }
 
+/* --------------------------------------------------
+   HOMEPAGE COMPONENTS
+   (extends the existing purple/Montserrat system rather
+   than introducing a second palette — soft purple-tinted
+   neutrals for card surfaces, the same #7F47ED/#4C1D95
+   used everywhere else for accents and headings.)
+   -------------------------------------------------- */
+
+.qcd-hero {
+    background: linear-gradient(135deg, #4C1D95 0%, #7F47ED 100%);
+    border-radius: 14px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.qcd-hero h2 {
+    color: #FFFFFF !important;
+    margin: 0 0 8px 0;
+    font-size: 1.7rem;
+}
+
+.qcd-hero p {
+    color: #E4DEF7;
+    margin: 0;
+    max-width: 640px;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.qcd-hero-badge {
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 10px;
+    padding: 12px 22px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.qcd-hero-badge .qcd-badge-value {
+    color: #FFFFFF;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 1.9rem;
+    line-height: 1.1;
+}
+
+.qcd-hero-badge .qcd-badge-label {
+    color: #E4DEF7;
+    font-size: 0.78rem;
+    line-height: 1.3;
+}
+
+.qcd-card {
+    background: #F7F5FC;
+    border: 1px solid #E4DEF7;
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+}
+
+.qcd-card-accent {
+    border-left: 4px solid #7F47ED;
+    background: #F7F5FC;
+    border-top: 1px solid #E4DEF7;
+    border-right: 1px solid #E4DEF7;
+    border-bottom: 1px solid #E4DEF7;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+}
+
+.qcd-eyebrow {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #7F47ED;
+    margin-bottom: 4px;
+}
+
+.qcd-card-title {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 0.98rem;
+    color: #2B2A33;
+    margin-bottom: 2px;
+}
+
+.qcd-card-body {
+    font-size: 0.86rem;
+    color: #5B5868;
+    line-height: 1.45;
+    margin: 0;
+}
+
+.qcd-section-label {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #7F47ED;
+    border-bottom: 2px solid #E4DEF7;
+    padding-bottom: 6px;
+    margin-bottom: 14px;
+}
+
+/* Reusable "takeaway" box for under a chart — states the
+   one-sentence insight in plain language, the way the PBIX
+   reference dashboard does. Not yet applied to any page;
+   ready to drop under a chart with:
+   st.markdown('<div class="qcd-insight"><div class="qcd-insight-label">Insight</div>...</div>', unsafe_allow_html=True) */
+
+.qcd-insight {
+    background: #F0EBFB;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 8px;
+    margin-bottom: 10px;
+}
+
+.qcd-insight-label {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #4C1D95;
+    margin-bottom: 3px;
+}
+
+.qcd-insight-body {
+    font-size: 0.88rem;
+    color: #2B2A33;
+    line-height: 1.45;
+    margin: 0;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -256,7 +400,7 @@ st.markdown("""
 # --------------------------------------------------
 
 if "page" not in st.session_state:
-    st.session_state.page = "Population Overview"
+    st.session_state.page = "Home"
 
 
 @st.cache_data(show_spinner="Building map...")
@@ -704,6 +848,14 @@ selected_ltc_category = "All"
 # --------------------------------------------------
 
 st.sidebar.title("Navigation")
+
+if st.sidebar.button(
+    "Home",
+    width="stretch"
+):
+    st.session_state.page = "Home"
+    st.rerun()
+
 st.sidebar.subheader("Care Maps")
 
 
@@ -1095,8 +1247,127 @@ if page == "Care Services Explorer":
 # PAGES
 # --------------------------------------------------
 
- 
-# --------------------------------------------------
+if page == "Home":
+
+    # =====================================================
+    # HERO
+    # =====================================================
+
+    citywide_population = population_summary["Total"].iloc[0]
+
+    st.markdown(
+        f"""
+        <div class="qcd-hero">
+            <div>
+                <h2>Quezon Caring City Dashboard</h2>
+                <p>
+                    Central reference for Quezon City's care-service
+                    network — population, facilities, accessibility,
+                    and climate exposure — to support planning,
+                    resource allocation, and program design.
+                </p>
+            </div>
+            <div class="qcd-hero-badge">
+                <div class="qcd-badge-value">
+                    {citywide_population:,.0f}
+                </div>
+                <div class="qcd-badge-label">
+                    residents citywide
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # =====================================================
+    # HOW TO NAVIGATE  /  WHAT'S INSIDE
+    # =====================================================
+
+    nav_col, contents_col = st.columns([1, 1.3])
+
+    with nav_col:
+
+        st.markdown(
+            '<div class="qcd-section-label">How to Navigate</div>',
+            unsafe_allow_html=True
+        )
+
+        nav_steps = [
+            (
+                "Explore",
+                "Use the sidebar to move between care-service "
+                "maps, analysis tools, and climate pages."
+            ),
+            (
+                "Filter",
+                "Most pages offer district, category, or layer "
+                "filters above the map or chart."
+            ),
+            (
+                "Decide",
+                "Use the accessibility ratios, planning "
+                "priorities, and vulnerability index to inform "
+                "resource allocation."
+            )
+        ]
+
+        for step_title, step_body in nav_steps:
+
+            st.markdown(
+                f"""
+                <div class="qcd-card">
+                    <div class="qcd-card-title">{step_title}</div>
+                    <p class="qcd-card-body">{step_body}</p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+    with contents_col:
+
+        st.markdown(
+            '<div class="qcd-section-label">What\'s Inside</div>',
+            unsafe_allow_html=True
+        )
+
+        content_groups = [
+            (
+                "#055B52",
+                "Care Services",
+                "Childcare, schools, health centers, older "
+                "persons' facilities, long-term care, action "
+                "offices, and migration resource centers."
+            ),
+            (
+                "#7F47ED",
+                "Analysis Tools",
+                "Care Services Explorer, Accessibility Analysis, "
+                "Care Planning & Investment Priorities, and "
+                "Barangay Clusters."
+            ),
+            (
+                "#B91C1C",
+                "Climate & Vulnerability",
+                "Population Vulnerability and Climate & Hazard "
+                "Exposure — which facilities and population "
+                "groups are most at risk, and where."
+            )
+        ]
+
+        for accent_color, group_title, group_body in content_groups:
+
+            st.markdown(
+                f"""
+                <div class="qcd-card-accent"
+                     style="border-left-color:{accent_color};">
+                    <div class="qcd-card-title">{group_title}</div>
+                    <p class="qcd-card-body">{group_body}</p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
 elif page == "Population Overview":
 
     import geopandas as gpd
@@ -9461,4 +9732,4 @@ elif page == "Climate & Hazard Exposure":
                 "processed/climate/Heatwaves.png",
                 caption="Land-surface temperature reference map",
                 width="stretch"
-            ) 
+            )
