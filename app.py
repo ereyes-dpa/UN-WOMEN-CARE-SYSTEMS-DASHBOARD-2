@@ -255,7 +255,7 @@ def build_explorer_map(
 
         "Schools": {
             "df": schools,
-            "color": "#5B21B6",
+            "color": "#055B52",
             "symbol": "■",
             "source": "School",
             "name_col": "Name",
@@ -267,7 +267,7 @@ def build_explorer_map(
 
         "Health Centers": {
             "df": health_centers,
-            "color": "#7F47ED",
+            "color": "#4C1D95",
             "symbol": "★",
             "source": "Health Facility",
             "name_col": "Name",
@@ -279,7 +279,7 @@ def build_explorer_map(
 
         "Older Persons Facilities": {
             "df": older_person_care,
-            "color": "#8B5CF6",
+            "color": "#055B52",
             "symbol": "◆",
             "source": "Older Persons Facility",
             "name_col": "Name",
@@ -291,7 +291,7 @@ def build_explorer_map(
 
         "Long-Term Care & Rehabilitation": {
             "df": long_term_care,
-            "color": "#A78BFA",
+            "color": "#4C1D95",
             "symbol": "▲",
             "source": "Rehabilitation Facility",
             "name_col": "Name",
@@ -303,7 +303,7 @@ def build_explorer_map(
 
         "Action Offices": {
             "df": satellite_offices,
-            "color": "#DDD6FE",
+            "color": "#055B52",
             "symbol": "⬢",
             "source": "Satellite Office",
             "name_col": "Name",
@@ -315,7 +315,7 @@ def build_explorer_map(
 
         "Migration Resource Centers": {
             "df": migration_centers,
-            "color": "#C084FC",
+            "color": "#C4B5FD",
             "symbol": "✦",
             "source": "Migration Resource Center",
             "name_col": "Name",
@@ -349,7 +349,7 @@ def build_explorer_map(
     folium.GeoJson(
         geo_json,
         style_function=lambda x: {
-            "fillColor": "#7fbf7f",
+            "fillColor": "#A6CFC1",
             "color": "#666666",
             "weight": 1,
             "fillOpacity": 0.10,
@@ -450,7 +450,7 @@ def build_explorer_map(
                 marker_color_value = district_color(district)
 
             elif layer_name == "Migration Resource Centers":
-                marker_color_value = "#C084FC"
+                marker_color_value = "#C4B5FD"
 
             else:
                 marker_color_value = "#7F47ED"
@@ -746,11 +746,11 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#5B21B6;font-size:22px;">●</span>
+        <span style="color:#4C1D95;font-size:22px;">●</span>
         <b>Child Development Center</b><br>
-        <span style="color:#7F47ED;font-size:22px;">●</span>
+        <span style="color:#8869C9;font-size:22px;">●</span>
         <b>Child Learning Center</b><br>
-        <span style="color:#A78BFA;font-size:22px;">●</span>
+        <span style="color:#C4B5FD;font-size:22px;">●</span>
         <b>Day Care Center</b>
         """,
         unsafe_allow_html=True
@@ -761,9 +761,9 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#5B21B6;font-size:22px;">■</span>
+        <span style="color:#055B52;font-size:22px;">■</span>
         <b>Public School</b><br>
-        <span style="color:#A78BFA;font-size:22px;">■</span>
+        <span style="color:#A6CFC1;font-size:22px;">■</span>
         <b>Private School</b>
         """,
         unsafe_allow_html=True
@@ -799,9 +799,9 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#4C1D95;font-size:22px;">◆</span>
+        <span style="color:#055B52;font-size:22px;">◆</span>
         <b>Nursing Care Center</b><br>
-        <span style="color:#A78BFA;font-size:22px;">◆</span>
+        <span style="color:#A6CFC1;font-size:22px;">◆</span>
         <b>Bahay Aruga</b>
         """,
         unsafe_allow_html=True
@@ -829,7 +829,7 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#7F47ED;font-size:22px;">⬢</span>
+        <span style="color:#055B52;font-size:22px;">⬢</span>
         <b>District Offices</b>
         """,
         unsafe_allow_html=True
@@ -840,7 +840,7 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#C084FC;font-size:22px;">✦</span>
+        <span style="color:#C4B5FD;font-size:22px;">✦</span>
         <b>Migration Resource Center</b>
         """,
         unsafe_allow_html=True
@@ -871,20 +871,6 @@ if page == "Childcare Centers":
     Explore the spatial distribution of childcare facilities in Quezon City,
     including public Child Development Centers and private childcare providers.
     """)
-
-    st.markdown(
-        """
-        <span style="color:#5B21B6;font-size:18px;">●</span>
-        <b>Child Development Center</b> — For children aged 3–4 years and supports school readiness.<br>
-
-        <span style="color:#7F47ED;font-size:18px;">●</span>
-        <b>Child Learning Center</b> — Private childcare and early learning services.<br>
-
-        <span style="color:#A78BFA;font-size:18px;">●</span>
-        <b>Day Care Center</b> — Private day care and supervision services.
-        """,
-        unsafe_allow_html=True
-    )
 
     # --------------------------------------------------
     # DISTRICT FILTER
@@ -1080,16 +1066,6 @@ elif page == "Schools":
     Explore the spatial distribution of schools across Quezon City,
     including both public and private educational institutions.
     """)
-
-    st.markdown(
-        """
-        <span style="color:#5B21B6;">●</span>
-        <b>Public School</b> — Government-operated educational institutions.<br>
-        <span style="color:#A78BFA;">●</span>
-        <b>Private School</b> — Privately operated educational institutions.
-        """,
-        unsafe_allow_html=True
-    )
 
     # --------------------------------------------------
     # DISTRICT FILTER
@@ -1311,28 +1287,6 @@ elif page == "Health Centers Map":
     facility coverage, and the availability of pharmacies across districts.
     """)
 
-    st.markdown(
-        f"""
-        <span style="color:{category_hex('QC LGU')};">●</span>
-        <b>QC LGU</b> — Maternity and lying-in clinics for healthy pregnancies.<br>
-
-        <span style="color:{category_hex('National')};">●</span>
-        <b>National</b> — National government-owned hospitals.<br>
-
-        <span style="color:{category_hex('Super Health')};">●</span>
-        <b>Super Health</b> — Enhanced health centers with laboratory, dental, ambulance, breastfeeding, and lying-in services.<br>
-
-        <span style="color:{category_hex('Health Center')};">●</span>
-        <b>Health Center</b> — Community-based primary healthcare facilities.<br>
-
-        <span style="color:{category_hex('Pharmacy')};">●</span>
-        <b>Pharmacy</b> — Pharmacy services within health facilities.<br>
-
-        <span style="color:{category_hex('Milk Bank')};">●</span>
-        <b>Milk Bank</b> — Safe pasteurized human milk services for infants in need.
-        """,
-        unsafe_allow_html=True
-    )
     # --------------------------------------------------
     # DISTRICT FILTER
     # --------------------------------------------------
@@ -1557,18 +1511,6 @@ elif page == "Older Persons Center Map":
     Explore facilities supporting older persons in Quezon City,
     including nursing care centers and Bahay Aruga facilities.
     """)
-
-    st.markdown(
-        """
-        <span style="color:#4C1D95;">●</span>
-        <b>Nursing Care Center</b> — Residential facilities providing long-term nursing and care services.<br>
-
-        <span style="color:#A78BFA;">●</span>
-        <b>Bahay Aruga</b> — Temporary residential facility for abandoned, neglected, abused, and indigent QC senior citizens aged 60 years and above.
-        """,
-        unsafe_allow_html=True
-    )
-
 
     # --------------------------------------------------
     # DISTRICT FILTER
@@ -1813,19 +1755,6 @@ elif page == "Long-Term Care & Rehabilitation":
     recovery services in Quezon City.
     """)
 
-    legend_html = ""
-
-    for cat in ltc_categories:
-        legend_html += (
-            f'<span style="color:{ltc_color(cat)};">●</span> '
-            f'<b>{cat}</b><br>'
-        )
-
-    st.markdown(
-        legend_html,
-        unsafe_allow_html=True
-    )
-
     # --------------------------------------------------
     # DISTRICT FILTER
     # --------------------------------------------------
@@ -2064,15 +1993,6 @@ elif page == "Action Offices":
     to government services.
     """)
 
-
-    st.markdown(
-        """
-        <span style="color:#7F47ED;">●</span>
-        <b>Action Offices</b> — Decentralized access points that provide city government services across Quezon City.
-        """,
-        unsafe_allow_html=True
-    )
-
     # --------------------------------------------------
     # DISTRICT FILTER
     # --------------------------------------------------
@@ -2298,14 +2218,6 @@ elif page == "Migration Resource Center":
     referral services, and support for migrant workers
     and their families in Quezon City.
     """)
-
-    st.markdown(
-        """
-        <span style="color:#7F47ED;">●</span>
-        <b>QC Migrants Resource Center</b> — Provides support, information, training, and services for migrant workers and their families.
-        """,
-        unsafe_allow_html=True
-    )
 
     # --------------------------------------------------
     # DISTRICT FILTER
@@ -2556,7 +2468,7 @@ elif page == "Care Services Explorer":
 
         "Schools": {
             "df": schools,
-            "color": "#5B21B6",
+            "color": "#055B52",
             "symbol": "■",
             "source": "School",
             "name_col": "Name",
@@ -2568,7 +2480,7 @@ elif page == "Care Services Explorer":
 
         "Health Centers": {
             "df": health_centers,
-            "color": "#7F47ED",
+            "color": "#4C1D95",
             "symbol": "★",
             "source": "Health Facility",
             "name_col": "Name",
@@ -2580,7 +2492,7 @@ elif page == "Care Services Explorer":
 
         "Older Persons Facilities": {
             "df": older_person_care,
-            "color": "#8B5CF6",
+            "color": "#055B52",
             "symbol": "◆",
             "source": "Older Persons Facility",
             "name_col": "Name",
@@ -2592,7 +2504,7 @@ elif page == "Care Services Explorer":
 
         "Long-Term Care & Rehabilitation": {
             "df": long_term_care,
-            "color": "#A78BFA",
+            "color": "#4C1D95",
             "symbol": "▲",
             "source": "Rehabilitation Facility",
             "name_col": "Name",
@@ -2604,7 +2516,7 @@ elif page == "Care Services Explorer":
 
         "Action Offices": {
             "df": satellite_offices,
-            "color": "#DDD6FE",
+            "color": "#055B52",
             "symbol": "⬢",
             "source": "Satellite Office",
             "name_col": "Name",
@@ -2616,7 +2528,7 @@ elif page == "Care Services Explorer":
 
         "Migration Resource Centers": {
             "df": migration_centers,
-            "color": "#C084FC",
+            "color": "#C4B5FD",
             "symbol": "✦",
             "source": "Migration Resource Center",
             "name_col": "Name",
