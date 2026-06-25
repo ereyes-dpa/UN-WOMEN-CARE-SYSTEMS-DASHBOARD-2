@@ -1,0 +1,55 @@
+Category,Indicator,Description,Data Source
+Demographic,Total population per barangay,Total residents in each barangay,PSA 2020 CPH
+Demographic,Population by sex (male / female),Male and female resident counts per barangay,PSA 2020 CPH
+Demographic,"Population by age group (0–2, 3–5, 6–17, 18–59, 60+)","Residents in each age band, disaggregated by sex; underpins the three care-demand groups",PSA 2020 CPH
+Demographic,Children 0–5 (childcare demand),Early-childhood care demand population (0–2 nursery plus 3–5 pre-school),PSA 2020 CPH
+Demographic,Older persons 60+ (census),Resident population aged 60 and above (RA 9994 threshold),PSA 2020 CPH
+Demographic,Population density,Residents per square kilometre,PSA 2020 CPH and barangay polygons
+Demographic,Registered PWDs per barangay,Cumulative count of persons with disability registered with PDAO (all ages),PDAO registry
+Demographic,Seniors with disability,"Persons registered as both senior citizen and PWD; two conflicting sources retained (OSCA = 4,677; PDAO = 6,429)",OSCA sector data and PDAO age data
+Demographic,Disability prevalence rate,Registered PWDs as a share of census population per barangay,PDAO and PSA 2020 CPH
+Contextual - Socio-economic,Sex ratio,Males per 100 females per barangay,PSA 2020 CPH
+Contextual - Socio-economic,Share of working-age women,Women aged 18–59 as a share of total population; proxy for female labour available for paid work and unpaid care?,PSA 2020 CPH
+Contextual - Socio-economic,Average household size,Average number of persons per household; context on household dependency load,2024 CBMS (PSA)
+Contextual - Socio-economic,Average nuclear families per household,Average number of nuclear families per household; values above 1 indicate doubling-up or shared dwellings,2024 CBMS (PSA)
+Contextual - Socio-economic,Food insecurity prevalence,Share of households worried about not having enough food to eat (mild / headline food insecurity),2024 CBMS (PSA)
+Contextual - Socio-economic,Severe food insecurity,Share of households that went without eating for a whole day (most severe food insecurity),2024 CBMS (PSA)
+Contextual - Socio-economic,Food insecurity intensity score,Severity-weighted score across all eight food insecurity items (1 = worried to 8 = whole day without eating),2024 CBMS (PSA)
+Contextual - Socio-economic,Housing inadequacy index,"Average share of households with unimproved (natural, light, or salvaged) roof, walls, and floor",2024 CBMS (PSA)
+Contextual - Socio-economic,Severe housing deprivation,Share of households using makeshift / salvaged / improvised building materials,2024 CBMS (PSA)
+Contextual - Climate,"Total Population (2020, constrained) under High Flood Risk (%)",Share of total constrained population (2020) living in high flood risk areas.,Administrative Data Sources; WorldPop
+Contextual - Climate,"Female Population (2020, constrained) under High Flood Risk (%)",Percentage of total constrained female population (2020) in high-risk areas.,Administrative Data Sources; WorldPop
+Contextual - Climate,"Male Population (2020, constrained) under High Flood Risk (%)",Percentage of total constrained male population (2020) living in high-risk areas.,Administrative Data Sources; WorldPop
+Contextual - Climate,Elderly Population (60+) under High Flood Risk (%),Percentage of total population aged 60+ exposed to high flood risk.,Administrative Data Sources; WorldPop
+Contextual - Climate,Female Elderly (60+) under High Flood Risk (%),Percentage of female elderly (60+) exposed to flood risk.,Administrative Data Sources; WorldPop
+Contextual - Climate,Male Elderly (60+) under High Flood Risk (%),Percentage of elderly male population (60+) exposed to flood risk.,Administrative Data Sources; WorldPop
+Accesibility,Number of facilities by barangay,Count of relevant facilities by barangay.,PSA 2020 CPH; Administrative supply data
+Accesibility,Facilities per 1000 children (0-5) ,"Ratio of childcare facilities to children aged 0–5, expressed per 1,000 children.",PSA 2020 CPH; Administrative supply data
+Accesibility,Facilities per 1000 female children (0-5),"Ratio of childcare facilities to female children aged 0–5, expressed per 1,000 female children.",PSA 2020 CPH; Administrative supply data
+Accesibility,Facilities per 1000 male children (0-5),"Ratio of childcare facilities to male children aged 0–5, expressed per 1,000 male children.",PSA 2020 CPH; Administrative supply data
+Accesibility,Facilities per 1000 older persons (60+),"Ratio of eldercare facilities to persons aged 60 and above, expressed per 1,000 older persons.",PSA 2020 CPH; Administrative supply data
+Accesibility,Facilities per 1000 male older persons (60+),"Ratio of eldercare facilities to male persons aged 60 and above, expressed per 1,000 male older persons.",PSA 2020 CPH; Administrative supply data
+Accesibility,Facilities per 1000 female older persons (60+),"Ratio of eldercare facilities to female persons aged 60 and above, expressed per 1,000 female older persons.",PSA 2020 CPH; Administrative supply data
+Accesibility,Long-Term Care and Rehabilitation Center per 1000 PWDs,"Ratio of long-term care and rehabilitation facilities to registered PWDs, expressed per 1,000 registered PWDs.",PSA 2020 CPH; Administrative supply data
+Accesibility,School facilities per 1000 children (3-5),"Ratio of school facilities to children aged 3–5, expressed per 1,000 children.",PSA 2020 CPH; Administrative supply data
+Accesibility,School facilities per 1000 male children (3-5),"Ratio of school facilities to male children aged 3–5, expressed per 1,000 male children.",PSA 2020 CPH; Administrative supply data
+Accesibility,School facilities per 1000 female children (3-5),"Ratio of school facilities to female children aged 3–5, expressed per 1,000 female children.",PSA 2020 CPH; Administrative supply data
+Accesibility,School facilities per 1000 children (6-17),"Ratio of school facilities to children aged 6–17, expressed per 1,000 children.",PSA 2020 CPH; Administrative supply data
+Accesibility,School facilities per 1000 male children (6-17),"Ratio of school facilities to male children aged 6–17, expressed per 1,000 male children.",PSA 2020 CPH; Administrative supply data
+Accesibility,School facilities per 1000 female children (6-17),"Ratio of school facilities to female children aged 6–17, expressed per 1,000 female children.",PSA 2020 CPH; Administrative supply data
+Accesibility,Eldercare facilities per 1000 older persons (80+),"Ratio of eldercare facilities to persons aged 80 and above, expressed per 1,000 older persons aged 80+.",PSA 2020 CPH; Administrative supply data
+Accesibility,Eldercare facilities per 1000 male older persons (80+),"Ratio of eldercare facilities to male persons aged 80 and above, expressed per 1,000 male older persons aged 80+.",PSA 2020 CPH; Administrative supply data
+Accesibility,Eldercare facilities per 1000 female older persons (80+),"Ratio of eldercare facilities to female persons aged 80 and above, expressed per 1,000 female older persons aged 80+.",PSA 2020 CPH; Administrative supply data
+Accesibility,Health centers per 1000 people,"Ratio of health centers to the total population, expressed per 1,000 residents.",PSA 2020 CPH; Administrative supply data
+Accesibility,Health centers per 1000 males,"Ratio of health centers to the male population, expressed per 1,000 male residents.",PSA 2020 CPH; Administrative supply data
+Accesibility,Health centers per 1000 females,"Ratio of health centers to the female population, expressed per 1,000 female residents.",PSA 2020 CPH; Administrative supply data
+Accesibility,Health centers per 1000 children 0-5,"Ratio of health centers to children aged 0–5, expressed per 1,000 children.",PSA 2020 CPH; Administrative supply data
+Accesibility,Health centers per 1000 male children 0-5,"Ratio of health centers to male children aged 0–5, expressed per 1,000 male children.",PSA 2020 CPH; Administrative supply data
+Accesibility,Health centers per 1000 female children 0-5,"Ratio of health centers to female children aged 0–5, expressed per 1,000 female children.",PSA 2020 CPH; Administrative supply data
+Accesibility,Health centers per 1000 older persons (60+),"Ratio of health centers to persons aged 60 and above, expressed per 1,000 older persons.",PSA 2020 CPH; Administrative supply data
+Accesibility,Health centers per 1000 male older persons (60+),"Ratio of health centers to male persons aged 60 and above, expressed per 1,000 male older persons.",PSA 2020 CPH; Administrative supply data
+Accesibility,Health centers per 1000 female older persons (60+),"Ratio of health centers to female persons aged 60 and above, expressed per 1, 000 female older persons.",PSA 2020 CPH; Administrative supply data
+Accesibility,Health centers per 1000 PWDs,"Ratio of health centers to registered PWDs, expressed per 1,000 registered PWDs.",PSA 2020 CPH; Administrative supply data
+Planning and Investment Prioritization,Accessibility Index,"Facilities per 10,000 population rescaled from 0 to 100, where 0 represents the least-served area in the dataset and 100 represents the best-served area",Higher is better
+Planning and Investment Prioritization,Care Demand per facility,Ratio of children aged 0–5 and older persons aged 60+ to care-related facilities,Lower is better
+Planning and Investment Prioritization,Care Desert,Barangay with zero registered care-related facilities of any kind,"Flag, not a score/direction"

@@ -1,0 +1,56 @@
+QC Care Mapping - Demand Indicators Codebook,,,,,,,
+One row per indicator. Mirrors the Viet Nam project format (Romain's indicator list).,,,,,,,
+,,,,,,,
+Indicator Name,Variable Name,Full Description,Calculation / Definition,Unit of Measurement,Level,Source,Status
+Barangay PSGC code,psgc_code,Official PSA geographic identifier for the barangay; join key to supply and accessibility layers.,Direct from PSA standard geographic code list.,code,ADM3,PSA,pending (to be filled)
+Barangay name,barangay,Barangay name (canonical spelling used across all demand outputs).,Direct.,text,ADM3,PSA 2020 CPH,final
+District,district,Congressional district (1 to 6).,Direct.,integer,ADM3,PSA,final
+Administrative area,area_km2,Barangay land area in square kilometres.,Derived from barangay polygon geometry (EPSG:32651).,km2,ADM3,QC barangay polygons,final
+Total population,pop_census,Total resident population per barangay.,Sum of all single-year age counts (Table 30).,persons,ADM3,PSA 2020 CPH (Table 30),final
+Male population,pop_male,Male resident population per barangay.,Sum of male single-year age counts.,persons,ADM3,PSA 2020 CPH (Table 30),final
+Female population,pop_female,Female resident population per barangay.,Sum of female single-year age counts.,persons,ADM3,PSA 2020 CPH (Table 30),final
+Children 0 to 2,age_0_2,Population aged 0 to 2 (nursery / infant-toddler care demand).,"Sum of single-year ages 0, 1, 2.",persons,ADM3,PSA 2020 CPH (Table 30),final
+"Children 0 to 2, male",age_0_2_m,Male population aged 0 to 2.,Sum of male ages 0 to 2.,persons,ADM3,PSA 2020 CPH (Table 30),final
+"Children 0 to 2, female",age_0_2_f,Female population aged 0 to 2.,Sum of female ages 0 to 2.,persons,ADM3,PSA 2020 CPH (Table 30),final
+Children 3 to 5,age_3_5,Population aged 3 to 5 (pre-school / kindergarten care demand).,"Sum of single-year ages 3, 4, 5.",persons,ADM3,PSA 2020 CPH (Table 30),final
+"Children 3 to 5, male",age_3_5_m,Male population aged 3 to 5.,Sum of male ages 3 to 5.,persons,ADM3,PSA 2020 CPH (Table 30),final
+"Children 3 to 5, female",age_3_5_f,Female population aged 3 to 5.,Sum of female ages 3 to 5.,persons,ADM3,PSA 2020 CPH (Table 30),final
+Children 0 to 5 (early childhood),age_0_5,Population aged 0 to 5; combined early-childhood care demand (nursery + pre-school). Headline childcare demand band.,age_0_2 + age_3_5.,persons,ADM3,PSA 2020 CPH (Table 30),final
+"Children 0 to 5, male",age_0_5_m,Male population aged 0 to 5.,age_0_2_m + age_3_5_m.,persons,ADM3,PSA 2020 CPH (Table 30),final
+"Children 0 to 5, female",age_0_5_f,Female population aged 0 to 5.,age_0_2_f + age_3_5_f.,persons,ADM3,PSA 2020 CPH (Table 30),final
+Children 6 to 17,age_6_17,School-age population aged 6 to 17.,Sum of single-year ages 6 to 17.,persons,ADM3,PSA 2020 CPH (Table 30),final
+"Children 6 to 17, male",age_6_17_m,Male population aged 6 to 17.,Sum of male ages 6 to 17.,persons,ADM3,PSA 2020 CPH (Table 30),final
+"Children 6 to 17, female",age_6_17_f,Female population aged 6 to 17.,Sum of female ages 6 to 17.,persons,ADM3,PSA 2020 CPH (Table 30),final
+Working-age population 18 to 59,age_18_59,Population aged 18 to 59 (project working-age band).,Sum of single-year ages 18 to 59.,persons,ADM3,PSA 2020 CPH (Table 30),final
+"Working-age population 18 to 59, male",age_18_59_m,Male population aged 18 to 59.,Sum of male ages 18 to 59.,persons,ADM3,PSA 2020 CPH (Table 30),final
+"Working-age population 18 to 59, female",age_18_59_f,Female population aged 18 to 59.,Sum of female ages 18 to 59.,persons,ADM3,PSA 2020 CPH (Table 30),final
+Older persons 60+,age_60plus,Resident population aged 60 and above (RA 9994 senior citizen threshold).,Sum of single-year ages 60 and over.,persons,ADM3,PSA 2020 CPH (Table 30),final
+"Older persons 60+, male",age_60plus_m,Male population aged 60 and above.,Sum of male ages 60 and over.,persons,ADM3,PSA 2020 CPH (Table 30),final
+"Older persons 60+, female",age_60plus_f,Female population aged 60 and above.,Sum of female ages 60 and over.,persons,ADM3,PSA 2020 CPH (Table 30),final
+Oldest old 80+,age_80plus,Resident population aged 80 and above; the oldest-old group with the most intensive eldercare needs.,Sum of single-year ages 80 and over.,persons,ADM3,PSA 2020 CPH (Table 30),final
+"Oldest old 80+, male",age_80plus_m,Male population aged 80 and above.,Sum of male ages 80 and over.,persons,ADM3,PSA 2020 CPH (Table 30),final
+"Oldest old 80+, female",age_80plus_f,Female population aged 80 and above.,Sum of female ages 80 and over.,persons,ADM3,PSA 2020 CPH (Table 30),final
+Children 0 to 5 (childcare demand),children_0_5_childcare,Combined early-childhood care demand population.,age_0_2 + age_3_5.,persons,ADM3,PSA 2020 CPH (Table 30),final
+Children 0 to 17 (all children),children_0_17_total,Total child population.,age_0_2 + age_3_5 + age_6_17.,persons,ADM3,PSA 2020 CPH (Table 30),final
+Population density,pop_density_km2,Residents per square kilometre.,pop_census / area_km2.,persons/km2,ADM3,PSA 2020 CPH + polygons,final
+Registered seniors,seniors_registered,"Cumulative count of senior citizens registered with OSCA / PDAO (60+). Administrative count, not census population.",Direct from PDAO/OSCA registry (2026).,persons,ADM3,"PDAO/OSCA (Table 11, 2026)",final
+Senior density,seniors_density_km2,Registered seniors per square kilometre.,seniors_registered / area_km2.,persons/km2,ADM3,PDAO/OSCA + polygons,final
+"Seniors per 1,000 residents",seniors_per_1000_census,"Registered seniors per 1,000 census residents.",seniors_registered / pop_census x 1000.,"per 1,000",ADM3,PDAO/OSCA + 2020 CPH,final
+Registered PWDs,pwd_registered,Cumulative count of persons with disability registered with PDAO (all ages). Administrative count.,Direct from PDAO registry (2026).,persons,ADM3,"PDAO (Table 17, 2026)",final
+PWD density,pwd_density_km2,Registered PWDs per square kilometre.,pwd_registered / area_km2.,persons/km2,ADM3,PDAO + polygons,final
+"PWDs per 1,000 residents",pwd_per_1000_census,"Registered PWDs per 1,000 census residents.",pwd_registered / pop_census x 1000.,"per 1,000",ADM3,PDAO + 2020 CPH,final
+Disability prevalence rate,disability_prevalence_rate_pct,Registered PWDs as a share of census population.,pwd_registered / pop_census x 100.,%,ADM3,PDAO + 2020 CPH,final
+Sex ratio,sex_ratio_m_per_100f,Males per 100 females.,pop_male / pop_female x 100.,ratio,ADM3,PSA 2020 CPH (Table 30),final
+Share of working-age women,share_women_18_59_pct,Women aged 18 to 59 as a share of total population; proxy for female labour available for paid and unpaid care.,age_18_59_f / pop_census x 100.,%,ADM3,PSA 2020 CPH (Table 30),final
+Child-woman ratio,child_woman_ratio,"Children aged 0 to 4 per 1,000 women of reproductive age (15 to 49); localised fertility / care-demand proxy.",age_0_4 / women_15_49 x 1000.,"per 1,000",ADM3,PSA 2020 CPH (Table 30),final
+CBMS covered population (secondary),pop_cbms_secondary,Population covered by responding CBMS households. SECONDARY source; covers ~71% of census citywide; never used as a denominator.,Direct from CBMS 2024.,persons,ADM3,CBMS 2024 (PSA),secondary
+Average household size (CBMS),cbms_avg_household_size,Average number of persons per responding household.,"Direct from CBMS 2024, Table 1.",persons,ADM3,CBMS 2024 (PSA),secondary
+Average nuclear families per household (CBMS),cbms_avg_nuclear_families_per_hh,Average number of nuclear families per household; values above 1 indicate doubling-up.,"Direct from CBMS 2024, Table 1.",families,ADM3,CBMS 2024 (PSA),secondary
+Food insecurity prevalence (CBMS),cbms_food_insecurity_prevalence_pct,Share of households worried about not having enough food (mild / headline food insecurity).,HH worried about food / total responding HH x 100.,%,ADM3,"CBMS 2024 (PSA), Table 21",secondary
+Severe food insecurity (CBMS),cbms_food_severe_wholeday_pct,Share of households that went without eating for a whole day (most severe food insecurity).,HH whole-day-without-eating / total responding HH x 100.,%,ADM3,"CBMS 2024 (PSA), Table 21",secondary
+Food insecurity intensity score (CBMS),cbms_food_intensity_score,Severity-weighted score across all eight food items (1 = worried to 8 = whole day).,sum(item_count x severity_weight) / total responding HH.,score,ADM3,"CBMS 2024 (PSA), Table 21",secondary
+Housing inadequacy index (CBMS),cbms_housing_inadequacy_index_pct,"Average share of households with unimproved roof, walls, and floor.","mean(unimproved_roof%, unimproved_wall%, unimproved_floor%).",%,ADM3,"CBMS 2024 (PSA), Tables 49-51",secondary
+Severe housing deprivation (CBMS),cbms_housing_makeshift_severe_pct,"Share of households using makeshift / salvaged / improvised materials (worst of roof, wall, floor).",max of makeshift% across roof/wall/floor.,%,ADM3,"CBMS 2024 (PSA), Tables 12-14",secondary
+Registered migrant workers,migrant_workers_total,Total registered migrant workers (OFWs) per barangay; socio-economic context indicator signalling remittance-dependent households and potentially absent caregivers.,Direct from QC migrant worker registry.,persons,ADM3,QC administrative registry (2026),secondary
+"Registered migrant workers, male",migrant_workers_male,Male registered migrant workers per barangay.,Direct from QC migrant worker registry.,persons,ADM3,QC administrative registry (2026),secondary
+"Registered migrant workers, female",migrant_workers_female,Female registered migrant workers per barangay.,Direct from QC migrant worker registry.,persons,ADM3,QC administrative registry (2026),secondary
