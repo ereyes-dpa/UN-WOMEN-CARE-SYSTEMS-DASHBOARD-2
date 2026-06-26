@@ -6,7 +6,48 @@ import pandas as pd
 import geopandas as gpd
 import folium
 import numpy as np
+import plotly.io as pio
+import plotly.graph_objects as go
 from PIL import Image
+
+# --------------------------------------------------
+# TRANSPARENT PLOTLY TEMPLATE
+# (Plotly Express draws an opaque white plot/paper
+# background by default, even with no plot_bgcolor set
+# explicitly — that white rectangle would sit on top of
+# the light-purple chart card background (see
+# div[class*="st-key-qcd-chart-"] in both dashboards'
+# <style> blocks) and hide it. Rather than add
+# plot_bgcolor/paper_bgcolor to every individual px.*
+# call (38+ call sites across the app), register one
+# small template that only sets those two properties and
+# make it the session default — every chart, current and
+# future, then inherits a transparent background with no
+# per-call changes.
+#
+# Built as a fresh go.layout.Template() rather than by
+# reading/mutating pio.templates["plotly"] in place —
+# Plotly's docs don't guarantee dict-style template
+# assignment deep-copies, so mutating a template fetched
+# from the registry risks silently corrupting the
+# built-in "plotly" template for any other code that
+# still expects its normal (opaque) styling. A from-
+# scratch template avoids that question entirely: it
+# only ever sets the two properties below, nothing is
+# read from or written back into an existing template.
+# --------------------------------------------------
+
+_qcd_transparent_template = go.layout.Template()
+_qcd_transparent_template.layout.paper_bgcolor = "rgba(0,0,0,0)"
+_qcd_transparent_template.layout.plot_bgcolor = "rgba(0,0,0,0)"
+
+pio.templates["qcd_transparent"] = _qcd_transparent_template
+
+# "plotly+qcd_transparent" merges the two: Plotly Express
+# keeps its normal default colors, fonts, and gridlines
+# from "plotly", and qcd_transparent only overrides the
+# two background properties on top.
+pio.templates.default = "plotly+qcd_transparent"
 
 # --------------------------------------------------
 # ACCESSIBILITY RATIO INDICATORS
@@ -156,7 +197,135 @@ ACCESSIBILITY_RATIO_INDICATORS = {
 def get_base64(img_path):
     with open(img_path, "rb") as f:
         return base64.b64encode(f.read()).decode()
-    
+
+
+# --------------------------------------------------
+# CHART PALETTE
+# (single source of truth for chart colors, so every
+# px.bar/line/pie/scatter call in the dashboard draws
+# from the same purple→green family instead of Plotly's
+# default rainbow palette. Order matters: series are
+# assigned colors in this order, so the first category
+# in a chart always gets the same purple, the second the
+# same violet, etc., across different pages.
+#
+#   QCD_CATEGORICAL — for bar/pie/scatter series (3+ steps,
+#                     purple through green, alternating
+#                     light/dark so adjacent bars stay
+#                     distinguishable)
+#   QCD_SEQUENTIAL  — single-hue purple ramp, for ordered/
+#                     magnitude charts with one series
+#                     (e.g. a single bar chart ranked by
+#                     value) where a sequential read makes
+#                     more sense than categorical colors
+#
+# Risk/severity choropleth maps (flood exposure, priority
+# scores) intentionally keep Plotly's built-in "Reds" /
+# "Purples" continuous scales rather than this palette —
+# red still means "high risk" on those, which is a more
+# useful convention than forcing every chart to one family.
+# --------------------------------------------------
+
+QCD_CATEGORICAL = [
+    "#4C1D95",  # deep purple
+    "#80AA31",  # green
+    "#7F47ED",  # core purple (brand)
+    "#1A9E5C",  # mid green
+    "#9478D3",  # light purple
+    "#A6CFC1",  # light green
+    "#C4B5FD",  # lightest purple
+    "#055B52",  # deep green
+]
+
+QCD_SEQUENTIAL = [
+    "#EEEDFE",
+    "#C4B5FD",
+    "#9478D3",
+    "#7F47ED",
+    "#643BAA",
+    "#4C1D95",
+]
+
+
+# --------------------------------------------------
+# KPI CARD
+# (boxed replacement for st.metric — white surface,
+# soft shadow, no border, purple label/value type to
+# match the dashboard's existing #7F47ED system. The
+# optional `polarity` arg draws a small static arrow
+# next to the value to signal whether a high or low
+# number is the "good" outcome for that metric, since
+# the underlying data has no real prior-period value
+# to diff against. This is a fixed visual cue, not a
+# computed delta — it never changes value-to-value.
+#
+#   polarity="up_good"   -> green up arrow   (more is better)
+#   polarity="down_good" -> green down arrow (less is better)
+#   polarity=None         -> no arrow (text values, raw
+#                             demographic counts, or metrics
+#                             with no clear "better" direction)
+#
+# `caption`, if given, renders a small line below the value
+# — used for the handful of KPIs that used to pass a third
+# positional arg to st.metric() as a delta/sub-label (e.g.
+# "1,234 est. residents") rather than an actual delta.
+#
+# `target` is whatever Streamlit column/container object
+# .metric() used to be called on (e.g. k1, col2, st itself)
+# — call as kpi_card(k1, "Facilities", f"{n:,}", "up_good")
+# in place of k1.metric("Facilities", f"{n:,}").
+# --------------------------------------------------
+
+_KPI_ARROW = {
+    "up_good": ("&#9650;", "#7ED957"),    # ▲ bright green, visible on purple card bg
+    "down_good": ("&#9660;", "#7ED957"),  # ▼ bright green, visible on purple card bg
+}
+
+def kpi_card(target, label, value, polarity=None, caption=None):
+
+    arrow_html = ""
+
+    if polarity in _KPI_ARROW:
+
+        glyph, color = _KPI_ARROW[polarity]
+
+        arrow_html = (
+            f'<span class="qcd-kpi-arrow" style="color:{color};">'
+            f'{glyph}'
+            f'</span>'
+        )
+
+    caption_html = ""
+
+    if caption:
+
+        caption_html = (
+            f'<div class="qcd-kpi-caption">{caption}</div>'
+        )
+
+    # NOTE: this HTML is built as one unbroken string with no
+    # leading whitespace on any line. Streamlit's st.markdown
+    # runs unsafe_allow_html content through a Markdown parser
+    # first — and Markdown treats 4+ spaces of leading indent
+    # as a fenced code block, which prints the HTML as literal
+    # text (e.g. a visible "</div>") instead of rendering it.
+    # A previous version used an indented triple-quoted f-string
+    # and hit exactly that bug. Do not reintroduce indentation
+    # here, even for readability.
+    html = (
+        '<div class="qcd-kpi-card">'
+        f'<div class="qcd-kpi-label">{label}</div>'
+        '<div class="qcd-kpi-value-row">'
+        f'<span class="qcd-kpi-value">{value}</span>'
+        f'{arrow_html}'
+        '</div>'
+        f'{caption_html}'
+        '</div>'
+    )
+
+    target.markdown(html, unsafe_allow_html=True)
+
+
 
 # --------------------------------------------------
 # CHILDCARE FUNCTIONS
