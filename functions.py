@@ -6,7 +6,48 @@ import pandas as pd
 import geopandas as gpd
 import folium
 import numpy as np
+import plotly.io as pio
+import plotly.graph_objects as go
 from PIL import Image
+
+# --------------------------------------------------
+# TRANSPARENT PLOTLY TEMPLATE
+# (Plotly Express draws an opaque white plot/paper
+# background by default, even with no plot_bgcolor set
+# explicitly — that white rectangle would sit on top of
+# the light-purple chart card background (see
+# div[class*="st-key-qcd-chart-"] in both dashboards'
+# <style> blocks) and hide it. Rather than add
+# plot_bgcolor/paper_bgcolor to every individual px.*
+# call (38+ call sites across the app), register one
+# small template that only sets those two properties and
+# make it the session default — every chart, current and
+# future, then inherits a transparent background with no
+# per-call changes.
+#
+# Built as a fresh go.layout.Template() rather than by
+# reading/mutating pio.templates["plotly"] in place —
+# Plotly's docs don't guarantee dict-style template
+# assignment deep-copies, so mutating a template fetched
+# from the registry risks silently corrupting the
+# built-in "plotly" template for any other code that
+# still expects its normal (opaque) styling. A from-
+# scratch template avoids that question entirely: it
+# only ever sets the two properties below, nothing is
+# read from or written back into an existing template.
+# --------------------------------------------------
+
+_qcd_transparent_template = go.layout.Template()
+_qcd_transparent_template.layout.paper_bgcolor = "rgba(0,0,0,0)"
+_qcd_transparent_template.layout.plot_bgcolor = "rgba(0,0,0,0)"
+
+pio.templates["qcd_transparent"] = _qcd_transparent_template
+
+# "plotly+qcd_transparent" merges the two: Plotly Express
+# keeps its normal default colors, fonts, and gridlines
+# from "plotly", and qcd_transparent only overrides the
+# two background properties on top.
+pio.templates.default = "plotly+qcd_transparent"
 
 # --------------------------------------------------
 # ACCESSIBILITY RATIO INDICATORS
@@ -156,7 +197,135 @@ ACCESSIBILITY_RATIO_INDICATORS = {
 def get_base64(img_path):
     with open(img_path, "rb") as f:
         return base64.b64encode(f.read()).decode()
-    
+
+
+# --------------------------------------------------
+# CHART PALETTE
+# (single source of truth for chart colors, so every
+# px.bar/line/pie/scatter call in the dashboard draws
+# from the same purple→green family instead of Plotly's
+# default rainbow palette. Order matters: series are
+# assigned colors in this order, so the first category
+# in a chart always gets the same purple, the second the
+# same violet, etc., across different pages.
+#
+#   QCD_CATEGORICAL — for bar/pie/scatter series (3+ steps,
+#                     purple through green, alternating
+#                     light/dark so adjacent bars stay
+#                     distinguishable)
+#   QCD_SEQUENTIAL  — single-hue purple ramp, for ordered/
+#                     magnitude charts with one series
+#                     (e.g. a single bar chart ranked by
+#                     value) where a sequential read makes
+#                     more sense than categorical colors
+#
+# Risk/severity choropleth maps (flood exposure, priority
+# scores) intentionally keep Plotly's built-in "Reds" /
+# "Purples" continuous scales rather than this palette —
+# red still means "high risk" on those, which is a more
+# useful convention than forcing every chart to one family.
+# --------------------------------------------------
+
+QCD_CATEGORICAL = [
+    "#4C1D95",  # deep purple
+    "#80AA31",  # green
+    "#7F47ED",  # core purple (brand)
+    "#1A9E5C",  # mid green
+    "#9478D3",  # light purple
+    "#A6CFC1",  # light green
+    "#C4B5FD",  # lightest purple
+    "#055B52",  # deep green
+]
+
+QCD_SEQUENTIAL = [
+    "#EEEDFE",
+    "#C4B5FD",
+    "#9478D3",
+    "#7F47ED",
+    "#643BAA",
+    "#4C1D95",
+]
+
+
+# --------------------------------------------------
+# KPI CARD
+# (boxed replacement for st.metric — white surface,
+# soft shadow, no border, purple label/value type to
+# match the dashboard's existing #7F47ED system. The
+# optional `polarity` arg draws a small static arrow
+# next to the value to signal whether a high or low
+# number is the "good" outcome for that metric, since
+# the underlying data has no real prior-period value
+# to diff against. This is a fixed visual cue, not a
+# computed delta — it never changes value-to-value.
+#
+#   polarity="up_good"   -> green up arrow   (more is better)
+#   polarity="down_good" -> green down arrow (less is better)
+#   polarity=None         -> no arrow (text values, raw
+#                             demographic counts, or metrics
+#                             with no clear "better" direction)
+#
+# `caption`, if given, renders a small line below the value
+# — used for the handful of KPIs that used to pass a third
+# positional arg to st.metric() as a delta/sub-label (e.g.
+# "1,234 est. residents") rather than an actual delta.
+#
+# `target` is whatever Streamlit column/container object
+# .metric() used to be called on (e.g. k1, col2, st itself)
+# — call as kpi_card(k1, "Facilities", f"{n:,}", "up_good")
+# in place of k1.metric("Facilities", f"{n:,}").
+# --------------------------------------------------
+
+_KPI_ARROW = {
+    "up_good": ("&#9650;", "#7ED957"),    # ▲ bright green, visible on purple card bg
+    "down_good": ("&#9660;", "#7ED957"),  # ▼ bright green, visible on purple card bg
+}
+
+def kpi_card(target, label, value, polarity=None, caption=None):
+
+    arrow_html = ""
+
+    if polarity in _KPI_ARROW:
+
+        glyph, color = _KPI_ARROW[polarity]
+
+        arrow_html = (
+            f'<span class="qcd-kpi-arrow" style="color:{color};">'
+            f'{glyph}'
+            f'</span>'
+        )
+
+    caption_html = ""
+
+    if caption:
+
+        caption_html = (
+            f'<div class="qcd-kpi-caption">{caption}</div>'
+        )
+
+    # NOTE: this HTML is built as one unbroken string with no
+    # leading whitespace on any line. Streamlit's st.markdown
+    # runs unsafe_allow_html content through a Markdown parser
+    # first — and Markdown treats 4+ spaces of leading indent
+    # as a fenced code block, which prints the HTML as literal
+    # text (e.g. a visible "</div>") instead of rendering it.
+    # A previous version used an indented triple-quoted f-string
+    # and hit exactly that bug. Do not reintroduce indentation
+    # here, even for readability.
+    html = (
+        '<div class="qcd-kpi-card">'
+        f'<div class="qcd-kpi-label">{label}</div>'
+        '<div class="qcd-kpi-value-row">'
+        f'<span class="qcd-kpi-value">{value}</span>'
+        f'{arrow_html}'
+        '</div>'
+        f'{caption_html}'
+        '</div>'
+    )
+
+    target.markdown(html, unsafe_allow_html=True)
+
+
 
 # --------------------------------------------------
 # CHILDCARE FUNCTIONS
@@ -786,6 +955,217 @@ def load_demand_context():
     )
 
     return city_context, district_context
+
+
+@st.cache_data(show_spinner=False)
+def load_domestic_workers():
+    """
+    Loads registered domestic worker counts (female/male/total)
+    from processed/indicators/domestic_workers.csv — a separate
+    source from demographics.csv, at barangay level with each
+    row already tagged with its district.
+
+    Returns (barangay_df, district_df):
+
+    - barangay_df: one row per barangay, columns
+      ["barangay", "barangay_key", "district", "domestic_workers_female",
+      "domestic_workers_male", "domestic_workers_total"]. "barangay"
+      is rewritten to match demographics.csv's spelling wherever a
+      verified match exists (see RENAME MAP below), so this frame
+      can be merged against demographics.csv or qc_barangays.geojson
+      using the same barangay_key convention used everywhere else
+      in this dashboard. barangay_key is the .strip().upper() form.
+    - district_df: the same three count columns, summed up to
+      one row per district (district as int 1-6, matching
+      demographics.csv's "district" column).
+
+    The source file has more rows (147) than demographics.csv has
+    barangays (142) for two different reasons, both resolved here
+    rather than left for every caller to rediscover:
+
+    1. GENUINE DUPLICATE ROWS (same barangay, listed twice under
+       different spellings) — both kept counts summed into one
+       row, written under demographics.csv's spelling:
+         - "N.S. AMORANTO" + "NS AMORANTO" (1 female + 1 male
+           between them) -> "N. S. Amoranto (Gintong Silahis)"
+       And two more pairs where one of the two rows is all-zero,
+       so summing vs. simply dropping the zero row gives the same
+       result either way — the all-zero row is dropped:
+         - "AURORA" (0/0/0, District 4) is a duplicate of
+           "DOÑA AURORA" (0/0/0) -> kept as "Doña Aurora"
+         - "SANTO NIÑO" (0/0/0, District 4) is a duplicate of
+           "STO. NIÑO" (24/0/24) -> kept as "Sto. Niño"
+         - "KAUNLARAN" appears under both District 1 (0/0/0) and
+           District 4 (0/0/0) — Quezon City has only one real
+           Kaunlaran, in District 4 (confirmed against
+           qc_barangays.geojson, demographics.csv, and the QC
+           government's barangay directory) — the District 1 row
+           is dropped.
+
+    2. SPELLING/FORMAT VARIANTS of the same real barangay —
+       rewritten to demographics.csv's spelling so the join
+       works (see RENAME_MAP):
+       roman-numeral vs. digit Escopa suffixes, "UP" vs. "U. P.",
+       a missing parenthetical on Claro and Sto. Domingo, and a
+       hyphen/casing difference on Balong-bato.
+
+    Two source rows are NOT touched by either fix above, since
+    they are not duplicates or misspellings but appear to be
+    genuinely distinct from anything in demographics.csv:
+    "SAN ISIDRO LABRADOR" (District 1) and "SAN ISIDRO GALAS"
+    (District 4) are both real Quezon City barangays per public
+    barangay directories, but demographics.csv has only a plain
+    "San Isidro" (District 4) — which doesn't district-match
+    "San Isidro Labrador" and isn't confirmed to be the same
+    barangay as "San Isidro Galas" either. Both source rows are
+    all-zero, so this has no effect on any total, but they are
+    kept as their own (unmatched) rows rather than force-mapped
+    to "San Isidro" — a barangay-geometry join will show them as
+    unmatched/excluded rather than silently misattributing their
+    (zero) count to the wrong polygon. "DILIMAN VILLAGE" (also
+    all-zero) has no counterpart under any spelling and isn't a
+    barangay on Quezon City's official District IV list either;
+    it's dropped rather than guessed at.
+    """
+
+    import pandas as pd
+
+    dw = pd.read_csv(
+        "processed/domestic_workers.csv"
+    )
+
+    dw = dw.rename(
+        columns={
+            "BARANGAY": "barangay",
+            "DISTRICT": "district",
+            "FEMALE": "domestic_workers_female",
+            "MALE": "domestic_workers_male",
+            "TOTAL": "domestic_workers_total"
+        }
+    )
+
+    dw["barangay"] = dw["barangay"].astype(str).str.strip()
+    dw["district"] = dw["district"].astype(str).str.strip()
+
+    # --------------------------------------------------
+    # DROP confirmed all-zero duplicate rows (see docstring
+    # case 1 above — only the spurious half of each pair)
+    # --------------------------------------------------
+
+    drop_mask = (
+        (
+            (dw["barangay"].str.upper() == "AURORA")
+            & (dw["district"] == "DISTRICT 4")
+        )
+        | (
+            (dw["barangay"].str.upper() == "SANTO NIÑO")
+            & (dw["district"] == "DISTRICT 4")
+        )
+        | (
+            (dw["barangay"].str.upper() == "KAUNLARAN")
+            & (dw["district"] != "DISTRICT 4")
+        )
+        | (dw["barangay"].str.upper() == "DILIMAN VILLAGE")
+    )
+
+    dw = dw.loc[~drop_mask]
+
+    # --------------------------------------------------
+    # MERGE the N.S./NS Amoranto split into one row
+    # (the one genuine duplicate that isn't all-zero on
+    # one side, so it's summed rather than dropped)
+    # --------------------------------------------------
+
+    amoranto_mask = dw["barangay"].isin(
+        ["N.S. AMORANTO", "NS AMORANTO"]
+    )
+
+    if amoranto_mask.sum() > 1:
+
+        merged_row = {
+            "barangay": "N. S. Amoranto (Gintong Silahis)",
+            "district": dw.loc[amoranto_mask, "district"].iloc[0],
+            "domestic_workers_female":
+                dw.loc[amoranto_mask, "domestic_workers_female"].sum(),
+            "domestic_workers_male":
+                dw.loc[amoranto_mask, "domestic_workers_male"].sum(),
+            "domestic_workers_total":
+                dw.loc[amoranto_mask, "domestic_workers_total"].sum()
+        }
+
+        dw = dw.loc[~amoranto_mask]
+        dw = pd.concat(
+            [dw, pd.DataFrame([merged_row])],
+            ignore_index=True
+        )
+
+    # --------------------------------------------------
+    # RENAME remaining spelling/format variants to match
+    # demographics.csv exactly (see docstring case 2 above)
+    # --------------------------------------------------
+
+    RENAME_MAP = {
+        "AURORA": "Doña Aurora",
+        "SANTO NIÑO": "Sto. Niño",
+        "ESCOPA I": "Escopa 1",
+        "ESCOPA II": "Escopa 2",
+        "ESCOPA III": "Escopa 3",
+        "ESCOPA IV": "Escopa 4",
+        "UP CAMPUS": "U. P. Campus",
+        "UP VILLAGE": "U. P. Village",
+        "CLARO": "Claro (Quirino 3-B)",
+        "STO. DOMINGO": "Sto. Domingo (Matalahib)",
+        "BALONG BATO": "Balong-bato"
+    }
+
+    dw["barangay"] = (
+        dw["barangay"]
+        .str.upper()
+        .map(RENAME_MAP)
+        .fillna(dw["barangay"])
+    )
+
+    # --------------------------------------------------
+    # NORMALIZE DISTRICT TO INT (matches demographics.csv)
+    # --------------------------------------------------
+
+    dw["district"] = (
+        dw["district"]
+        .str.replace("DISTRICT ", "", regex=False)
+        .astype(int)
+    )
+
+    dw["barangay_key"] = (
+        dw["barangay"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    barangay_df = dw[
+        [
+            "barangay",
+            "barangay_key",
+            "district",
+            "domestic_workers_female",
+            "domestic_workers_male",
+            "domestic_workers_total"
+        ]
+    ].reset_index(drop=True)
+
+    district_df = (
+        barangay_df
+        .groupby("district", as_index=False)[
+            [
+                "domestic_workers_female",
+                "domestic_workers_male",
+                "domestic_workers_total"
+            ]
+        ]
+        .sum()
+    )
+
+    return barangay_df, district_df
 
 
 @st.cache_data(show_spinner=False)
