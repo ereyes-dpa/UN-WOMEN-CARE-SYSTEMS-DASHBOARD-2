@@ -789,6 +789,217 @@ def load_demand_context():
 
 
 @st.cache_data(show_spinner=False)
+def load_domestic_workers():
+    """
+    Loads registered domestic worker counts (female/male/total)
+    from processed/indicators/domestic_workers.csv — a separate
+    source from demographics.csv, at barangay level with each
+    row already tagged with its district.
+
+    Returns (barangay_df, district_df):
+
+    - barangay_df: one row per barangay, columns
+      ["barangay", "barangay_key", "district", "domestic_workers_female",
+      "domestic_workers_male", "domestic_workers_total"]. "barangay"
+      is rewritten to match demographics.csv's spelling wherever a
+      verified match exists (see RENAME MAP below), so this frame
+      can be merged against demographics.csv or qc_barangays.geojson
+      using the same barangay_key convention used everywhere else
+      in this dashboard. barangay_key is the .strip().upper() form.
+    - district_df: the same three count columns, summed up to
+      one row per district (district as int 1-6, matching
+      demographics.csv's "district" column).
+
+    The source file has more rows (147) than demographics.csv has
+    barangays (142) for two different reasons, both resolved here
+    rather than left for every caller to rediscover:
+
+    1. GENUINE DUPLICATE ROWS (same barangay, listed twice under
+       different spellings) — both kept counts summed into one
+       row, written under demographics.csv's spelling:
+         - "N.S. AMORANTO" + "NS AMORANTO" (1 female + 1 male
+           between them) -> "N. S. Amoranto (Gintong Silahis)"
+       And two more pairs where one of the two rows is all-zero,
+       so summing vs. simply dropping the zero row gives the same
+       result either way — the all-zero row is dropped:
+         - "AURORA" (0/0/0, District 4) is a duplicate of
+           "DOÑA AURORA" (0/0/0) -> kept as "Doña Aurora"
+         - "SANTO NIÑO" (0/0/0, District 4) is a duplicate of
+           "STO. NIÑO" (24/0/24) -> kept as "Sto. Niño"
+         - "KAUNLARAN" appears under both District 1 (0/0/0) and
+           District 4 (0/0/0) — Quezon City has only one real
+           Kaunlaran, in District 4 (confirmed against
+           qc_barangays.geojson, demographics.csv, and the QC
+           government's barangay directory) — the District 1 row
+           is dropped.
+
+    2. SPELLING/FORMAT VARIANTS of the same real barangay —
+       rewritten to demographics.csv's spelling so the join
+       works (see RENAME_MAP):
+       roman-numeral vs. digit Escopa suffixes, "UP" vs. "U. P.",
+       a missing parenthetical on Claro and Sto. Domingo, and a
+       hyphen/casing difference on Balong-bato.
+
+    Two source rows are NOT touched by either fix above, since
+    they are not duplicates or misspellings but appear to be
+    genuinely distinct from anything in demographics.csv:
+    "SAN ISIDRO LABRADOR" (District 1) and "SAN ISIDRO GALAS"
+    (District 4) are both real Quezon City barangays per public
+    barangay directories, but demographics.csv has only a plain
+    "San Isidro" (District 4) — which doesn't district-match
+    "San Isidro Labrador" and isn't confirmed to be the same
+    barangay as "San Isidro Galas" either. Both source rows are
+    all-zero, so this has no effect on any total, but they are
+    kept as their own (unmatched) rows rather than force-mapped
+    to "San Isidro" — a barangay-geometry join will show them as
+    unmatched/excluded rather than silently misattributing their
+    (zero) count to the wrong polygon. "DILIMAN VILLAGE" (also
+    all-zero) has no counterpart under any spelling and isn't a
+    barangay on Quezon City's official District IV list either;
+    it's dropped rather than guessed at.
+    """
+
+    import pandas as pd
+
+    dw = pd.read_csv(
+        "processed/domestic_workers.csv"
+    )
+
+    dw = dw.rename(
+        columns={
+            "BARANGAY": "barangay",
+            "DISTRICT": "district",
+            "FEMALE": "domestic_workers_female",
+            "MALE": "domestic_workers_male",
+            "TOTAL": "domestic_workers_total"
+        }
+    )
+
+    dw["barangay"] = dw["barangay"].astype(str).str.strip()
+    dw["district"] = dw["district"].astype(str).str.strip()
+
+    # --------------------------------------------------
+    # DROP confirmed all-zero duplicate rows (see docstring
+    # case 1 above — only the spurious half of each pair)
+    # --------------------------------------------------
+
+    drop_mask = (
+        (
+            (dw["barangay"].str.upper() == "AURORA")
+            & (dw["district"] == "DISTRICT 4")
+        )
+        | (
+            (dw["barangay"].str.upper() == "SANTO NIÑO")
+            & (dw["district"] == "DISTRICT 4")
+        )
+        | (
+            (dw["barangay"].str.upper() == "KAUNLARAN")
+            & (dw["district"] != "DISTRICT 4")
+        )
+        | (dw["barangay"].str.upper() == "DILIMAN VILLAGE")
+    )
+
+    dw = dw.loc[~drop_mask]
+
+    # --------------------------------------------------
+    # MERGE the N.S./NS Amoranto split into one row
+    # (the one genuine duplicate that isn't all-zero on
+    # one side, so it's summed rather than dropped)
+    # --------------------------------------------------
+
+    amoranto_mask = dw["barangay"].isin(
+        ["N.S. AMORANTO", "NS AMORANTO"]
+    )
+
+    if amoranto_mask.sum() > 1:
+
+        merged_row = {
+            "barangay": "N. S. Amoranto (Gintong Silahis)",
+            "district": dw.loc[amoranto_mask, "district"].iloc[0],
+            "domestic_workers_female":
+                dw.loc[amoranto_mask, "domestic_workers_female"].sum(),
+            "domestic_workers_male":
+                dw.loc[amoranto_mask, "domestic_workers_male"].sum(),
+            "domestic_workers_total":
+                dw.loc[amoranto_mask, "domestic_workers_total"].sum()
+        }
+
+        dw = dw.loc[~amoranto_mask]
+        dw = pd.concat(
+            [dw, pd.DataFrame([merged_row])],
+            ignore_index=True
+        )
+
+    # --------------------------------------------------
+    # RENAME remaining spelling/format variants to match
+    # demographics.csv exactly (see docstring case 2 above)
+    # --------------------------------------------------
+
+    RENAME_MAP = {
+        "AURORA": "Doña Aurora",
+        "SANTO NIÑO": "Sto. Niño",
+        "ESCOPA I": "Escopa 1",
+        "ESCOPA II": "Escopa 2",
+        "ESCOPA III": "Escopa 3",
+        "ESCOPA IV": "Escopa 4",
+        "UP CAMPUS": "U. P. Campus",
+        "UP VILLAGE": "U. P. Village",
+        "CLARO": "Claro (Quirino 3-B)",
+        "STO. DOMINGO": "Sto. Domingo (Matalahib)",
+        "BALONG BATO": "Balong-bato"
+    }
+
+    dw["barangay"] = (
+        dw["barangay"]
+        .str.upper()
+        .map(RENAME_MAP)
+        .fillna(dw["barangay"])
+    )
+
+    # --------------------------------------------------
+    # NORMALIZE DISTRICT TO INT (matches demographics.csv)
+    # --------------------------------------------------
+
+    dw["district"] = (
+        dw["district"]
+        .str.replace("DISTRICT ", "", regex=False)
+        .astype(int)
+    )
+
+    dw["barangay_key"] = (
+        dw["barangay"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    barangay_df = dw[
+        [
+            "barangay",
+            "barangay_key",
+            "district",
+            "domestic_workers_female",
+            "domestic_workers_male",
+            "domestic_workers_total"
+        ]
+    ].reset_index(drop=True)
+
+    district_df = (
+        barangay_df
+        .groupby("district", as_index=False)[
+            [
+                "domestic_workers_female",
+                "domestic_workers_male",
+                "domestic_workers_total"
+            ]
+        ]
+        .sum()
+    )
+
+    return barangay_df, district_df
+
+
+@st.cache_data(show_spinner=False)
 def sample_raster_at_points(path, lats, lons):
     """
     Samples a single-band GeoTIFF (any CRS) at a list of point
