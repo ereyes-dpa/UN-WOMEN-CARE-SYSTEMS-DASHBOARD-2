@@ -319,6 +319,9 @@ population_summary, population_sex, population_age = (
 demographics = load_demographics()
 climate_context = load_climate_context()
 demand_city_context, demand_district_context = load_demand_context()
+domestic_workers_barangay, domestic_workers_district = (
+    load_domestic_workers()
+)
 
 # --------------------------------------------------
 # SUPPLY-SIDE CLIMATE EXPOSURE
@@ -434,13 +437,14 @@ def build_explorer_map(
     computed once for every facility type up top (see
     flag_facilities_at_risk calls near DATA LOADING), not
     recomputed here. Only offered as a UI control on the Care
-    Services Explorer tab inside Population Vulnerability; the
-    main Care Services Explorer page always passes False, since
-    that page is meant to stay a plain facility map with no
-    flood-risk framing.
+    Services Explorer tab inside Climate, Hazard and Population
+    Analysis; the main Care Services Explorer page always passes
+    False, since that page is meant to stay a plain facility map
+    with no flood-risk framing.
 
     show_risk_rings — when True (used by the Care Services
-    Explorer tab inside Population Vulnerability), flood-exposed
+    Explorer tab inside Climate, Hazard and Population
+    Analysis), flood-exposed
     facilities get an extra red ring around their marker and a
     "⚠ flood risk" tag on the tooltip, so they stand out even
     with flood_risk_only off and the climate overlay off. When
@@ -1117,17 +1121,10 @@ if st.sidebar.button(
     st.rerun()
 
 if st.sidebar.button(
-    "Population Vulnerability",
+    "Climate, Hazard and Population Analysis",
     width='stretch'
 ):
-    st.session_state.page = "Population Vulnerability"
-    st.rerun()
-
-if st.sidebar.button(
-    "Climate & Hazard Exposure",
-    width='stretch'
-):
-    st.session_state.page = "Climate & Hazard Exposure"
+    st.session_state.page = "Climate, Hazard and Population Analysis"
     st.rerun()
 
 # --------------------------------------------------
@@ -1349,9 +1346,9 @@ if page == "Home":
             (
                 "#B91C1C",
                 "Climate & Vulnerability",
-                "Population Vulnerability and Climate & Hazard "
-                "Exposure — which facilities and population "
-                "groups are most at risk, and where."
+                "Climate, Hazard and Population Analysis — which "
+                "facilities and population groups are most at "
+                "risk from flooding and heat, and where."
             )
         ]
 
@@ -2227,7 +2224,78 @@ elif page == "Population Overview":
         # MAP DATA
         # ---------------------------------------------------
 
+        # Domestic worker counts live in a separate source
+        # (domestic_workers_barangay, from
+        # load_domestic_workers() in functions.py) rather than
+        # demographics.csv, so they're merged in here, once,
+        # before the indicator dict below — everything
+        # downstream (KPIs, map, top-15 table) just sees three
+        # more plain numeric columns and treats them exactly
+        # like every other socio-economic indicator.
+        demographics_with_dw = demographics.copy()
+
+        demographics_with_dw["barangay_key"] = (
+            demographics_with_dw["barangay"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+        demographics_with_dw = demographics_with_dw.merge(
+            domestic_workers_barangay[
+                [
+                    "barangay_key",
+                    "domestic_workers_female",
+                    "domestic_workers_male",
+                    "domestic_workers_total"
+                ]
+            ],
+            on="barangay_key",
+            how="left"
+        )
+
+        demographics_with_dw["domestic_workers_per_1000_total"] = (
+            demographics_with_dw["domestic_workers_total"]
+            / demographics_with_dw["pop_census"]
+            * 1000
+        )
+
+        demographics_with_dw["domestic_workers_per_1000_female"] = (
+            demographics_with_dw["domestic_workers_female"]
+            / demographics_with_dw["pop_female"]
+            * 1000
+        )
+
+        demographics_with_dw["domestic_workers_per_1000_male"] = (
+            demographics_with_dw["domestic_workers_male"]
+            / demographics_with_dw["pop_male"]
+            * 1000
+        )
+
         socio_indicators = {
+            "Population Distribution vs. Total Domestic Workers": {
+                "col": "domestic_workers_per_1000_total",
+                "description": (
+                    "Registered domestic workers per 1,000 "
+                    "residents, by barangay. Source: "
+                    "processed/indicators/domestic_workers.csv "
+                    "(separate from the CBMS indicators below)."
+                )
+            },
+            "Population Distribution vs. Female Domestic Workers": {
+                "col": "domestic_workers_per_1000_female",
+                "description": (
+                    "Registered female domestic workers per "
+                    "1,000 female residents, by barangay."
+                )
+            },
+            "Population Distribution vs. Male Domestic Workers": {
+                "col": "domestic_workers_per_1000_male",
+                "description": (
+                    "Registered male domestic workers per "
+                    "1,000 male residents, by barangay."
+                )
+            },
             "Sex Ratio (Males per 100 Females)": {
                 "col": "sex_ratio_m_per_100f",
                 "description": (
@@ -2314,7 +2382,7 @@ elif page == "Population Overview":
 
         # Normalize join keys defensively, same convention used
         # throughout this dashboard.
-        demographics_socio = demographics[
+        demographics_socio = demographics_with_dw[
             ["barangay", "district", selected_socio_col]
         ].copy()
 
@@ -5929,8 +5997,8 @@ elif page == "Care Services Explorer":
         help=(
             "Overlay land-surface temperature, vegetation, or "
             "flood extent under the service markers above. See "
-            "the Climate & Hazard Exposure page for a closer look "
-            "at each layer individually."
+            "the Climate, Hazard and Population Analysis page "
+            "for a closer look at each layer individually."
         )
     )
 
@@ -5997,9 +6065,10 @@ elif page == "Care Services Explorer":
     # flood footprint — see flag_facilities_at_risk in
     # functions.py. The map above no longer offers an at-risk-
     # only filter or red rings on this page — see the Care
-    # Services Explorer tab inside Population Vulnerability for
-    # that view — but this summary stays here since it's a
-    # useful count regardless of how the map is displayed.)
+    # Services Explorer tab inside Climate, Hazard and
+    # Population Analysis for that view — but this summary
+    # stays here since it's a useful count regardless of how
+    # the map is displayed.)
     # --------------------------------------------------
 
     st.markdown("### Facilities at Risk of Flooding")
@@ -8401,7 +8470,7 @@ elif page == "Barangay Clusters":
         "text/csv"
     )
 
-elif page == "Population Vulnerability":
+elif page == "Climate, Hazard and Population Analysis":
 
 
     st.markdown(
@@ -8413,7 +8482,7 @@ elif page == "Population Vulnerability":
             margin-bottom:10px;
             padding-top:0px;
         ">
-            Population Vulnerability
+            Climate, Hazard and Population Analysis
         </h2>
         """,
         unsafe_allow_html=True
@@ -8422,18 +8491,22 @@ elif page == "Population Vulnerability":
     st.caption(
         """
         Which segments of the population are most at risk, and
-        where. Combines barangay-level flood exposure with one
-        vulnerable population group you choose below into a
-        single Climate Vulnerability Index — the demand-side
-        counterpart to the facility-level flood flagging on the
-        Care Services Explorer page.
+        where. The Vulnerability Index tab below combines
+        barangay-level flood exposure with one vulnerable
+        population group you choose, into a single Climate
+        Vulnerability Index — the demand-side counterpart to
+        the facility-level flood flagging on the Care Services
+        Explorer tab. Further down this page, city-wide
+        flood-risk figures by population group and the
+        interactive climate/hazard raster layers (heat,
+        vegetation, flood) are also available.
         """
     )
 
 
     tab1, tab2 = st.tabs([
         "Vulnerability Index",
-        "Care Services Explorer"
+        "Services, Climate & Hazard Explorer"
     ])
 
     with tab1:
@@ -8946,7 +9019,7 @@ elif page == "Population Vulnerability":
                 margin-bottom:10px;
                 padding-top:0px;
             ">
-                Care Services Explorer
+                Services, Climate & Hazard Explorer
             </h3>
             """,
             unsafe_allow_html=True
@@ -9154,7 +9227,8 @@ elif page == "Population Vulnerability":
             help=(
                 "Overlay land-surface temperature, vegetation, or "
                 "flood extent under the service markers above. See "
-                "the Climate & Hazard Exposure page for a closer look "
+                "the Climate, Hazard and Population Analysis "
+                "section further down this page for a closer look "
                 "at each layer individually."
             ),
             key="popvuln_explorer_climate_layers"
@@ -9347,22 +9421,21 @@ elif page == "Population Vulnerability":
 
 
 
-elif page == "Climate & Hazard Exposure":
 
-    st.markdown(
-        """
-        <h2 style="
-            color:#7F47ED;
-            font-size:2.0rem;
-            margin-top:-25px;
-            margin-bottom:10px;
-            padding-top:0px;
-        ">
-            Climate & Hazard Exposure
-        </h2>
-        """,
-        unsafe_allow_html=True
-    )
+    st.divider()
+
+    # =====================================================
+    # CLIMATE & HAZARD LAYERS
+    # (moved here from the former standalone "Climate &
+    # Hazard Exposure" page — merged in since both pages
+    # covered overlapping ground: flood exposure and which
+    # population groups/areas are most affected. This
+    # section is the city-wide / raster-layer view; the
+    # Vulnerability Index tab above is the barangay-level
+    # view.)
+    # =====================================================
+
+    st.subheader("Climate & Hazard Layers")
 
     st.caption(
         """
@@ -9390,7 +9463,9 @@ elif page == "Climate & Hazard Exposure":
     These figures come from a separate WorldPop-based
     analysis estimating what share of each population group lives inside the
     high flood-risk zone shown in the "Flood Inundation
-    (100-yr)" layer below.
+    (100-yr)" layer below. Groups covered: total population,
+    by sex, children (0-4), and elderly (60+) — each also
+    split by sex.
 
     **This is city-wide only — there is no barangay or
     district breakdown for these specific figures.** They
@@ -9401,12 +9476,13 @@ elif page == "Climate & Hazard Exposure":
     Priorities for what that would require).
 
     Every population group shows almost exactly the same
-    ~25% flood-risk share. This isn't a coincidence in the
-    data — WorldPop's age/sex breakdowns are built by
-    applying the same demographic ratios across the
-    population grid, so each subgroup inherits nearly the
-    same spatial distribution as the total population,
-    and therefore nearly the same exposure rate.
+    ~25% flood-risk share — including children (0-4), added
+    in the most recent update to this dataset. This isn't a
+    coincidence in the data — WorldPop's age/sex breakdowns
+    are built by applying the same demographic ratios across
+    the population grid, so each subgroup inherits nearly the
+    same spatial distribution as the total population, and
+    therefore nearly the same exposure rate.
     """)
 
     # Official indicator names from indicators_codebook.csv —
