@@ -187,6 +187,90 @@ h1, h2, h3, h4 {
     margin: 0;
 }
 
+/* --------------------------------------------------
+   KPI CARDS
+   (replaces bare st.metric with a boxed, elevated card —
+   purple gradient surface, white text — matching the
+   dashboard's hero banner treatment. Used via the
+   kpi_card() helper in functions.py rather than
+   st.metric directly, so the optional polarity arrow can
+   be drawn next to the value.)
+   -------------------------------------------------- */
+
+.qcd-kpi-card {
+    background: linear-gradient(135deg, #4C1D95 0%, #7F47ED 100%);
+    border-radius: 12px;
+    padding: 16px 18px 14px 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 10px rgba(76, 29, 149, 0.18);
+    min-height: 88px;
+}
+
+.qcd-kpi-label {
+    font-family: 'Roboto', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #E4DEF7;
+    margin-bottom: 6px;
+    line-height: 1.3;
+}
+
+.qcd-kpi-value-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.qcd-kpi-value {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 1.6rem;
+    color: #FFFFFF;
+    line-height: 1.1;
+}
+
+.qcd-kpi-arrow {
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+.qcd-kpi-caption {
+    font-family: 'Roboto', sans-serif;
+    font-size: 0.74rem;
+    color: #E4DEF7;
+    margin-top: 4px;
+    line-height: 1.3;
+}
+
+/* --------------------------------------------------
+   CHART / TABLE CARDS
+   (every chart/table container is created with
+   st.container(border=True, key="qcd-chart-...") — the
+   key prefix lets this single selector catch all of them
+   via Streamlit's auto-generated .st-key-<key> class,
+   without also restyling tabs, expanders, or other
+   containers Streamlit generates internally that also
+   use stVerticalBlockBorderWrapper under the hood.
+
+   Light purple tint (not the solid KPI gradient) so chart
+   text/axis labels and table contents stay legible without
+   needing to flip every label to white. Note: st.dataframe
+   renders its grid in its own internal component with a
+   transparent cell background by design (a Streamlit
+   limitation, not a CSS bug here) — this tint colors the
+   panel and padding around a table, but individual table
+   cells may still show through as white/default underneath.
+   Plotly charts render as inline SVG, so they pick up this
+   background cleanly.)
+   -------------------------------------------------- */
+
+div[class*="st-key-qcd-chart-"] {
+    background: #F3EFFC;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(76, 29, 149, 0.08);
+    border-color: transparent !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -1473,36 +1557,73 @@ elif page == "Population Overview":
         * 100
     )
 
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    early_childhood_pct = (
+        early_childhood
+        / total_population
+        * 100
+    )
 
-    c1.metric(
+    school_age_pct = (
+        school_age
+        / total_population
+        * 100
+    )
+
+    working_age_pct = (
+        working_age
+        / total_population
+        * 100
+    )
+
+    elderly_pct = (
+        elderly
+        / total_population
+        * 100
+    )
+
+    top1, top2 = st.columns(2)
+
+    kpi_card(
+        top1,
         "Population",
         f"{total_population:,.0f}"
     )
 
-    c2.metric(
-        "0-5",
-        f"{early_childhood:,.0f}"
-    )
-
-    c3.metric(
-        "6-17",
-        f"{school_age:,.0f}"
-    )
-
-    c4.metric(
-        "18-59",
-        f"{working_age:,.0f}"
-    )
-
-    c5.metric(
-        "60+",
-        f"{elderly:,.0f}"
-    )
-
-    c6.metric(
+    kpi_card(
+        top2,
         "Sex Ratio (M/F)",
         f"{sex_ratio_overall:.1f}"
+    )
+
+    st.markdown(
+        '<div class="qcd-section-label">Age Ranges — % of Total Population</div>',
+        unsafe_allow_html=True
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    kpi_card(
+        c1,
+        "0-5",
+        f"{early_childhood_pct:.1f}%"
+    )
+
+    kpi_card(
+        c2,
+        "6-17",
+        f"{school_age_pct:.1f}%"
+    )
+
+    kpi_card(
+        c3,
+        "18-59",
+        f"{working_age_pct:.1f}%"
+    )
+
+    kpi_card(
+        c4,
+        "60+",
+        f"{elderly_pct:.1f}%"
     )
 
     st.divider()
@@ -1777,11 +1898,12 @@ elif page == "Population Overview":
             map_style="light"
         )
 
-        st.pydeck_chart(
-            deck,
-            height=650,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-1"):
+            st.pydeck_chart(
+                deck,
+                height=650,
+                width="stretch"
+            )
 
         st.divider()
 
@@ -1821,7 +1943,8 @@ elif page == "Population Overview":
                 margin=dict(l=0, r=0, t=40, b=0),
                 xaxis_title="Population Density"
             )
-            st.plotly_chart(fig_top_den, width="stretch")
+            with st.container(border=True, key="qcd-chart-2"):
+                st.plotly_chart(fig_top_den, width="stretch")
 
         with col_den2:
             fig_bottom_den = px.bar(
@@ -1837,7 +1960,8 @@ elif page == "Population Overview":
                 margin=dict(l=0, r=0, t=40, b=0),
                 xaxis_title="Population Density"
             )
-            st.plotly_chart(fig_bottom_den, width="stretch")
+            with st.container(border=True, key="qcd-chart-3"):
+                st.plotly_chart(fig_bottom_den, width="stretch")
 
         st.divider()
 
@@ -1845,21 +1969,22 @@ elif page == "Population Overview":
             f"Top 15 Barangays by {indicator}"
         )
 
-        st.dataframe(
-            barangay_df[
-                [
-                    "Barangay",
-                    "District",
-                    selected_col
+        with st.container(border=True, key="qcd-chart-4"):
+            st.dataframe(
+                barangay_df[
+                    [
+                        "Barangay",
+                        "District",
+                        selected_col
+                    ]
                 ]
-            ]
-            .sort_values(
-                selected_col,
-                ascending=False
+                .sort_values(
+                    selected_col,
+                    ascending=False
+                )
+                .head(15),
+                width="stretch"
             )
-            .head(15),
-            width="stretch"
-        )
 
     # =====================================================
     # DISTRICT TAB
@@ -2045,11 +2170,12 @@ elif page == "Population Overview":
             map_style="light"
         )
 
-        st.pydeck_chart(
-            deck,
-            height=650,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-5"):
+            st.pydeck_chart(
+                deck,
+                height=650,
+                width="stretch"
+            )
 
         st.divider()
 
@@ -2070,15 +2196,17 @@ elif page == "Population Overview":
             y="Population",
             color="Age Group",
             title="Population Structure by District",
-            barmode="stack"
+            barmode="stack",
+            color_discrete_sequence=QCD_CATEGORICAL
         )
 
         fig_age.update_layout(height=450)
 
-        st.plotly_chart(
-            fig_age,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-6"):
+            st.plotly_chart(
+                fig_age,
+                width="stretch"
+            )
 
         st.divider()
 
@@ -2129,7 +2257,8 @@ elif page == "Population Overview":
         col_pyr1, col_pyr2 = st.columns([2, 1])
 
         with col_pyr1:
-            st.plotly_chart(fig_pyramid, width="stretch")
+            with st.container(border=True, key="qcd-chart-7"):
+                st.plotly_chart(fig_pyramid, width="stretch")
 
         with col_pyr2:
             fig_ratio = px.bar(
@@ -2149,7 +2278,8 @@ elif page == "Population Overview":
                 height=250,
                 margin=dict(l=0, r=0, t=40, b=0)
             )
-            st.plotly_chart(fig_ratio, width="stretch")
+            with st.container(border=True, key="qcd-chart-8"):
+                st.plotly_chart(fig_ratio, width="stretch")
 
         st.divider()
 
@@ -2191,10 +2321,11 @@ elif page == "Population Overview":
             "District Demographic Summary"
         )
 
-        st.dataframe(
-            district_summary,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-9"):
+            st.dataframe(
+                district_summary,
+                width="stretch"
+            )
 
     # =====================================================
     # SOCIO-ECONOMIC TAB
@@ -2417,18 +2548,21 @@ elif page == "Population Overview":
 
         sc1, sc2, sc3 = st.columns(3)
 
-        sc1.metric(
+        kpi_card(
+            sc1,
             "Citywide Average",
             f"{socio_avg:,.2f}"
         )
 
-        sc2.metric(
+        kpi_card(
+            sc2,
             "Highest Barangay",
             f"{socio_max_row['barangay_name'].title()} "
             f"({socio_max_row[selected_socio_col]:,.2f})"
         )
 
-        sc3.metric(
+        kpi_card(
+            sc3,
             "Lowest Barangay",
             f"{socio_min_row['barangay_name'].title()} "
             f"({socio_min_row[selected_socio_col]:,.2f})"
@@ -2499,11 +2633,12 @@ elif page == "Population Overview":
             map_style="light"
         )
 
-        st.pydeck_chart(
-            deck,
-            height=650,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-10"):
+            st.pydeck_chart(
+                deck,
+                height=650,
+                width="stretch"
+            )
 
         st.divider()
 
@@ -2515,21 +2650,22 @@ elif page == "Population Overview":
             f"Top 15 Barangays by {selected_socio_label}"
         )
 
-        st.dataframe(
-            socio_map[
-                ["barangay_name", "District", selected_socio_col]
-            ]
-            .rename(
-                columns={
-                    "barangay_name": "Barangay",
-                    selected_socio_col: selected_socio_label
-                }
+        with st.container(border=True, key="qcd-chart-11"):
+            st.dataframe(
+                socio_map[
+                    ["barangay_name", "District", selected_socio_col]
+                ]
+                .rename(
+                    columns={
+                        "barangay_name": "Barangay",
+                        selected_socio_col: selected_socio_label
+                    }
+                )
+                .dropna(subset=[selected_socio_label])
+                .sort_values(selected_socio_label, ascending=False)
+                .head(15),
+                width="stretch"
             )
-            .dropna(subset=[selected_socio_label])
-            .sort_values(selected_socio_label, ascending=False)
-            .head(15),
-            width="stretch"
-        )
 
 if page == "Childcare Centers":
 
@@ -2611,34 +2747,44 @@ if page == "Childcare Centers":
 
     k1, k2, k3, k4, k5, k6 = st.columns(6)
 
-    k1.metric(
+    kpi_card(
+        k1,
         "Facilities",
-        f"{total_facilities:,}"
+        f"{total_facilities:,}",
+        "up_good"
     )
 
-    k2.metric(
-        "CDCs",
-        f"{total_centers:,}"
+    kpi_card(
+        k2,
+        "Barangays Served",
+        f"{covered_barangays:,}",
+        "up_good"
     )
 
-    k3.metric(
+    kpi_card(
+        k3,
         "ECCD Enrollees",
-        f"{eccd_enrollees:,}"
+        f"{eccd_enrollees:,}",
+        "up_good"
     )
 
-    k4.metric(
+    kpi_card(
+        k4,
+        "CDCs",
+        f"{total_centers:,}",
+        "up_good"
+    )
+
+    kpi_card(
+        k5,
         "Public",
         f"{public_centers:,}"
     )
 
-    k5.metric(
+    kpi_card(
+        k6,
         "Private",
         f"{private_centers:,}"
-    )
-
-    k6.metric(
-        "Barangays Served",
-        f"{covered_barangays:,}"
     )
 
     st.divider()
@@ -2814,11 +2960,12 @@ if page == "Childcare Centers":
 
     )
 
-    st.pydeck_chart(
-        deck,
-        height=700,
-        width='stretch'
-    )
+    with st.container(border=True, key="qcd-chart-12"):
+        st.pydeck_chart(
+            deck,
+            height=700,
+            width='stretch'
+        )
 
     # --------------------------------------------------
     # TABLE
@@ -2826,18 +2973,19 @@ if page == "Childcare Centers":
 
     st.subheader("Facilities")
 
-    st.dataframe(
-        cc[
-            [
-                "Name",
-                "Sector",
-                "Category",
-                "District",
-                "Address"
-            ]
-        ],
-        width = 'stretch'
-    )
+    with st.container(border=True, key="qcd-chart-13"):
+        st.dataframe(
+            cc[
+                [
+                    "Name",
+                    "Sector",
+                    "Category",
+                    "District",
+                    "Address"
+                ]
+            ],
+            width = 'stretch'
+        )
 
 
     # --------------------------------------------------
@@ -2863,13 +3011,15 @@ if page == "Childcare Centers":
             category_counts,
             x="Category",
             y="Facilities",
-            title="Facilities by Category"
+            title="Facilities by Category",
+            color_discrete_sequence=["#7F47ED"]
         )
 
-        st.plotly_chart(
-            fig,
-            width='stretch'
-        )
+        with st.container(border=True, key="qcd-chart-14"):
+            st.plotly_chart(
+                fig,
+                width='stretch'
+            )
 
     with col2:
 
@@ -2888,13 +3038,15 @@ if page == "Childcare Centers":
             district_counts,
             x="District",
             y="Facilities",
-            title="Facilities by District"
+            title="Facilities by District",
+            color_discrete_sequence=["#7F47ED"]
         )
 
-        st.plotly_chart(
-            fig,
-            width='stretch'
-        )
+        with st.container(border=True, key="qcd-chart-15"):
+            st.plotly_chart(
+                fig,
+                width='stretch'
+            )
 
     early_childhood_population = (
         population_age[
@@ -2916,19 +3068,24 @@ if page == "Childcare Centers":
 
     c1, c2, c3 = st.columns(3)
 
-    c1.metric(
+    kpi_card(
+        c1,
         "Children (0-5)",
         f"{early_childhood_population:,.0f}"
     )
 
-    c2.metric(
+    kpi_card(
+        c2,
         "Children per CDC",
-        f"{children_per_center:.0f}"
+        f"{children_per_center:.0f}",
+        "down_good"
     )
 
-    c3.metric(
+    kpi_card(
+        c3,
         "ECCD Coverage",
-        f"{enrollment_rate:.1f}%"
+        f"{enrollment_rate:.1f}%",
+        "up_good"
     )
 
 elif page == "Schools":
@@ -2988,29 +3145,37 @@ elif page == "Schools":
 
     k1, k2, k3, k4, k5 = st.columns(5)
 
-    k1.metric(
+    kpi_card(
+        k1,
         "Total Schools",
-        f"{total_schools:,}"
+        f"{total_schools:,}",
+        "up_good"
     )
 
-    k2.metric(
+    kpi_card(
+        k2,
+        "Barangays Served",
+        f"{covered_barangays:,}",
+        "up_good"
+    )
+
+    kpi_card(
+        k3,
+        "Districts Served",
+        f"{covered_districts:,}",
+        "up_good"
+    )
+
+    kpi_card(
+        k4,
         "Public",
         f"{public_schools:,}"
     )
 
-    k3.metric(
+    kpi_card(
+        k5,
         "Private",
         f"{private_schools:,}"
-    )
-
-    k4.metric(
-        "Barangays Served",
-        f"{covered_barangays:,}"
-    )
-
-    k5.metric(
-        "Districts Served",
-        f"{covered_districts:,}"
     )
 
     st.divider()
@@ -3029,14 +3194,17 @@ elif page == "Schools":
 
     c1, c2 = st.columns(2)
 
-    c1.metric(
+    kpi_card(
+        c1,
         "School-Age Population (6-17)",
         f"{school_age_population:,.0f}"
     )
 
-    c2.metric(
+    kpi_card(
+        c2,
         "Children per School",
-        f"{children_per_school:,.0f}"
+        f"{children_per_school:,.0f}",
+        "down_good"
     )
 
     st.divider()
@@ -3234,11 +3402,12 @@ elif page == "Schools":
 
     )
 
-    st.pydeck_chart(
-        deck,
-        height=700,
-        width='stretch'
-    )
+    with st.container(border=True, key="qcd-chart-16"):
+        st.pydeck_chart(
+            deck,
+            height=700,
+            width='stretch'
+        )
 
     # --------------------------------------------------
     # TABLE
@@ -3246,18 +3415,19 @@ elif page == "Schools":
 
     st.subheader("Schools")
 
-    st.dataframe(
-        sch[
-            [
-                "Name",
-                "Sector",
-                "Category",
-                "District",
-                "Address"
-            ]
-        ],
-        width = 'stretch'
-    )
+    with st.container(border=True, key="qcd-chart-17"):
+        st.dataframe(
+            sch[
+                [
+                    "Name",
+                    "Sector",
+                    "Category",
+                    "District",
+                    "Address"
+                ]
+            ],
+            width = 'stretch'
+        )
 
 
     # --------------------------------------------------
@@ -3282,13 +3452,15 @@ elif page == "Schools":
             category_counts,
             names="Category",
             values="Schools",
-            title="School Distribution"
+            title="School Distribution",
+            color_discrete_sequence=QCD_CATEGORICAL
         )
 
-        st.plotly_chart(
-            fig,
-            width='stretch'
-        )
+        with st.container(border=True, key="qcd-chart-18"):
+            st.plotly_chart(
+                fig,
+                width='stretch'
+            )
 
     with col2:
 
@@ -3308,13 +3480,15 @@ elif page == "Schools":
             x="District",
             y="Schools",
             text_auto=True,
-            title="Schools by District"
+            title="Schools by District",
+            color_discrete_sequence=["#7F47ED"]
         )
 
-        st.plotly_chart(
-            fig,
-            width='stretch'
-        )
+        with st.container(border=True, key="qcd-chart-19"):
+            st.plotly_chart(
+                fig,
+                width='stretch'
+            )
  
 
     district_schools = (
@@ -3363,13 +3537,14 @@ elif page == "Schools":
         "School Coverage by District"
     )
 
-    st.dataframe(
-        coverage.sort_values(
-            "Children per School",
-            ascending=False
-        ),
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-20"):
+        st.dataframe(
+            coverage.sort_values(
+                "Children per School",
+                ascending=False
+            ),
+            width="stretch"
+        )
 
     barangay_counts = (
         schools
@@ -3387,10 +3562,11 @@ elif page == "Schools":
         "Top Barangays by Number of Schools"
     )
 
-    st.dataframe(
-        barangay_counts,
-        width='stretch'
-    )
+    with st.container(border=True, key="qcd-chart-21"):
+        st.dataframe(
+            barangay_counts,
+            width='stretch'
+        )
 
 elif page == "Health Centers Map":
 
@@ -3457,34 +3633,46 @@ elif page == "Health Centers Map":
 
     k1, k2, k3, k4, k5, k6 = st.columns(6)
 
-    k1.metric(
+    kpi_card(
+        k1,
         "Facilities",
-        f"{total_facilities:,}"
+        f"{total_facilities:,}",
+        "up_good"
     )
 
-    k2.metric(
+    kpi_card(
+        k2,
         "Doctors",
-        f"{int(total_doctors):,}"
+        f"{int(total_doctors):,}",
+        "up_good"
     )
 
-    k3.metric(
+    kpi_card(
+        k3,
         "Health Centers",
-        f"{health_centers_count:,}"
+        f"{health_centers_count:,}",
+        "up_good"
     )
 
-    k4.metric(
+    kpi_card(
+        k4,
         "Super Health",
-        f"{super_health_centers:,}"
+        f"{super_health_centers:,}",
+        "up_good"
     )
 
-    k5.metric(
+    kpi_card(
+        k5,
         "Hospitals",
-        f"{hospitals:,}"
+        f"{hospitals:,}",
+        "up_good"
     )
 
-    k6.metric(
+    kpi_card(
+        k6,
         "Pharmacies",
-        f"{pharmacies:,}"
+        f"{pharmacies:,}",
+        "up_good"
     )
 
     st.divider()
@@ -3686,11 +3874,12 @@ elif page == "Health Centers Map":
         map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
     )
 
-    st.pydeck_chart(
-        deck,
-        height=700,
-        width='stretch'
-    )
+    with st.container(border=True, key="qcd-chart-22"):
+        st.pydeck_chart(
+            deck,
+            height=700,
+            width='stretch'
+        )
 
     # --------------------------------------------------
     # HEALTH KPIs
@@ -3719,19 +3908,24 @@ elif page == "Health Centers Map":
 
     c1, c2, c3 = st.columns(3)
 
-    c1.metric(
+    kpi_card(
+        c1,
         "Population",
         f"{total_population:,.0f}"
     )
 
-    c2.metric(
+    kpi_card(
+        c2,
         "Population / Doctor",
-        f"{population_per_doctor:,.0f}"
+        f"{population_per_doctor:,.0f}",
+        "down_good"
     )
 
-    c3.metric(
+    kpi_card(
+        c3,
         "Population / Health Center",
-        f"{population_per_health_center:,.0f}"
+        f"{population_per_health_center:,.0f}",
+        "down_good"
     )
 
     st.divider()
@@ -3755,13 +3949,15 @@ elif page == "Health Centers Map":
         x="district",
         y="health_centers",
         title="Health Centers by District",
-        text_auto=True
+        text_auto=True,
+        color_discrete_sequence=["#7F47ED"]
     )
 
-    st.plotly_chart(
-        fig,
-        width='stretch'
-    )
+    with st.container(border=True, key="qcd-chart-23"):
+        st.plotly_chart(
+            fig,
+            width='stretch'
+        )
 
     fig = px.scatter(
         district_capacity,
@@ -3769,17 +3965,19 @@ elif page == "Health Centers Map":
         y="doctors",
         text="district",
         size="doctors",
-        title="Doctors vs Health Centers"
+        title="Doctors vs Health Centers",
+        color_discrete_sequence=["#7F47ED"]
     )
 
     fig.update_traces(
         textposition="top center"
     )
 
-    st.plotly_chart(
-        fig,
-        width='stretch'
-    )
+    with st.container(border=True, key="qcd-chart-24"):
+        st.plotly_chart(
+            fig,
+            width='stretch'
+        )
 
     district_population = (
         population_sex
@@ -3819,19 +4017,20 @@ elif page == "Health Centers Map":
         "Health Coverage by District"
     )
 
-    st.dataframe(
-        coverage[
-            [
-                "District",
-                "Total",
-                "health_centers",
-                "doctors",
-                "Population per Doctor",
-                "Population per Health Center"
-            ]
-        ],
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-25"):
+        st.dataframe(
+            coverage[
+                [
+                    "District",
+                    "Total",
+                    "health_centers",
+                    "doctors",
+                    "Population per Doctor",
+                    "Population per Health Center"
+                ]
+            ],
+            width="stretch"
+        )
 
 
     facility_mix = (
@@ -3849,13 +4048,15 @@ elif page == "Health Centers Map":
         facility_mix,
         names="Facility Type",
         values="Count",
-        title="Health Facility Composition"
+        title="Health Facility Composition",
+        color_discrete_sequence=QCD_CATEGORICAL
     )
 
-    st.plotly_chart(
-        fig,
-        width='stretch'
-    )
+    with st.container(border=True, key="qcd-chart-26"):
+        st.plotly_chart(
+            fig,
+            width='stretch'
+        )
 
 elif page == "Older Persons Center Map":
 
@@ -3953,34 +4154,41 @@ elif page == "Older Persons Center Map":
 
     k1, k2, k3, k4, k5, k6 = st.columns(6)
 
-    k1.metric(
+    kpi_card(
+        k1,
         "Registered Seniors",
         f"{registered_seniors:,}"
     )
 
-    k2.metric(
+    kpi_card(
+        k2,
         "Female",
         f"{female_seniors:,}"
     )
 
-    k3.metric(
+    kpi_card(
+        k3,
         "Male",
         f"{male_seniors:,}"
     )
 
-    k4.metric(
+    kpi_card(
+        k4,
         "Age 60-79",
         f"{age_60_79:,}"
     )
 
-    k5.metric(
+    kpi_card(
+        k5,
         "Age 80+",
         f"{age_80_plus:,}"
     )
 
-    k6.metric(
+    kpi_card(
+        k6,
         "Care Facilities",
-        f"{total_facilities:,}"
+        f"{total_facilities:,}",
+        "up_good"
     )
 
     st.divider()
@@ -3991,9 +4199,11 @@ elif page == "Older Persons Center Map":
         / total_facilities
     )
 
-    st.metric(
+    kpi_card(
+        st,
         "Registered Seniors per Care Facility",
-        f"{seniors_per_facility:,.0f}"
+        f"{seniors_per_facility:,.0f}",
+        "down_good"
     )
 
     # --------------------------------------------------
@@ -4210,11 +4420,12 @@ elif page == "Older Persons Center Map":
         map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
     )
 
-    st.pydeck_chart(
-        deck,
-        height=700,
-        width='stretch'
-    )
+    with st.container(border=True, key="qcd-chart-27"):
+        st.pydeck_chart(
+            deck,
+            height=700,
+            width='stretch'
+        )
 
 
     # --------------------------------------------------
@@ -4239,13 +4450,15 @@ elif page == "Older Persons Center Map":
             sex_df,
             names="Sex",
             values="Population",
-            title="Senior Citizens by Sex"
+            title="Senior Citizens by Sex",
+            color_discrete_sequence=QCD_CATEGORICAL
         )
 
-        st.plotly_chart(
-            fig,
-            width='stretch'
-        )
+        with st.container(border=True, key="qcd-chart-28"):
+            st.plotly_chart(
+                fig,
+                width='stretch'
+            )
 
     with col2:
 
@@ -4266,13 +4479,15 @@ elif page == "Older Persons Center Map":
             age_df,
             x="Age Group",
             y="Population",
-            title="Senior Citizens by Age Group"
+            title="Senior Citizens by Age Group",
+            color_discrete_sequence=["#7F47ED"]
         )
 
-        st.plotly_chart(
-            fig,
-            width='stretch'
-        )
+        with st.container(border=True, key="qcd-chart-29"):
+            st.plotly_chart(
+                fig,
+                width='stretch'
+            )
 
     seniors_per_year = pd.read_csv(
         "processed/seniors_per_year.csv"
@@ -4294,13 +4509,15 @@ elif page == "Older Persons Center Map":
         x="year",
         y="senior_citizens_registered_during_the_year",
         markers=True,
-        title="Registered Senior Citizens Over Time"
+        title="Registered Senior Citizens Over Time",
+        color_discrete_sequence=["#7F47ED"]
     )
 
-    st.plotly_chart(
-        fig,
-        width='stretch'
-    )
+    with st.container(border=True, key="qcd-chart-30"):
+        st.plotly_chart(
+            fig,
+            width='stretch'
+        )
 
     seniors_barangay = pd.read_csv(
         "processed/seniors_per_barangay.csv"
@@ -4319,16 +4536,17 @@ elif page == "Older Persons Center Map":
         "Top 10 Barangays by Number of Senior Citizens"
     )
 
-    st.dataframe(
-        top_barangays[
-            [
-                "Barangay",
-                "District",
-                "Senior Citizens"
-            ]
-        ],
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-31"):
+        st.dataframe(
+            top_barangays[
+                [
+                    "Barangay",
+                    "District",
+                    "Senior Citizens"
+                ]
+            ],
+            width="stretch"
+        )
 
     district_seniors = (
         seniors_barangay
@@ -4343,13 +4561,15 @@ elif page == "Older Persons Center Map":
         x="District",
         y="Senior Citizens",
         text_auto=",",
-        title="Senior Citizens by District"
+        title="Senior Citizens by District",
+        color_discrete_sequence=["#7F47ED"]
     )
 
-    st.plotly_chart(
-        fig,
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-32"):
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
 
     facility_counts = (
         older_person_care
@@ -4387,13 +4607,14 @@ elif page == "Older Persons Center Map":
         "Senior Care Coverage by District"
     )
 
-    st.dataframe(
-        coverage.sort_values(
-            "Seniors per Facility",
-            ascending=False
-        ),
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-33"):
+        st.dataframe(
+            coverage.sort_values(
+                "Seniors per Facility",
+                ascending=False
+            ),
+            width="stretch"
+        )
 
 
     facility_mix = (
@@ -4411,13 +4632,15 @@ elif page == "Older Persons Center Map":
         facility_mix,
         names="Facility Type",
         values="Count",
-        title="Older Persons Care Facility Types"
+        title="Older Persons Care Facility Types",
+        color_discrete_sequence=QCD_CATEGORICAL
     )
 
-    st.plotly_chart(
-        fig,
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-34"):
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
 
 elif page == "Long-Term Care & Rehabilitation":
     
@@ -4465,24 +4688,32 @@ elif page == "Long-Term Care & Rehabilitation":
 
     k1, k2, k3, k4 = st.columns(4)
 
-    k1.metric(
+    kpi_card(
+        k1,
         "Facilities",
-        f"{total_facilities:,}"
+        f"{total_facilities:,}",
+        "up_good"
     )
 
-    k2.metric(
+    kpi_card(
+        k2,
         "Service Types",
-        f"{total_categories:,}"
+        f"{total_categories:,}",
+        "up_good"
     )
 
-    k3.metric(
+    kpi_card(
+        k3,
         "Barangays Served",
-        f"{covered_barangays:,}"
+        f"{covered_barangays:,}",
+        "up_good"
     )
 
-    k4.metric(
+    kpi_card(
+        k4,
         "Districts Served",
-        f"{covered_districts:,}"
+        f"{covered_districts:,}",
+        "up_good"
     )
 
     st.divider()
@@ -4696,11 +4927,12 @@ elif page == "Long-Term Care & Rehabilitation":
         map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
     )
 
-    st.pydeck_chart(
-        deck,
-        height=700,
-        width='stretch' 
-    )
+    with st.container(border=True, key="qcd-chart-35"):
+        st.pydeck_chart(
+            deck,
+            height=700,
+            width='stretch' 
+        )
 
     # ----------------------------------
     # TABLE
@@ -4708,17 +4940,18 @@ elif page == "Long-Term Care & Rehabilitation":
 
     st.subheader("Facilities")
 
-    st.dataframe(
-        ltc[
-            [
-                "Name",
-                "Category",
-                "District",
-                "Address"
-            ]
-        ],
-        width = 'stretch'
-    )
+    with st.container(border=True, key="qcd-chart-36"):
+        st.dataframe(
+            ltc[
+                [
+                    "Name",
+                    "Category",
+                    "District",
+                    "Address"
+                ]
+            ],
+            width = 'stretch'
+        )
 
     # --------------------------------------------------
     # REHABILITATION KPIs
@@ -4748,19 +4981,24 @@ elif page == "Long-Term Care & Rehabilitation":
 
     c1, c2, c3 = st.columns(3)
 
-    c1.metric(
+    kpi_card(
+        c1,
         "Total Population",
         f"{population_total:,.0f}"
     )
 
-    c2.metric(
+    kpi_card(
+        c2,
         "Population per Facility",
-        f"{population_per_rehab:,.0f}"
+        f"{population_per_rehab:,.0f}",
+        "down_good"
     )
 
-    c3.metric(
+    kpi_card(
+        c3,
         "Older Persons per Facility",
-        f"{elderly_per_rehab:,.0f}"
+        f"{elderly_per_rehab:,.0f}",
+        "down_good"
     )
 
     st.divider()
@@ -4780,13 +5018,15 @@ elif page == "Long-Term Care & Rehabilitation":
         service_mix,
         x="Service Type",
         y="Facilities",
-        title="Long-Term Care and Rehabilitation Services"
+        title="Long-Term Care and Rehabilitation Services",
+        color_discrete_sequence=["#7F47ED"]
     )
 
-    st.plotly_chart(
-        fig,
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-37"):
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
 
     district_counts = (
         long_term_care
@@ -4800,13 +5040,15 @@ elif page == "Long-Term Care & Rehabilitation":
         x="District",
         y="Facilities",
         text_auto=True,
-        title="Rehabilitation Facilities by District"
+        title="Rehabilitation Facilities by District",
+        color_discrete_sequence=["#7F47ED"]
     )
 
-    st.plotly_chart(
-        fig,
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-38"):
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
 
     district_population = (
         population_sex
@@ -4845,13 +5087,14 @@ elif page == "Long-Term Care & Rehabilitation":
         "Coverage by District"
     )
 
-    st.dataframe(
-        coverage.sort_values(
-            "Population per Facility",
-            ascending=False
-        ),
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-39"):
+        st.dataframe(
+            coverage.sort_values(
+                "Population per Facility",
+                ascending=False
+            ),
+            width="stretch"
+        )
 
     top_categories = (
         long_term_care["Category"]
@@ -4888,10 +5131,11 @@ elif page == "Long-Term Care & Rehabilitation":
         "District Priority Ranking"
     )
 
-    st.dataframe(
-        ranking,
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-40"):
+        st.dataframe(
+            ranking,
+            width="stretch"
+        )
 
 elif page == "Persons with Disabilities":
 
@@ -4956,34 +5200,41 @@ elif page == "Persons with Disabilities":
 
     k1, k2, k3, k4, k5, k6 = st.columns(6)
 
-    k1.metric(
+    kpi_card(
+        k1,
         "Registered PWDs",
         f"{total_pwd:,.0f}"
     )
 
-    k2.metric(
-        "Male",
-        f"{total_male:,.0f}"
-    )
-
-    k3.metric(
-        "Female",
-        f"{total_female:,.0f}"
-    )
-
-    k4.metric(
-        "Disability Types",
-        disability_types
-    )
-
-    k5.metric(
+    kpi_card(
+        k2,
         "Barangays",
         barangays_covered
     )
 
-    k6.metric(
+    kpi_card(
+        k3,
         "Rehab Facilities",
-        rehab_facilities
+        rehab_facilities,
+        "up_good"
+    )
+
+    kpi_card(
+        k4,
+        "Male",
+        f"{total_male:,.0f}"
+    )
+
+    kpi_card(
+        k5,
+        "Female",
+        f"{total_female:,.0f}"
+    )
+
+    kpi_card(
+        k6,
+        "Disability Types",
+        disability_types
     )
 
     st.divider()
@@ -4992,9 +5243,11 @@ elif page == "Persons with Disabilities":
     # COVERAGE KPI
     # --------------------------------------------------
 
-    st.metric(
+    kpi_card(
+        st,
         "PWDs per Rehabilitation Facility",
-        f"{(total_pwd / rehab_facilities):,.0f}"
+        f"{(total_pwd / rehab_facilities):,.0f}",
+        "down_good"
     )
 
     st.divider()
@@ -5024,13 +5277,15 @@ elif page == "Persons with Disabilities":
             sex_df,
             names="Sex",
             values="Count",
-            title="PWD Population by Sex"
+            title="PWD Population by Sex",
+            color_discrete_sequence=QCD_CATEGORICAL
         )
 
-        st.plotly_chart(
-            fig,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-41"):
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
 
     with col2:
 
@@ -5042,17 +5297,19 @@ elif page == "Persons with Disabilities":
             ),
             x="Type of Disability",
             y="total",
-            title="Disability Types"
+            title="Disability Types",
+            color_discrete_sequence=["#7F47ED"]
         )
 
         fig.update_layout(
             yaxis_title="Registered PWDs"
         )
 
-        st.plotly_chart(
-            fig,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-42"):
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
 
     st.divider()
 
@@ -5076,17 +5333,19 @@ elif page == "Persons with Disabilities":
         x="District",
         y="pwd_registered",
         text_auto=",",
-        title="Registered PWDs by District"
+        title="Registered PWDs by District",
+        color_discrete_sequence=["#7F47ED"]
     )
 
     fig.update_layout(
         yaxis_title="Registered PWDs"
     )
 
-    st.plotly_chart(
-        fig,
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-43"):
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
 
     st.divider()
 
@@ -5131,7 +5390,8 @@ elif page == "Persons with Disabilities":
             x="breakdown",
             y="total",
             title="Seniors Also Registered as PWD",
-            text_auto=","
+            text_auto=",",
+            color_discrete_sequence=["#7F47ED"]
         )
 
         fig.update_layout(
@@ -5139,10 +5399,11 @@ elif page == "Persons with Disabilities":
             yaxis_title="Count"
         )
 
-        st.plotly_chart(
-            fig,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-44"):
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
 
     with col4:
 
@@ -5151,7 +5412,8 @@ elif page == "Persons with Disabilities":
             x="breakdown",
             y="total",
             title="Registered Seniors by Age Band",
-            text_auto=","
+            text_auto=",",
+            color_discrete_sequence=["#7F47ED"]
         )
 
         fig.update_layout(
@@ -5159,10 +5421,11 @@ elif page == "Persons with Disabilities":
             yaxis_title="Registered Seniors"
         )
 
-        st.plotly_chart(
-            fig,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-45"):
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
 
     st.divider()
 
@@ -5178,28 +5441,29 @@ elif page == "Persons with Disabilities":
             "Top 10 Barangays by PWD Population"
         )
 
-        st.dataframe(
-            demographics[
-                [
-                    "barangay",
-                    "district",
-                    "pwd_registered"
+        with st.container(border=True, key="qcd-chart-46"):
+            st.dataframe(
+                demographics[
+                    [
+                        "barangay",
+                        "district",
+                        "pwd_registered"
+                    ]
                 ]
-            ]
-            .rename(
-                columns={
-                    "barangay": "Barangay",
-                    "district": "District",
-                    "pwd_registered": "PWDs"
-                }
+                .rename(
+                    columns={
+                        "barangay": "Barangay",
+                        "district": "District",
+                        "pwd_registered": "PWDs"
+                    }
+                )
+                .sort_values(
+                    "PWDs",
+                    ascending=False
+                )
+                .head(10),
+                width="stretch"
             )
-            .sort_values(
-                "PWDs",
-                ascending=False
-            )
-            .head(10),
-            width="stretch"
-        )
 
     with col6:
 
@@ -5207,29 +5471,30 @@ elif page == "Persons with Disabilities":
             "Highest Disability Prevalence Rate"
         )
 
-        st.dataframe(
-            demographics[
-                [
-                    "barangay",
-                    "district",
-                    "disability_prevalence_rate_pct"
+        with st.container(border=True, key="qcd-chart-47"):
+            st.dataframe(
+                demographics[
+                    [
+                        "barangay",
+                        "district",
+                        "disability_prevalence_rate_pct"
+                    ]
                 ]
-            ]
-            .rename(
-                columns={
-                    "barangay": "Barangay",
-                    "district": "District",
-                    "disability_prevalence_rate_pct":
-                        "Prevalence Rate (%)"
-                }
+                .rename(
+                    columns={
+                        "barangay": "Barangay",
+                        "district": "District",
+                        "disability_prevalence_rate_pct":
+                            "Prevalence Rate (%)"
+                    }
+                )
+                .sort_values(
+                    "Prevalence Rate (%)",
+                    ascending=False
+                )
+                .head(10),
+                width="stretch"
             )
-            .sort_values(
-                "Prevalence Rate (%)",
-                ascending=False
-            )
-            .head(10),
-            width="stretch"
-        )
 
     st.divider()
 
@@ -5268,22 +5533,23 @@ elif page == "Persons with Disabilities":
         district_coverage["Facilities"]
     ).round(0)
 
-    st.dataframe(
-        district_coverage[
-            [
-                "district",
-                "pwd_registered",
-                "Facilities",
-                "PWDs per Facility"
-            ]
-        ].rename(
-            columns={
-                "district": "District",
-                "pwd_registered": "Registered PWDs in QC"
-            }
-        ),
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-48"):
+        st.dataframe(
+            district_coverage[
+                [
+                    "district",
+                    "pwd_registered",
+                    "Facilities",
+                    "PWDs per Facility"
+                ]
+            ].rename(
+                columns={
+                    "district": "District",
+                    "pwd_registered": "Registered PWDs in QC"
+                }
+            ),
+            width="stretch"
+        )
 
 elif page == "Action Offices":
 
@@ -5508,26 +5774,28 @@ elif page == "Action Offices":
         map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
     )
 
-    st.pydeck_chart(
-        deck,
-        height=700,
-        width='stretch'
-    )
+    with st.container(border=True, key="qcd-chart-49"):
+        st.pydeck_chart(
+            deck,
+            height=700,
+            width='stretch'
+        )
     # ----------------------------------
     # TABLE
     # ----------------------------------
 
     st.subheader("Action Offices")
 
-    st.dataframe(
-        sat[
-            [
-                "District",
-                "Address"
-            ]
-        ],
-        width = 'stretch'
-    )
+    with st.container(border=True, key="qcd-chart-50"):
+        st.dataframe(
+            sat[
+                [
+                    "District",
+                    "Address"
+                ]
+            ],
+            width = 'stretch'
+        )
 
 elif page == "Migration Resource Center":
 
@@ -5749,11 +6017,12 @@ elif page == "Migration Resource Center":
         map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
     )
 
-    st.pydeck_chart(
-        deck,
-        height=700,
-        width='stretch'
-    )
+    with st.container(border=True, key="qcd-chart-51"):
+        st.pydeck_chart(
+            deck,
+            height=700,
+            width='stretch'
+        )
 
     # ----------------------------------
     # TABLE
@@ -5773,10 +6042,11 @@ elif page == "Migration Resource Center":
         if c in mig.columns
     ]
 
-    st.dataframe(
-        mig[display_cols],
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-52"):
+        st.dataframe(
+            mig[display_cols],
+            width="stretch"
+        )
 
 elif page == "Care Services Explorer":
 
@@ -6131,20 +6401,25 @@ elif page == "Care Services Explorer":
 
         kpi1, kpi2, kpi3 = st.columns(3)
 
-        kpi1.metric(
+        kpi_card(
+            kpi1,
             "Facilities Selected",
             f"{total_facilities:,}"
         )
 
-        kpi2.metric(
+        kpi_card(
+            kpi2,
             "In Flood Zone",
-            f"{total_at_risk:,}"
+            f"{total_at_risk:,}",
+            "down_good"
         )
 
-        kpi3.metric(
+        kpi_card(
+            kpi3,
             "% At Risk",
             f"{(100 * total_at_risk / total_facilities):.1f}%"
-            if total_facilities > 0 else "0.0%"
+            if total_facilities > 0 else "0.0%",
+            "down_good"
         )
 
         fig_exposure = px.bar(
@@ -6164,15 +6439,17 @@ elif page == "Care Services Explorer":
             yaxis_title="Facilities in Flood Zone"
         )
 
-        st.plotly_chart(
-            fig_exposure,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-53"):
+            st.plotly_chart(
+                fig_exposure,
+                width="stretch"
+            )
 
-        st.dataframe(
-            exposure_df,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-54"):
+            st.dataframe(
+                exposure_df,
+                width="stretch"
+            )
 
 
 elif page == "Accessibility Analysis":
@@ -6342,22 +6619,28 @@ elif page == "Accessibility Analysis":
 
         c1, c2, c3, c4 = st.columns(4)
 
-        c1.metric(
+        kpi_card(
+            c1,
             "Accessibility Index",
-            avg_score
+            avg_score,
+            "up_good"
         )
 
-        c2.metric(
+        kpi_card(
+            c2,
             "Total Facilities",
-            f"{total_facilities:,}"
+            f"{total_facilities:,}",
+            "up_good"
         )
 
-        c3.metric(
+        kpi_card(
+            c3,
             "Best Served District",
             best_district
         )
 
-        c4.metric(
+        kpi_card(
+            c4,
             "Priority District",
             worst_district
         )
@@ -6586,11 +6869,12 @@ elif page == "Accessibility Analysis":
             map_style="light"
         )
 
-        st.pydeck_chart(
-            deck,
-            height=700,
-            width='stretch'
-        )
+        with st.container(border=True, key="qcd-chart-55"):
+            st.pydeck_chart(
+                deck,
+                height=700,
+                width='stretch'
+            )
 
         st.divider()
 
@@ -6614,10 +6898,11 @@ elif page == "Accessibility Analysis":
                 title=f"{selected_ratio_label} by District"
             )
 
-            st.plotly_chart(
-                fig,
-                width="stretch"
-            )
+            with st.container(border=True, key="qcd-chart-56"):
+                st.plotly_chart(
+                    fig,
+                    width="stretch"
+                )
 
         with right:
 
@@ -6633,10 +6918,11 @@ elif page == "Accessibility Analysis":
                 title="Overall Accessibility Index by District"
             )
 
-            st.plotly_chart(
-                fig,
-                width="stretch"
-            )
+            with st.container(border=True, key="qcd-chart-57"):
+                st.plotly_chart(
+                    fig,
+                    width="stretch"
+                )
 
         st.divider()
 
@@ -6664,10 +6950,11 @@ elif page == "Accessibility Analysis":
             textposition="top center"
         )
 
-        st.plotly_chart(
-            fig,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-58"):
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
 
         st.divider()
 
@@ -6698,19 +6985,20 @@ elif page == "Accessibility Analysis":
             .head(5)
         )
 
-        st.dataframe(
-            priority[
-                [
-                    "District",
-                    selected_ratio_label,
-                    "Facilities",
-                    "Total",
-                    "Accessibility Index",
-                    "Care Demand per Facility"
-                ]
-            ],
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-59"):
+            st.dataframe(
+                priority[
+                    [
+                        "District",
+                        selected_ratio_label,
+                        "Facilities",
+                        "Total",
+                        "Accessibility Index",
+                        "Care Demand per Facility"
+                    ]
+                ],
+                width="stretch"
+            )
 
         st.divider()
 
@@ -6722,20 +7010,21 @@ elif page == "Accessibility Analysis":
             "District Accessibility Indicators"
         )
 
-        st.dataframe(
-            access[
-                [
-                    "District",
-                    selected_ratio_label,
-                    "Facilities",
-                    "Total",
-                    "Facilities per 10k Population",
-                    "Accessibility Index",
-                    "Care Demand per Facility"
-                ]
-            ],
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-60"):
+            st.dataframe(
+                access[
+                    [
+                        "District",
+                        selected_ratio_label,
+                        "Facilities",
+                        "Total",
+                        "Facilities per 10k Population",
+                        "Accessibility Index",
+                        "Care Demand per Facility"
+                    ]
+                ],
+                width="stretch"
+            )
  
     with tab2:
 
@@ -6852,17 +7141,22 @@ elif page == "Accessibility Analysis":
 
         c1, c2, c3 = st.columns(3)
 
-        c1.metric(
+        kpi_card(
+            c1,
             "Average Accessibility",
-            avg_access
+            avg_access,
+            "up_good"
         )
 
-        c2.metric(
+        kpi_card(
+            c2,
             "Barangays Without Facilities",
-            int(no_facilities)
+            int(no_facilities),
+            "down_good"
         )
 
-        c3.metric(
+        kpi_card(
+            c3,
             "Best Served Barangay",
             str(top_barangay)
         )
@@ -7027,11 +7321,12 @@ elif page == "Accessibility Analysis":
             map_style="light"
         )
 
-        st.pydeck_chart(
-            deck,
-            height=750,
-            width='stretch'
-        )
+        with st.container(border=True, key="qcd-chart-61"):
+            st.pydeck_chart(
+                deck,
+                height=750,
+                width='stretch'
+            )
 
         st.divider()
 
@@ -7058,10 +7353,11 @@ elif page == "Accessibility Analysis":
             title=f"Most Underserved Barangays — {selected_ratio_label}"
         )
 
-        st.plotly_chart(
-            fig,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-62"):
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
 
         # ==================================================
         # POPULATION VS FACILITIES
@@ -7078,10 +7374,11 @@ elif page == "Accessibility Analysis":
             title="Population vs Facilities (All Types)"
         )
 
-        st.plotly_chart(
-            fig,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-63"):
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
 
         st.divider()
 
@@ -7115,19 +7412,20 @@ elif page == "Accessibility Analysis":
             .head(25)
         )
 
-        st.dataframe(
-            priority_barangays[
-                [
-                    "Barangay",
-                    "District",
-                    "Total",
-                    "Facilities",
-                    selected_ratio_label,
-                    "Accessibility Index"
-                ]
-            ],
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-64"):
+            st.dataframe(
+                priority_barangays[
+                    [
+                        "Barangay",
+                        "District",
+                        "Total",
+                        "Facilities",
+                        selected_ratio_label,
+                        "Accessibility Index"
+                    ]
+                ],
+                width="stretch"
+            )
 
         st.divider()
 
@@ -7139,21 +7437,22 @@ elif page == "Accessibility Analysis":
             "Barangay Accessibility Indicators"
         )
 
-        st.dataframe(
-            barangay_access[
-                [
-                    "Barangay",
-                    "District",
-                    "Total",
-                    "Facilities",
-                    selected_ratio_label,
-                    "Facilities per 10k Population",
-                    "Accessibility Index",
-                    "Care Demand per Facility"
-                ]
-            ],
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-65"):
+            st.dataframe(
+                barangay_access[
+                    [
+                        "Barangay",
+                        "District",
+                        "Total",
+                        "Facilities",
+                        selected_ratio_label,
+                        "Facilities per 10k Population",
+                        "Accessibility Index",
+                        "Care Demand per Facility"
+                    ]
+                ],
+                width="stretch"
+            )
 
 elif page == "Care Planning & Investment Priorities":
 
@@ -7381,32 +7680,37 @@ elif page == "Care Planning & Investment Priorities":
 
     with col1:
 
-        st.metric(
+        kpi_card(
+            st,
             "Total Barangays",
             len(barangay_access)
         )
 
     with col2:
 
-        st.metric(
+        kpi_card(
+            st,
             "Care Desert Barangays",
             int(
                 (
                     barangay_access["Facilities"] == 0
                 ).sum()
-            )
+            ),
+            "down_good"
         )
 
     with col3:
 
-        st.metric(
+        kpi_card(
+            st,
             "Highest Priority Barangay",
             barangay_access.iloc[0]["Barangay"]
         )
 
     with col4:
 
-        st.metric(
+        kpi_card(
+            st,
             "Average Priority Score",
             round(
                 barangay_access[
@@ -7609,11 +7913,12 @@ elif page == "Care Planning & Investment Priorities":
         map_style="light"
     )
 
-    st.pydeck_chart(
-        deck,
-        height=750,
-        width='stretch'
-    )
+    with st.container(border=True, key="qcd-chart-66"):
+        st.pydeck_chart(
+            deck,
+            height=750,
+            width='stretch'
+        )
 
     st.divider()
 
@@ -7625,20 +7930,21 @@ elif page == "Care Planning & Investment Priorities":
         "Top 25 Priority Barangays"
     )
 
-    st.dataframe(
-        barangay_access[
-            [
-                "Barangay",
-                "District",
-                "Total",
-                "Facilities",
-                "Care Demand",
-                "Service Diversity",
-                "Priority Score"
-            ]
-        ].head(25),
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-67"):
+        st.dataframe(
+            barangay_access[
+                [
+                    "Barangay",
+                    "District",
+                    "Total",
+                    "Facilities",
+                    "Care Demand",
+                    "Service Diversity",
+                    "Priority Score"
+                ]
+            ].head(25),
+            width="stretch"
+        )
 
     # ==================================================
     # CHART
@@ -7650,17 +7956,19 @@ elif page == "Care Planning & Investment Priorities":
         y="Barangay",
         orientation="h",
         color="Priority Score",
-        title="Highest Priority Barangays"
+        title="Highest Priority Barangays",
+        color_continuous_scale=QCD_SEQUENTIAL
     )
 
     fig.update_layout(
         height=700
     )
 
-    st.plotly_chart(
-        fig,
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-68"):
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
 
     st.divider()
 
@@ -7689,23 +7997,26 @@ elif page == "Care Planning & Investment Priorities":
     identify service gaps and potential investment needs.
     """)
 
-    st.metric(
+    kpi_card(
+        st,
         "Care Desert Barangays",
-        len(care_deserts)
+        len(care_deserts),
+        "down_good"
     )
 
-    st.dataframe(
-        care_deserts[
-            [
-                "Barangay",
-                "District",
-                "Total",
-                "Care Demand",
-                "Priority Score"
-            ]
-        ],
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-69"):
+        st.dataframe(
+            care_deserts[
+                [
+                    "Barangay",
+                    "District",
+                    "Total",
+                    "Care Demand",
+                    "Priority Score"
+                ]
+            ],
+            width="stretch"
+        )
 
     st.divider()
 
@@ -7727,13 +8038,15 @@ elif page == "Care Planning & Investment Priorities":
             y="Priority Score",
             hover_name="Barangay",
             title="Care Demand vs Priority Score",
-            color="Priority Score"
+            color="Priority Score",
+            color_continuous_scale=QCD_SEQUENTIAL
         )
 
-        st.plotly_chart(
-            fig,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-70"):
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
 
     with driver_col2:
 
@@ -7743,13 +8056,15 @@ elif page == "Care Planning & Investment Priorities":
             y="Priority Score",
             hover_name="Barangay",
             title="Facilities vs Priority Score",
-            color="Priority Score"
+            color="Priority Score",
+            color_continuous_scale=QCD_SEQUENTIAL
         )
 
-        st.plotly_chart(
-            fig,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-71"):
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
 
     st.divider()
 
@@ -7776,17 +8091,19 @@ elif page == "Care Planning & Investment Priorities":
         y="Barangay",
         orientation="h",
         color="Service Diversity",
-        title="Barangays with the Most Diverse Care Services"
+        title="Barangays with the Most Diverse Care Services",
+        color_continuous_scale=QCD_SEQUENTIAL
     )
 
     fig.update_layout(
         height=700
     )
 
-    st.plotly_chart(
-        fig,
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-72"):
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
 
     st.divider()
 
@@ -7814,30 +8131,38 @@ elif page == "Care Planning & Investment Priorities":
 
     with cpf_col1:
 
-        st.metric(
+        kpi_card(
+            st,
             "Median Children per Facility",
-            f"{barangay_access['Children per Facility'].median():,.0f}"
+            f"{barangay_access['Children per Facility'].median():,.0f}",
+            "down_good"
         )
 
     with cpf_col2:
 
-        st.metric(
+        kpi_card(
+            st,
             "Median Elderly per Facility",
-            f"{barangay_access['Elderly per Facility'].median():,.0f}"
+            f"{barangay_access['Elderly per Facility'].median():,.0f}",
+            "down_good"
         )
 
     with cpf_col3:
 
-        st.metric(
+        kpi_card(
+            st,
             "Barangays with No Child-Serving Facility",
-            int((barangay_access["Child-Serving Facilities"] == 0).sum())
+            int((barangay_access["Child-Serving Facilities"] == 0).sum()),
+            "down_good"
         )
 
     with cpf_col4:
 
-        st.metric(
+        kpi_card(
+            st,
             "Barangays with No Elderly-Serving Facility",
-            int((barangay_access["Elderly-Serving Facilities"] == 0).sum())
+            int((barangay_access["Elderly-Serving Facilities"] == 0).sum()),
+            "down_good"
         )
 
     cpf_left, cpf_right = st.columns(2)
@@ -7863,10 +8188,11 @@ elif page == "Care Planning & Investment Priorities":
 
         fig.update_layout(height=550)
 
-        st.plotly_chart(
-            fig,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-73"):
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
 
     with cpf_right:
 
@@ -7889,31 +8215,33 @@ elif page == "Care Planning & Investment Priorities":
 
         fig.update_layout(height=550)
 
-        st.plotly_chart(
-            fig,
+        with st.container(border=True, key="qcd-chart-74"):
+            st.plotly_chart(
+                fig,
+                width="stretch"
+            )
+
+    with st.container(border=True, key="qcd-chart-75"):
+        st.dataframe(
+            barangay_access[
+                [
+                    "Barangay",
+                    "District",
+                    "age_0_5",
+                    "Child-Serving Facilities",
+                    "Children per Facility",
+                    "age_60plus",
+                    "Elderly-Serving Facilities",
+                    "Elderly per Facility"
+                ]
+            ].rename(
+                columns={
+                    "age_0_5": "Children (0-5)",
+                    "age_60plus": "Older Persons (60+)"
+                }
+            ).sort_values("Children per Facility", ascending=False),
             width="stretch"
         )
-
-    st.dataframe(
-        barangay_access[
-            [
-                "Barangay",
-                "District",
-                "age_0_5",
-                "Child-Serving Facilities",
-                "Children per Facility",
-                "age_60plus",
-                "Elderly-Serving Facilities",
-                "Elderly per Facility"
-            ]
-        ].rename(
-            columns={
-                "age_0_5": "Children (0-5)",
-                "age_60plus": "Older Persons (60+)"
-            }
-        ).sort_values("Children per Facility", ascending=False),
-        width="stretch"
-    )
 
     st.divider()
 
@@ -8146,17 +8474,20 @@ elif page == "Barangay Clusters":
 
     k1, k2, k3 = st.columns(3)
 
-    k1.metric(
+    kpi_card(
+        k1,
         "Barangays Clustered",
         int(clustered["barangay_name"].notna().sum())
     )
 
-    k2.metric(
+    kpi_card(
+        k2,
         "Clusters",
         n_clusters
     )
 
-    k3.metric(
+    kpi_card(
+        k3,
         "Largest Cluster",
         f"Cluster {largest_cluster}"
     )
@@ -8261,11 +8592,12 @@ elif page == "Barangay Clusters":
 
     st.markdown(legend_items, unsafe_allow_html=True)
 
-    st.pydeck_chart(
-        deck,
-        height=700,
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-76"):
+        st.pydeck_chart(
+            deck,
+            height=700,
+            width="stretch"
+        )
 
     st.divider()
 
@@ -8346,10 +8678,11 @@ elif page == "Barangay Clusters":
                 height=400
             )
 
-            st.plotly_chart(
-                fig,
-                width="stretch"
-            )
+            with st.container(border=True, key=f"qcd-chart-77-{int(cid)}"):
+                st.plotly_chart(
+                    fig,
+                    width="stretch"
+                )
 
     st.divider()
 
@@ -8400,10 +8733,11 @@ elif page == "Barangay Clusters":
         }
     )
 
-    st.dataframe(
-        cluster_summary,
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-78"):
+        st.dataframe(
+            cluster_summary,
+            width="stretch"
+        )
 
     st.divider()
 
@@ -8420,35 +8754,36 @@ elif page == "Barangay Clusters":
         cluster_ids
     )
 
-    st.dataframe(
-        clustered[
-            clustered["Cluster"] == selected_cluster
-        ][
-            [
-                "barangay_name",
-                "District",
-                "Total",
-                "population_density",
-                "children_pct",
-                "elderly_pct",
-                "facilities_per_10k",
-                "disability_prevalence_rate_pct",
-                "cbms_food_insecurity_prevalence_pct"
-            ]
-        ].rename(
-            columns={
-                "barangay_name": "Barangay",
-                "population_density": "Density (per km²)",
-                "children_pct": "Children Share (%)",
-                "elderly_pct": "Elderly Share (%)",
-                "facilities_per_10k": "Facilities per 10k Pop.",
-                "disability_prevalence_rate_pct": "Disability Prevalence (%)",
-                "cbms_food_insecurity_prevalence_pct": "Food Insecurity (%)"
-            }
+    with st.container(border=True, key="qcd-chart-79"):
+        st.dataframe(
+            clustered[
+                clustered["Cluster"] == selected_cluster
+            ][
+                [
+                    "barangay_name",
+                    "District",
+                    "Total",
+                    "population_density",
+                    "children_pct",
+                    "elderly_pct",
+                    "facilities_per_10k",
+                    "disability_prevalence_rate_pct",
+                    "cbms_food_insecurity_prevalence_pct"
+                ]
+            ].rename(
+                columns={
+                    "barangay_name": "Barangay",
+                    "population_density": "Density (per km²)",
+                    "children_pct": "Children Share (%)",
+                    "elderly_pct": "Elderly Share (%)",
+                    "facilities_per_10k": "Facilities per 10k Pop.",
+                    "disability_prevalence_rate_pct": "Disability Prevalence (%)",
+                    "cbms_food_insecurity_prevalence_pct": "Food Insecurity (%)"
+                }
+            )
+            .sort_values("Total", ascending=False),
+            width="stretch"
         )
-        .sort_values("Total", ascending=False),
-        width="stretch"
-    )
 
     st.divider()
 
@@ -8755,21 +9090,25 @@ elif page == "Climate, Hazard and Population Analysis":
 
             v1, v2, v3 = st.columns(3)
 
-            v1.metric(
+            kpi_card(
+                v1,
                 "Est. Citywide Population Exposed",
-                f"{total_exposed_est:,}"
+                f"{total_exposed_est:,}",
+                "down_good"
             )
 
-            v2.metric(
+            kpi_card(
+                v2,
                 "Most Exposed Barangay",
                 str(top_exposed_barangay["barangay"]),
-                f"{top_exposed_barangay['est_population_exposed']:,.0f} est. residents"
+                caption=f"{top_exposed_barangay['est_population_exposed']:,.0f} est. residents"
             )
 
-            v3.metric(
+            kpi_card(
+                v3,
                 "Most Vulnerable Barangay",
                 str(top_vulnerable_barangay["barangay"]),
-                f"Index: {top_vulnerable_barangay['vulnerability_index']:.0f}/100"
+                caption=f"Index: {top_vulnerable_barangay['vulnerability_index']:.0f}/100"
             )
 
             st.divider()
@@ -8908,11 +9247,12 @@ elif page == "Climate, Hazard and Population Analysis":
                 map_style="light"
             )
 
-            st.pydeck_chart(
-                vuln_deck,
-                height=700,
-                width="stretch"
-            )
+            with st.container(border=True, key="qcd-chart-80"):
+                st.pydeck_chart(
+                    vuln_deck,
+                    height=700,
+                    width="stretch"
+                )
 
             st.caption(
                 "Darker red = higher Climate Vulnerability Index."
@@ -8947,10 +9287,11 @@ elif page == "Climate, Hazard and Population Analysis":
                 yaxis=dict(autorange="reversed")
             )
 
-            st.plotly_chart(
-                fig_vuln,
-                width="stretch"
-            )
+            with st.container(border=True, key="qcd-chart-81"):
+                st.plotly_chart(
+                    fig_vuln,
+                    width="stretch"
+                )
 
             with st.expander(
                 "Full barangay table (exposure & vulnerability)"
@@ -8987,16 +9328,17 @@ elif page == "Climate, Hazard and Population Analysis":
                         VULNERABILITY_GROUPS[label]["rate_col"]
                     ] = label
 
-                st.dataframe(
-                    vuln_barangay[display_cols]
-                    .rename(columns=rename_map)
-                    .round(1)
-                    .sort_values(
-                        "Vulnerability Index (0-100)",
-                        ascending=False
-                    ),
-                    width="stretch"
-                )
+                with st.container(border=True, key="qcd-chart-82"):
+                    st.dataframe(
+                        vuln_barangay[display_cols]
+                        .rename(columns=rename_map)
+                        .round(1)
+                        .sort_values(
+                            "Vulnerability Index (0-100)",
+                            ascending=False
+                        ),
+                        width="stretch"
+                    )
 
         except Exception as e:
 
@@ -9375,20 +9717,25 @@ elif page == "Climate, Hazard and Population Analysis":
 
             kpi1, kpi2, kpi3 = st.columns(3)
 
-            kpi1.metric(
+            kpi_card(
+                kpi1,
                 "Facilities Selected",
                 f"{total_facilities:,}"
             )
 
-            kpi2.metric(
+            kpi_card(
+                kpi2,
                 "In Flood Zone",
-                f"{total_at_risk:,}"
+                f"{total_at_risk:,}",
+                "down_good"
             )
 
-            kpi3.metric(
+            kpi_card(
+                kpi3,
                 "% At Risk",
                 f"{(100 * total_at_risk / total_facilities):.1f}%"
-                if total_facilities > 0 else "0.0%"
+                if total_facilities > 0 else "0.0%",
+                "down_good"
             )
 
             fig_exposure = px.bar(
@@ -9408,15 +9755,17 @@ elif page == "Climate, Hazard and Population Analysis":
                 yaxis_title="Facilities in Flood Zone"
             )
 
-            st.plotly_chart(
-                fig_exposure,
-                width="stretch"
-            )
+            with st.container(border=True, key="qcd-chart-83"):
+                st.plotly_chart(
+                    fig_exposure,
+                    width="stretch"
+                )
 
-            st.dataframe(
-                exposure_df,
-                width="stretch"
-            )
+            with st.container(border=True, key="qcd-chart-84"):
+                st.dataframe(
+                    exposure_df,
+                    width="stretch"
+                )
 
 
 
@@ -9529,17 +9878,22 @@ elif page == "Climate, Hazard and Population Analysis":
 
     fc1, fc2, fc3 = st.columns(3)
 
-    fc1.metric(
+    kpi_card(
+        fc1,
         "Total Population in High Flood Risk Zone",
-        f"{flood_total['Population in Flood Zone']:,.0f}"
+        f"{flood_total['Population in Flood Zone']:,.0f}",
+        "down_good"
     )
 
-    fc2.metric(
+    kpi_card(
+        fc2,
         "Share of Citywide Population",
-        f"{flood_total['% under flood risk']:.1f}%"
+        f"{flood_total['% under flood risk']:.1f}%",
+        "down_good"
     )
 
-    fc3.metric(
+    kpi_card(
+        fc3,
         "Total Population (WorldPop)",
         f"{flood_total['Total (WorldPop)']:,.0f}"
     )
@@ -9579,22 +9933,24 @@ elif page == "Climate, Hazard and Population Analysis":
         yaxis_title="Population in Flood Zone"
     )
 
-    st.plotly_chart(
-        fig,
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-85"):
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
 
-    st.dataframe(
-        climate_context_display.rename(
-            columns={
-                "Total (WorldPop)": "Total Population",
-                "Population in Flood Zone":
-                    "Population in High Flood Risk Zone",
-                "% under flood risk": "% Under Flood Risk"
-            }
-        ),
-        width="stretch"
-    )
+    with st.container(border=True, key="qcd-chart-86"):
+        st.dataframe(
+            climate_context_display.rename(
+                columns={
+                    "Total (WorldPop)": "Total Population",
+                    "Population in Flood Zone":
+                        "Population in High Flood Risk Zone",
+                    "% under flood risk": "% Under Flood Risk"
+                }
+            ),
+            width="stretch"
+        )
 
     st.divider()
 
@@ -9737,11 +10093,12 @@ elif page == "Climate, Hazard and Population Analysis":
             map_style="light"
         )
 
-        st.pydeck_chart(
-            deck,
-            height=700,
-            width="stretch"
-        )
+        with st.container(border=True, key="qcd-chart-87"):
+            st.pydeck_chart(
+                deck,
+                height=700,
+                width="stretch"
+            )
 
         if active_layer["binary"]:
 
