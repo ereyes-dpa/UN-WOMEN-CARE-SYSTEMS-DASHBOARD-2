@@ -246,7 +246,7 @@ st.divider()
     health_centers,
     older_person_care, 
     long_term_care,
-    satellite_offices,
+    action_offices,
     migration_centers
 ) = load_data()
 
@@ -415,7 +415,7 @@ def build_explorer_map(
         },
 
         "Action Offices": {
-            "df": satellite_offices,
+            "df": action_offices,
             "color": "#055B52",
             "symbol": "⬢",
             "source": "Satellite Office",
@@ -2230,7 +2230,7 @@ elif page == "Action Offices":
 
     st.markdown("""
     Explore the distribution of Quezon City
-    satellite offices providing local access
+    Action offices providing local access
     to government services.
     """)
 
@@ -2239,7 +2239,7 @@ elif page == "Action Offices":
     # --------------------------------------------------
 
     districts = sorted(
-        satellite_offices["District"]
+        action_offices["District"]
         .dropna()
         .astype(int)
         .unique()
@@ -2256,7 +2256,7 @@ elif page == "Action Offices":
     # FILTERING
     # --------------------------------------------------
 
-    sat = satellite_offices.copy()
+    sat = action_offices.copy()
 
     if selected_district != "All":
 
@@ -2685,7 +2685,7 @@ elif page == "Care Services Explorer":
         Explore childcare centers, schools, health facilities,
         older persons facilities, rehabilitation centers,
         migration resource centers, and Quezon City
-        satellite offices on a single map.
+        Action offices on a single map.
         """
     )
 
@@ -2756,7 +2756,7 @@ elif page == "Care Services Explorer":
         },
 
         "Action Offices": {
-            "df": satellite_offices,
+            "df": action_offices,
             "color": "#055B52",
             "symbol": "⬢",
             "source": "Satellite Office",
