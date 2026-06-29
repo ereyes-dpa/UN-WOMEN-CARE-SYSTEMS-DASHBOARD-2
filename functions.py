@@ -341,7 +341,10 @@ def childcare_color(category):
         return "#8869C9"   # purple gradient — mid
 
     elif "DAY CARE" in category:
-        return "#C4B5FD"   # purple gradient — lightest (still visible on map)
+        return "#C4B5FD"   # purple gradient — light
+
+    elif "SUPERVISED NEIGHBORHOOD PLAY" in category:
+        return "#E0D4FD"   # purple gradient — lightest (still visible on map)
 
     return "#C4B5FD"
 
@@ -451,7 +454,7 @@ def ltc_hex(category):
     return ltc_color(category)
 
 # --------------------------------------------------
-# SATELLITE OFFICES FUNCTIONS
+# ACTION OFFICES FUNCTIONS
 # --------------------------------------------------
 DISTRICT_COLORS = {
     1: "#055B52",   # green gradient — darkest
@@ -536,6 +539,19 @@ def clean_health_centers(df) :
         .apply(health_category_mapper)
     )
 
+    # df["category"] (and therefore the Category column derived
+    # from it) is still a pandas `category` dtype at this point
+    # — see load_data()'s category_cols loop, which casts
+    # major_division/sub_division/category on the *full* care_v3
+    # dataframe before it gets split by major_division. A
+    # categorical column remembers every level that ever existed
+    # in the unfiltered data, even after rows are filtered out,
+    # so .value_counts()/px.pie() downstream would otherwise
+    # report a 0-count slice for every OTHER division's category
+    # (Schools, Childcare, etc.) in what should be a health-only
+    # chart. Casting to plain string drops that stale level list.
+    df["Category"] = df["Category"].astype(str)
+
     df = df.rename(
         columns={
             "name_original": "Name",
@@ -564,6 +580,23 @@ def clean_dataframe(df) :
             "category": "Category"
         }
     )
+
+    # Category and Sector are still pandas `category` dtype here
+    # — load_data() casts major_division/sub_division/category to
+    # `category` dtype on the full care_v3 dataframe *before*
+    # splitting it by major_division (see load_data() in this
+    # file). A categorical column keeps every level that existed
+    # in the unfiltered data even after rows are dropped, so any
+    # .value_counts() / px.pie() built on this subset's Category
+    # or Sector would silently include a 0-count slice for every
+    # OTHER division's categories too (e.g. a Schools chart
+    # listing Childcare/Health Center/District labels at 0%).
+    # Casting to plain string drops that stale level list so each
+    # facility type only ever reports the categories it actually
+    # has rows for.
+    for col in ("Category", "Sector"):
+        if col in df.columns:
+            df[col] = df[col].astype(str)
 
     df = df.dropna(
         subset=[
@@ -710,7 +743,7 @@ def load_data():
         == "Long-term care and rehabilitation services"
     ].copy()
 
-    satellite_offices = care[
+    action_offices = care[
         care["major_division"]
         == "Quezon City satellite offices for services"
     ].copy()
@@ -728,8 +761,8 @@ def load_data():
     schools                   = clean_dataframe(schools)
     older_person_care         = clean_dataframe(older_person_care)
     long_term_care            = clean_dataframe(long_term_care)
-    satellite_offices         = clean_dataframe(satellite_offices)
-    satellite_offices["Name"] = "District " + satellite_offices["District"].astype(int).astype(str)
+    action_offices            = clean_dataframe(action_offices)
+    action_offices["Name"]    = "District " + action_offices["District"].astype(int).astype(str)
     migration_centers         = clean_dataframe(migration_centers)
 
     return (
@@ -738,7 +771,7 @@ def load_data():
         health_centers,
         older_person_care,
         long_term_care,
-        satellite_offices,
+        action_offices,
         migration_centers
     )
 
@@ -1598,8 +1631,8 @@ def build_cluster_features(
       (share of local facilities that are Childcare, Health
       centers, Long-term care and rehabilitation services, or
       Schools — the four facility types with enough barangays
-      to carry real signal; Older persons care, satellite
-      offices, and Trainings are each present in well under
+      to carry real signal; Older persons care, Action
+      Offices, and Trainings are each present in well under
       5% of barangays and were dropped as near-constant/
       zero-inflated, which would otherwise dominate distance
       calculations with noise rather than signal).
