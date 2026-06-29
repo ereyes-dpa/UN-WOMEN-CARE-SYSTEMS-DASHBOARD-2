@@ -418,7 +418,7 @@ def build_explorer_map(
             "df": action_offices,
             "color": "#055B52",
             "symbol": "⬢",
-            "source": "Satellite Office",
+            "source": "Action Office",
             "name_col": "Name",
             "district_col": "District",
             "address_col": "Address",
@@ -605,7 +605,6 @@ def build_explorer_map(
 # Default values so variables always exist
 selected_category = "All"
 
-selected_childcare_sector = "All"
 selected_childcare_category = "All"
 
 selected_school_sector = "All"
@@ -645,43 +644,15 @@ if st.session_state.page == "Childcare Centers":
 
     st.sidebar.markdown("##### Filters")
 
-    selected_childcare_sector = st.sidebar.radio(
-        "Provider Type",
+    selected_childcare_category = st.sidebar.radio(
+        "Facility Category",
         [
-            "All",
-            "Public",
-            "Private"
-        ],
-        key="childcare_sector"
-    )
-
-    if selected_childcare_sector == "Public":
-
-        category_options = [
-            "All",
-            "Child Development Center"
-        ]
-
-    elif selected_childcare_sector == "Private":
-
-        category_options = [
-            "All",
-            "Child Learning Center",
-            "Day Care Center"
-        ]
-
-    else:
-
-        category_options = [
             "All",
             "Child Development Center",
             "Child Learning Center",
-            "Day Care Center"
-        ]
-
-    selected_childcare_category = st.sidebar.radio(
-        "Facility Category",
-        category_options,
+            "Day Care Center",
+            "Supervised Neighborhood Play"
+        ],
         key="childcare_category"
     )
 
@@ -820,7 +791,7 @@ if st.session_state.page == "Long-Term Care & Rehabilitation":
     )
 
 # --------------------------------------------------
-# SATELLITE OFFICES
+# ACTION OFFICES
 # --------------------------------------------------
 
 if st.sidebar.button(
@@ -872,7 +843,9 @@ if page == "Care Services Explorer":
         <span style="color:#8869C9;font-size:22px;">●</span>
         <b>Child Learning Center</b><br>
         <span style="color:#C4B5FD;font-size:22px;">●</span>
-        <b>Day Care Center</b>
+        <b>Day Care Center</b><br>
+        <span style="color:#E0D4FD;font-size:22px;">●</span>
+        <b>Supervised Neighborhood Play</b>
         """,
         unsafe_allow_html=True
     )
@@ -946,7 +919,7 @@ if page == "Care Services Explorer":
 
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("## Satellite Offices")
+    st.sidebar.markdown("## Action Offices")
 
     st.sidebar.markdown(
         """
@@ -1110,7 +1083,9 @@ elif page == "Childcare Centers":
 
     st.markdown("""
     Explore the spatial distribution of childcare facilities in Quezon City,
-    including public Child Development Centers and private childcare providers.
+    including Child Development Centers, Child Learning Centers, Day Care
+    Centers, and Supervised Neighborhood Play facilities. Each facility's
+    public or private classification is noted in its individual details.
     """)
 
     # --------------------------------------------------
@@ -1148,17 +1123,6 @@ elif page == "Childcare Centers":
 
         cc = cc[
             cc["District"] == district_number
-        ]
-
-    if selected_childcare_sector != "All":
-
-        cc = cc[
-            cc["Sector"]
-            .str.contains(
-                selected_childcare_sector,
-                case=False,
-                na=False
-            )
         ]
 
     if selected_childcare_category != "All":
@@ -1251,8 +1215,8 @@ elif page == "Childcare Centers":
     tooltip = {
         "html": """
         <b>{Name}</b><br/>
-        Sector: {Sector}<br/>
         Category: {Category}<br/>
+        Provider Type: {Sector}<br/>
         District: {District}<br/>
         Address: {Address}<br/>
         Open: {open_hours}<br/>
@@ -2231,7 +2195,9 @@ elif page == "Action Offices":
     st.markdown("""
     Explore the distribution of Quezon City
     Action offices providing local access
-    to government services.
+    to government services. 
+                
+    The District Action Offices serve as the City Hall’s extension, where people can raise all their concerns and grievances for proper and immediate action. They are tasked to extend maximum service to the greater number of people and to engage the active participation of the private sector.            
     """)
 
     # --------------------------------------------------
@@ -2759,7 +2725,7 @@ elif page == "Care Services Explorer":
             "df": action_offices,
             "color": "#055B52",
             "symbol": "⬢",
-            "source": "Satellite Office",
+            "source": "Action Office",
             "name_col": "Name",
             "district_col": "District",
             "address_col": "Address",
