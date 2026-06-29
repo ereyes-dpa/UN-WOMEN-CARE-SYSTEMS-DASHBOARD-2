@@ -379,7 +379,7 @@ st.divider()
     health_centers,
     older_person_care, 
     long_term_care,
-    satellite_offices,
+    action_offices,
     migration_centers
 ) = load_data()
 
@@ -422,7 +422,7 @@ schools             = flag_facilities_at_risk(schools)
 health_centers      = flag_facilities_at_risk(health_centers)
 older_person_care   = flag_facilities_at_risk(older_person_care)
 long_term_care      = flag_facilities_at_risk(long_term_care)
-satellite_offices   = flag_facilities_at_risk(satellite_offices)
+action_offices   = flag_facilities_at_risk(action_offices)
 migration_centers   = flag_facilities_at_risk(migration_centers)
 
 
@@ -620,10 +620,10 @@ def build_explorer_map(
         },
 
         "Action Offices": {
-            "df": satellite_offices,
+            "df": action_offices,
             "color": "#055B52",
             "symbol": "⬢",
-            "source": "Satellite Office",
+            "source": "Action Office",
             "name_col": "Name",
             "district_col": "District",
             "address_col": "Address",
@@ -921,7 +921,6 @@ def build_explorer_map(
 # Default values so variables always exist
 selected_category = "All"
 
-selected_childcare_sector = "All"
 selected_childcare_category = "All"
 
 selected_school_sector = "All"
@@ -974,43 +973,15 @@ if st.session_state.page == "Childcare Centers":
 
     st.sidebar.markdown("##### Filters")
 
-    selected_childcare_sector = st.sidebar.radio(
-        "Provider Type",
+    selected_childcare_category = st.sidebar.radio(
+        "Facility Category",
         [
-            "All",
-            "Public",
-            "Private"
-        ],
-        key="childcare_sector"
-    )
-
-    if selected_childcare_sector == "Public":
-
-        category_options = [
-            "All",
-            "Child Development Center"
-        ]
-
-    elif selected_childcare_sector == "Private":
-
-        category_options = [
-            "All",
-            "Child Learning Center",
-            "Day Care Center"
-        ]
-
-    else:
-
-        category_options = [
             "All",
             "Child Development Center",
             "Child Learning Center",
-            "Day Care Center"
-        ]
-
-    selected_childcare_category = st.sidebar.radio(
-        "Facility Category",
-        category_options,
+            "Day Care Center",
+            "Supervised Neighborhood Play"
+        ],
         key="childcare_category"
     )
 
@@ -1149,7 +1120,7 @@ if st.session_state.page == "Long-Term Care & Rehabilitation":
     )
 
 # --------------------------------------------------
-# SATELLITE OFFICES
+# ACTION OFFICES
 # --------------------------------------------------
 
 if st.sidebar.button(
@@ -1229,7 +1200,9 @@ if page == "Care Services Explorer":
         <span style="color:#8869C9;font-size:22px;">●</span>
         <b>Child Learning Center</b><br>
         <span style="color:#C4B5FD;font-size:22px;">●</span>
-        <b>Day Care Center</b>
+        <b>Day Care Center</b><br>
+        <span style="color:#E0D4FD;font-size:22px;">●</span>
+        <b>Supervised Neighborhood Play</b>
         """,
         unsafe_allow_html=True
     )
@@ -1903,6 +1876,32 @@ elif page == "Population Overview":
                 deck,
                 height=650,
                 width="stretch"
+            )
+
+            # pydeck has no built-in colorbar (unlike Plotly's
+            # automatic color_continuous_scale legend), so the
+            # fill color here would otherwise be unexplained —
+            # render_colormap_legend_html builds the same kind of
+            # gradient-bar legend already used for the climate
+            # raster layers elsewhere in this app, reusing the
+            # same vmin/vmax (5th-95th percentile clip) that was
+            # used to compute fill_color above, so the legend
+            # matches what's actually drawn on the map.
+            indicator_units = {
+                "Children Share (%)": "%",
+                "Older Persons Share (%)": "%",
+                "Population Density": "people/km²"
+            }
+
+            st.markdown(
+                render_colormap_legend_html(
+                    "Purples",
+                    vmin,
+                    vmax,
+                    unit=indicator_units.get(indicator, ""),
+                    label=f"{indicator} (darker = higher)"
+                ),
+                unsafe_allow_html=True
             )
 
         st.divider()
@@ -2640,6 +2639,33 @@ elif page == "Population Overview":
                 width="stretch"
             )
 
+            # Same gap as the Barangay/District Analysis maps —
+            # pydeck draws the fill color but never explains it.
+            # Unit is derived from the column name itself rather
+            # than a separate hand-maintained lookup, since these
+            # columns follow a consistent naming convention
+            # (_pct, per_1000, per_100f) that would otherwise need
+            # to be kept in sync with socio_indicators by hand.
+            if selected_socio_col.endswith("_pct"):
+                socio_unit = "%"
+            elif "per_1000" in selected_socio_col:
+                socio_unit = "per 1,000"
+            elif "per_100f" in selected_socio_col:
+                socio_unit = "per 100 females"
+            else:
+                socio_unit = ""
+
+            st.markdown(
+                render_colormap_legend_html(
+                    "Purples",
+                    socio_vmin,
+                    socio_vmax,
+                    unit=socio_unit,
+                    label=f"{selected_socio_label} (darker = higher)"
+                ),
+                unsafe_allow_html=True
+            )
+
         st.divider()
 
         # ---------------------------------------------------
@@ -2686,7 +2712,9 @@ if page == "Childcare Centers":
 
     st.markdown("""
     Explore the spatial distribution of childcare facilities in Quezon City,
-    including public Child Development Centers and private childcare providers.
+    including Child Development Centers, Child Learning Centers, Day Care
+    Centers, and Supervised Neighborhood Play facilities. Each facility's
+    public or private classification is noted in its individual details.
     """)
 
     # --------------------------------------------------
@@ -2715,20 +2743,20 @@ if page == "Childcare Centers":
 
     total_facilities = len(childcare_centers)
 
-    public_centers = (
-        childcare_centers["Sector"]
+    day_care_centers = (
+        childcare_centers["Category"]
         .str.contains(
-            "Public",
+            "Day Care",
             case=False,
             na=False
         )
         .sum()
     )
 
-    private_centers = (
-        childcare_centers["Sector"]
+    supervised_play_centers = (
+        childcare_centers["Category"]
         .str.contains(
-            "Private",
+            "Supervised Neighborhood Play",
             case=False,
             na=False
         )
@@ -2777,14 +2805,14 @@ if page == "Childcare Centers":
 
     kpi_card(
         k5,
-        "Public",
-        f"{public_centers:,}"
+        "Day Care Centers",
+        f"{day_care_centers:,}"
     )
 
     kpi_card(
         k6,
-        "Private",
-        f"{private_centers:,}"
+        "Supervised Neighborhood Play",
+        f"{supervised_play_centers:,}"
     )
 
     st.divider()
@@ -2828,17 +2856,6 @@ if page == "Childcare Centers":
 
         cc = cc[
             cc["District"] == district_number
-        ]
-
-    if selected_childcare_sector != "All":
-
-        cc = cc[
-            cc["Sector"]
-            .str.contains(
-                selected_childcare_sector,
-                case=False,
-                na=False
-            )
         ]
 
     if selected_childcare_category != "All":
@@ -2931,8 +2948,8 @@ if page == "Childcare Centers":
     tooltip = {
         "html": """
         <b>{Name}</b><br/>
-        Sector: {Sector}<br/>
         Category: {Category}<br/>
+        Provider Type: {Sector}<br/>
         District: {District}<br/>
         Address: {Address}<br/>
         Open: {open_hours}<br/>
@@ -2978,12 +2995,14 @@ if page == "Childcare Centers":
             cc[
                 [
                     "Name",
-                    "Sector",
                     "Category",
+                    "Sector",
                     "District",
                     "Address"
                 ]
-            ],
+            ].rename(
+                columns={"Sector": "Provider Type"}
+            ),
             width = 'stretch'
         )
 
@@ -3437,8 +3456,26 @@ elif page == "Schools":
 
     with col1:
 
-        category_counts = (
+        # Defensive filter: schools is already scoped to
+        # major_division == "Schools" upstream (see load_data()
+        # in functions.py), so every row here should carry a
+        # "Public School" / "Private School" Category value. If
+        # a stray row with an unrelated Category slips through
+        # (e.g. mislabeled in the source CSV), drop it here
+        # rather than let it show up as a phantom slice with an
+        # unrelated color in this chart.
+        valid_school_categories = (
             schools["Category"]
+            .astype(str)
+            .str.contains(
+                "PUBLIC SCHOOL|PRIVATE SCHOOL",
+                case=False,
+                na=False
+            )
+        )
+
+        category_counts = (
+            schools.loc[valid_school_categories, "Category"]
             .value_counts()
             .reset_index()
         )
@@ -3448,12 +3485,35 @@ elif page == "Schools":
             "Schools"
         ]
 
+        school_colors = [
+            school_color(cat)
+            for cat in category_counts["Category"]
+        ]
+
         fig = px.pie(
             category_counts,
             names="Category",
             values="Schools",
             title="School Distribution",
-            color_discrete_sequence=QCD_CATEGORICAL
+            color_discrete_sequence=school_colors
+        )
+
+        # Pull percentage labels outside the slices and hide
+        # labels for any near-zero slice. With only two real
+        # categories (Public/Private School) this mostly just
+        # keeps spacing clean, but it also guards against label
+        # crowding if a future data refresh reintroduces a tiny
+        # third slice.
+        fig.update_traces(
+            textposition="outside",
+            textinfo="percent+label",
+            texttemplate="%{label}: %{percent:.0%}"
+        )
+
+        fig.update_layout(
+            showlegend=True,
+            uniformtext_minsize=12,
+            uniformtext_mode="hide"
         )
 
         with st.container(border=True, key="qcd-chart-18"):
@@ -3597,6 +3657,25 @@ elif page == "Health Centers Map":
 
     health_capacity = pd.read_csv(
         "processed/health_centers_and_doctors_per_district.csv"
+    )
+
+    # The district column in this CSV has inconsistent spacing
+    # between "District" and the number (e.g. "District  2" with
+    # two spaces vs. "District 1" with one) — collapse it once
+    # here, right after loading, so every chart/table built from
+    # health_capacity downstream (Health Centers by District,
+    # Doctors vs Health Centers, Health Coverage by District)
+    # sees clean, consistent labels and merges correctly against
+    # the "District N" strings built elsewhere in this page.
+    health_capacity["district"] = (
+        health_capacity["district"]
+        .astype(str)
+        .str.replace(
+            r"\s+",
+            " ",
+            regex=True
+        )
+        .str.strip()
     )
 
     total_facilities = len(health_centers)
@@ -3999,6 +4078,43 @@ elif page == "Health Centers Map":
         how="left"
     )
 
+    # health_capacity["health_centers"] only counts facilities
+    # tagged specifically as a "Health Center" in that lookup
+    # CSV — it doesn't reflect the full range of health-related
+    # facility types (Super Health Centers, pharmacies, national/
+    # LGU hospitals, milk banks, etc.) that actually show up on
+    # this page's map and in the Category breakdown below.
+    # all_health_facilities counts every row in the live
+    # health_centers facility data per district, regardless of
+    # Category, so this table can show that broader total
+    # alongside the narrower CSV-based health_centers/doctors
+    # figures rather than implying that "Health Center" is the
+    # only category that exists.
+    all_health_facilities = (
+        health_centers
+        .groupby("District")
+        .size()
+        .reset_index(name="All Health Facilities")
+    )
+
+    all_health_facilities["District"] = (
+        "District "
+        + all_health_facilities["District"]
+        .astype(str)
+    )
+
+    coverage = coverage.merge(
+        all_health_facilities,
+        on="District",
+        how="left"
+    )
+
+    coverage["All Health Facilities"] = (
+        coverage["All Health Facilities"]
+        .fillna(0)
+        .astype(int)
+    )
+
     coverage[
         "Population per Doctor"
     ] = (
@@ -4017,6 +4133,17 @@ elif page == "Health Centers Map":
         "Health Coverage by District"
     )
 
+    st.caption(
+        """
+        "health_centers" and "doctors" reflect facilities
+        specifically tagged as Health Centers in the official
+        district capacity records. "All Health Facilities"
+        additionally includes Super Health Centers, pharmacies,
+        hospitals, and other health-related facility types
+        mapped on this page.
+        """
+    )
+
     with st.container(border=True, key="qcd-chart-25"):
         st.dataframe(
             coverage[
@@ -4024,6 +4151,7 @@ elif page == "Health Centers Map":
                     "District",
                     "Total",
                     "health_centers",
+                    "All Health Facilities",
                     "doctors",
                     "Population per Doctor",
                     "Population per Health Center"
@@ -5572,7 +5700,7 @@ elif page == "Action Offices":
     st.caption(
         """
         Explore the distribution of Quezon City
-        satellite offices providing local access
+        Action Offices providing local access
         to government services.
         """
     )
@@ -5582,7 +5710,7 @@ elif page == "Action Offices":
     # --------------------------------------------------
 
     districts = sorted(
-        satellite_offices["District"]
+        action_offices["District"]
         .dropna()
         .astype(int)
         .unique()
@@ -5599,7 +5727,7 @@ elif page == "Action Offices":
     # FILTERING
     # --------------------------------------------------
 
-    sat = satellite_offices.copy()
+    sat = action_offices.copy()
 
     if selected_district != "All":
 
@@ -6070,7 +6198,7 @@ elif page == "Care Services Explorer":
         Explore childcare centers, schools, health facilities,
         older persons facilities, rehabilitation centers,
         migration resource centers, and Quezon City
-        satellite offices on a single map — optionally overlaid
+        Action Offices on a single map — optionally overlaid
         with land-surface temperature, vegetation, or flood
         exposure layers.
         """
@@ -6143,10 +6271,10 @@ elif page == "Care Services Explorer":
         },
 
         "Action Offices": {
-            "df": satellite_offices,
+            "df": action_offices,
             "color": "#055B52",
             "symbol": "⬢",
-            "source": "Satellite Office",
+            "source": "Action Office",
             "name_col": "Name",
             "district_col": "District",
             "address_col": "Address",
@@ -6691,9 +6819,9 @@ elif page == "Accessibility Analysis":
         )
 
         st.caption(
-            "Darker = higher ratio = more facilities of this "
+            "Darker = lower ratio = fewer facilities of this "
             "type relative to the population they serve "
-            "(better served)."
+            "(more underserved)."
         )
 
         # ------------------------------------------
@@ -6707,6 +6835,14 @@ elif page == "Accessibility Analysis":
 
             t = (value - vmin) / (vmax - vmin)
             t = min(max(t, 0), 1)
+
+            # Inverted so darker shading marks the *lower* end of
+            # the ratio (fewer facilities per capita = more
+            # underserved), matching the "darker = underserved"
+            # convention used elsewhere in this dashboard (e.g.
+            # the Priority Investment Map) rather than "darker =
+            # better served".
+            t = 1 - t
 
             # Light lavender -> deep magenta/purple, approximating
             # the matplotlib "PuRd" colormap used by folium.Choropleth
@@ -6894,7 +7030,12 @@ elif page == "Accessibility Analysis":
                 x="District",
                 y=selected_ratio_label,
                 color=selected_ratio_label,
-                color_continuous_scale="Purples",
+                # Reversed ("_r") so a lower ratio (fewer
+                # facilities per capita = more underserved) gets
+                # the darker shade, matching the "darker =
+                # underserved" convention used on the rest of
+                # this page rather than "darker = better served".
+                color_continuous_scale="Purples_r",
                 title=f"{selected_ratio_label} by District"
             )
 
@@ -6914,7 +7055,11 @@ elif page == "Accessibility Analysis":
                 x="District",
                 y="Accessibility Index",
                 color="Accessibility Index",
-                color_continuous_scale="Purples",
+                # Reversed for the same reason as the chart on
+                # the left — a lower Accessibility Index means
+                # more underserved, so it should read darker, not
+                # lighter.
+                color_continuous_scale="Purples_r",
                 title="Overall Accessibility Index by District"
             )
 
@@ -6937,7 +7082,10 @@ elif page == "Accessibility Analysis":
             size="Facility_Type_Count",
             text="District",
             color=selected_ratio_label,
-            color_continuous_scale="Purples",
+            # Reversed for the same "darker = underserved"
+            # convention used on the rest of this page — a lower
+            # ratio should read darker, not lighter.
+            color_continuous_scale="Purples_r",
             title=f"Relevant Population vs Facilities — {selected_ratio_label}"
         )
 
@@ -7206,9 +7354,9 @@ elif page == "Accessibility Analysis":
         )
 
         st.caption(
-            "Darker = higher ratio = more facilities of this "
+            "Darker = lower ratio = fewer facilities of this "
             "type relative to the population they serve "
-            "(better served)."
+            "(more underserved)."
         )
 
         def purd_color(value, vmin, vmax):
@@ -7218,6 +7366,14 @@ elif page == "Accessibility Analysis":
 
             t = (value - vmin) / (vmax - vmin)
             t = min(max(t, 0), 1)
+
+            # Inverted so darker shading marks the *lower* end of
+            # the ratio (fewer facilities per capita = more
+            # underserved), matching the "darker = underserved"
+            # convention used elsewhere in this dashboard (e.g.
+            # the Priority Investment Map) rather than "darker =
+            # better served".
+            t = 1 - t
 
             # Light lavender -> deep magenta/purple, approximating
             # the matplotlib "PuRd" colormap used by folium.Choropleth
@@ -7349,7 +7505,13 @@ elif page == "Accessibility Analysis":
             y="Barangay",
             orientation="h",
             color=selected_ratio_label,
-            color_continuous_scale="Reds",
+            # Reversed ("_r") so the lowest ratio in this
+            # already-worst-20 subset — the most underserved
+            # barangay — gets the darkest red, matching the
+            # "darker = underserved" convention used elsewhere on
+            # this page, instead of the default where the least-
+            # bad barangay in the list would appear darkest.
+            color_continuous_scale="Reds_r",
             title=f"Most Underserved Barangays — {selected_ratio_label}"
         )
 
@@ -7370,7 +7532,10 @@ elif page == "Accessibility Analysis":
             size="Facilities",
             hover_name="Barangay",
             color="Accessibility Index",
-            color_continuous_scale="Purples",
+            # Reversed for the same "darker = underserved"
+            # convention used on the rest of this page — a lower
+            # Accessibility Index should read darker, not lighter.
+            color_continuous_scale="Purples_r",
             title="Population vs Facilities (All Types)"
         )
 
@@ -7507,10 +7672,10 @@ elif page == "Care Planning & Investment Priorities":
     # SERVICE DIVERSITY
     # (count of distinct facility types present — Childcare,
     # Health centers, Long-term care and rehabilitation
-    # services, Older persons care, Quezon City satellite
-    # offices for services, Schools, Trainings — mirrors the
-    # old major_division.nunique() from care_v3.csv, since
-    # these are the same seven categories)
+    # services, Older persons care, Action Offices, Schools,
+    # Trainings — mirrors the old major_division.nunique()
+    # from care_v3.csv, since these are the same seven
+    # categories)
     # ==================================================
 
     facility_type_cols = [
@@ -7753,16 +7918,6 @@ elif page == "Care Planning & Investment Priorities":
         right_on="Barangay",
         how="left"
     )
-
-    unmatched = int(priority_map["Priority Score"].isna().sum())
-
-    if unmatched > 0:
-        st.warning(
-            f"{unmatched} barangay polygon(s) didn't match any "
-            "row in the priority table and will show as gray "
-            "with no score — check spelling/casing of barangay "
-            "names in the source data."
-        )
 
     st.subheader(
         "Priority Investment Map"
@@ -8210,7 +8365,7 @@ elif page == "Care Planning & Investment Priorities":
             orientation="h",
             color="Elderly per Facility",
             color_continuous_scale="Purples",
-            title="Highest Elderly per Facility (60+ yrs)"
+            title="Highest Senior Citizens per Facility (60+ yrs)"
         )
 
         fig.update_layout(height=550)
@@ -9443,10 +9598,10 @@ elif page == "Climate, Hazard and Population Analysis":
             },
 
             "Action Offices": {
-                "df": satellite_offices,
+                "df": action_offices,
                 "color": "#055B52",
                 "symbol": "⬢",
-                "source": "Satellite Office",
+                "source": "Action Office",
                 "name_col": "Name",
                 "district_col": "District",
                 "address_col": "Address",
@@ -9855,12 +10010,12 @@ elif page == "Climate, Hazard and Population Analysis":
             "Female Children (0-4) under High Flood Risk (%)",
         "Male Children (0-4) under High Flood Risk (%)":
             "Male Children (0-4) under High Flood Risk (%)",
-        "Elderly (60+) under High Flood Risk (%)":
-            "Elderly Population (60+) under High Flood Risk (%)",
-        "Female Elderly (60+) under High Flood Risk (%)":
-            "Female Elderly (60+) under High Flood Risk (%)",
-        "Male Elderly (60+) under High Flood Risk (%)":
-            "Male Elderly (60+) under High Flood Risk (%)"
+        "Seniors (60+) under High Flood Risk (%)":
+            "Seniors Population (60+) under High Flood Risk (%)",
+        "Female Seniors(60+) under High Flood Risk (%)":
+            "Female Seniors (60+) under High Flood Risk (%)",
+        "Male Seniors (60+) under High Flood Risk (%)":
+            "Male Seniors (60+) under High Flood Risk (%)"
     }
 
     climate_context_display = climate_context.copy()
@@ -9914,6 +10069,7 @@ elif page == "Climate, Hazard and Population Analysis":
             "",
             regex=False
         )
+        
     )
 
     fig = px.bar(
