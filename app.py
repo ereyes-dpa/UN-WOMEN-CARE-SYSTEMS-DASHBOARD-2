@@ -2402,27 +2402,16 @@ elif page == "Population Overview":
         )
 
         socio_indicators = {
-            "Population Distribution vs. Total Domestic Workers": {
-                "col": "domestic_workers_per_1000_total",
+            "Population (Census)": {
+                "col": "pop_census",
                 "description": (
-                    "Registered domestic workers per 1,000 "
-                    "residents, by barangay. Source: "
-                    "processed/indicators/domestic_workers.csv "
-                    "(separate from the CBMS indicators below)."
-                )
-            },
-            "Population Distribution vs. Female Domestic Workers": {
-                "col": "domestic_workers_per_1000_female",
-                "description": (
-                    "Registered female domestic workers per "
-                    "1,000 female residents, by barangay."
-                )
-            },
-            "Population Distribution vs. Male Domestic Workers": {
-                "col": "domestic_workers_per_1000_male",
-                "description": (
-                    "Registered male domestic workers per "
-                    "1,000 male residents, by barangay."
+                    "Total population, by barangay (2024 "
+                    "census). Standalone population "
+                    "distribution map, separate from the "
+                    "per-1,000 domestic worker rates above — "
+                    "for seeing raw population scale on its "
+                    "own, in the same map/table format as "
+                    "every other indicator here."
                 )
             },
             "Sex Ratio (Males per 100 Females)": {
@@ -2491,6 +2480,52 @@ elif page == "Population Overview":
                 "description": (
                     "Share of households using makeshift / "
                     "salvaged / improvised building materials."
+                )
+            },
+            "Total Domestic Workers (Count)": {
+                "col": "domestic_workers_total",
+                "description": (
+                    "Total registered domestic workers, by "
+                    "barangay (raw count, not a rate). "
+                    "Source: processed/indicators/"
+                    "domestic_workers.csv."
+                )
+            },
+            "Female Domestic Workers (Count)": {
+                "col": "domestic_workers_female",
+                "description": (
+                    "Registered female domestic workers, by "
+                    "barangay (raw count, not a rate)."
+                )
+            },
+            "Male Domestic Workers (Count)": {
+                "col": "domestic_workers_male",
+                "description": (
+                    "Registered male domestic workers, by "
+                    "barangay (raw count, not a rate)."
+                )
+            },
+            "Population Distribution vs. Total Domestic Workers": {
+                "col": "domestic_workers_per_1000_total",
+                "description": (
+                    "Registered domestic workers per 1,000 "
+                    "residents, by barangay. Source: "
+                    "processed/indicators/domestic_workers.csv "
+                    "(separate from the CBMS indicators below)."
+                )
+            },
+            "Population Distribution vs. Female Domestic Workers": {
+                "col": "domestic_workers_per_1000_female",
+                "description": (
+                    "Registered female domestic workers per "
+                    "1,000 female residents, by barangay."
+                )
+            },
+            "Population Distribution vs. Male Domestic Workers": {
+                "col": "domestic_workers_per_1000_male",
+                "description": (
+                    "Registered male domestic workers per "
+                    "1,000 male residents, by barangay."
                 )
             }
         }
@@ -2692,6 +2727,137 @@ elif page == "Population Overview":
                 .head(15),
                 width="stretch"
             )
+
+        st.divider()
+
+        # ---------------------------------------------------
+        # POPULATION vs. DOMESTIC WORKERS (SIDE BY SIDE)
+        # (Cecilia's original ask, per Zainab's Slack
+        # clarification: population distribution shown
+        # alongside domestic worker counts as two separate
+        # values per barangay — not blended into the per-1,000
+        # rate used by the "Population Distribution vs.
+        # Domestic Workers" choropleths above. Both views stay
+        # on the dashboard per Zainab's "we can keep both".
+        # Uses the same demographics_with_dw frame already
+        # merged with domestic worker counts earlier in this
+        # tab, so no second data load/merge is needed here.)
+        # ---------------------------------------------------
+
+        st.subheader("Domestic Worker Concentration")
+
+        st.caption(
+            "Barangays ranked by raw domestic worker count "
+            "(not population, and not a per-1,000 rate) — for "
+            "resource and outreach planning where what matters "
+            "is where domestic workers are physically "
+            "concentrated, regardless of barangay population "
+            "size. The full table below also includes "
+            "population for reference, alongside the per-1,000 "
+            "rate charts above."
+        )
+
+        dw_compare_sex = st.radio(
+            "Domestic worker count to compare",
+            ["Total", "Female", "Male"],
+            horizontal=True,
+            key="dw_compare_sex"
+        )
+
+        dw_compare_col_map = {
+            "Total": (
+                "domestic_workers_total", "pop_census",
+                "Total Population"
+            ),
+            "Female": (
+                "domestic_workers_female", "pop_female",
+                "Female Population"
+            ),
+            "Male": (
+                "domestic_workers_male", "pop_male",
+                "Male Population"
+            ),
+        }
+
+        dw_col, pop_col, pop_label = (
+            dw_compare_col_map[dw_compare_sex]
+        )
+
+        dw_compare_df = demographics_with_dw[
+            ["barangay", "district", pop_col, dw_col]
+        ].dropna(subset=[pop_col, dw_col]).copy()
+
+        dw_compare_df = dw_compare_df.rename(
+            columns={
+                "barangay": "Barangay",
+                "district": "District",
+                pop_col: pop_label,
+                dw_col: f"{dw_compare_sex} Domestic Workers"
+            }
+        )
+
+        # Ranked purely by domestic worker count, not
+        # population — the question this chart answers is
+        # "where are domestic workers concentrated", a
+        # resource-planning/headcount question, not a rate or
+        # correlation question. Population is intentionally left
+        # off this chart; it doesn't help answer that question
+        # and was the source of the earlier scale-mismatch issue
+        # (population in the hundreds of thousands flattening
+        # domestic worker bars to near-invisible). Horizontal
+        # orientation since up to 15 barangay names are easier
+        # to read as y-axis labels than rotated/crowded x-axis
+        # labels.
+        dw_top15 = (
+            dw_compare_df
+            .sort_values(
+                f"{dw_compare_sex} Domestic Workers",
+                ascending=False
+            )
+            .head(15)
+        )
+
+        fig_dw_compare = px.bar(
+            dw_top15.sort_values(
+                f"{dw_compare_sex} Domestic Workers",
+                ascending=True
+            ),
+            x=f"{dw_compare_sex} Domestic Workers",
+            y="Barangay",
+            orientation="h",
+            color=f"{dw_compare_sex} Domestic Workers",
+            color_continuous_scale="Purples",
+            title=(
+                f"Top 15 Barangays by {dw_compare_sex} "
+                "Domestic Worker Count"
+            )
+        )
+
+        fig_dw_compare.update_layout(
+            yaxis_title="",
+            xaxis_title=(
+                f"{dw_compare_sex} Domestic Workers (count)"
+            ),
+            coloraxis_showscale=False
+        )
+
+        with st.container(border=True, key="qcd-chart-88"):
+            st.plotly_chart(
+                fig_dw_compare,
+                width="stretch"
+            )
+
+        with st.expander(
+            "Full barangay table — population vs. domestic "
+            "workers"
+        ):
+            with st.container(border=True, key="qcd-chart-89"):
+                st.dataframe(
+                    dw_compare_df.sort_values(
+                        pop_label, ascending=False
+                    ),
+                    width="stretch"
+                )
 
 if page == "Childcare Centers":
 
