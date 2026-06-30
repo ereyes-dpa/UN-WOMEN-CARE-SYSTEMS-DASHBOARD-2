@@ -1981,7 +1981,7 @@ def render_colormap_legend_html(
 
     label_html = (
         f'<div style="font-size:13px;font-weight:600;'
-        f'margin-bottom:4px;">{label}</div>'
+        f'margin-bottom:4px;color:#1a1a1a;">{label}</div>'
         if label else ""
     )
 
@@ -1989,7 +1989,13 @@ def render_colormap_legend_html(
     vmax_display = 0.0 if round(vmax, 1) == 0 else vmax
 
     return f"""
-    <div style="margin-top:8px;margin-bottom:8px;">
+    <div style="
+        margin-top:8px;
+        margin-bottom:8px;
+        background:#ffffff;
+        padding:8px 10px;
+        border-radius:6px;
+    ">
         {label_html}
         <div style="
             width:100%;
@@ -2002,7 +2008,7 @@ def render_colormap_legend_html(
             display:flex;
             justify-content:space-between;
             font-size:12px;
-            color:#444;
+            color:#1a1a1a;
             margin-top:2px;
         ">
             <span>{vmin_display:.1f} {unit}</span>
