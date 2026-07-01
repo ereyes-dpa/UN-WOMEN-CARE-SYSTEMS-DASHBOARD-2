@@ -1182,6 +1182,13 @@ if st.sidebar.button(
     st.session_state.page = "Climate, Hazard and Population Analysis"
     st.rerun()
 
+if st.sidebar.button(
+    "Zoning Map",
+    width='stretch'
+):
+    st.session_state.page = "Zoning Map"
+    st.rerun()
+
 # --------------------------------------------------
 # ACTIVE PAGE
 # --------------------------------------------------
@@ -10487,3 +10494,246 @@ elif page == "Climate, Hazard and Population Analysis":
                 caption="Land-surface temperature reference map",
                 width="stretch"
             )
+
+# ==============================================================
+# ZONING MAP
+# (Visualization-only page for QC zoning polygon data scraped
+# from zaulb.quezoncity.gov.ph/index.php/zau_viewer/zau_public_viewer
+# via the get_zau_zones_brgyid_v2 endpoint. Data lives at
+# processed/zoning/qc_zoning.geojson and qc_zoning_summary.csv.
+# Intended as a reference layer for the dashboard — future
+# integration with Accessibility Analysis for siting/gap context
+# can build on top of this page once the team decides the
+# analytical use case.)
+# ==============================================================
+
+elif page == "Zoning Map":
+
+    import geopandas as gpd
+    import json
+    import pandas as pd
+    import pydeck as pdk
+
+    st.title("Zoning Map")
+    st.caption(
+        "Land-use zone polygons for all Quezon City barangays, "
+        "sourced from the QC Zoning Administration Unit public "
+        "viewer (zaulb.quezoncity.gov.ph). Visualization only — "
+        "private/restricted zone records are excluded by the source."
+    )
+
+    # ── Zone type colour palette (matches QC viewer legend) ──
+    ZONE_COLORS = {
+        "R-3 HIGH DENSITY RESIDENTIAL ZONE": [180, 90,  40,  180],
+        "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": [220, 140, 80,  180],
+        "R-1 LOW DENSITY RESIDENTIAL ZONE":  [240, 190, 130, 180],
+        "C-1 MINOR COMMERCIAL ZONE":         [220, 80,  80,  180],
+        "C-2 MAJOR COMMERCIAL ZONE":         [180, 30,  30,  180],
+        "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": [160, 80, 200, 180],
+        "I-1 LIGHT INTENSITY INDUSTRIAL ZONE":  [200, 140, 230, 180],
+        "INSTITUTIONAL":                     [80,  120, 200, 180],
+        "CEMETERY":                          [80,  160, 80,  180],
+        "UTILITY":                           [100, 100, 100, 180],
+        "ROAD":                              [200, 200, 200, 120],
+        "WATER":                             [80,  160, 220, 180],
+        "X":                                 [180, 180, 180, 60],
+    }
+    DEFAULT_COLOR = [160, 160, 160, 120]
+
+    # ── Load data ──
+    try:
+        zoning_gdf = gpd.read_file(
+            "processed/zoning/qc_zoning.geojson"
+        )
+        summary_df = pd.read_csv(
+            "processed/zoning/qc_zoning_summary.csv"
+        )
+    except Exception as e:
+        st.error(
+            f"Could not load zoning data: {e}\n\n"
+            "Make sure the files are at:\n"
+            "- `processed/zoning/qc_zoning.geojson`\n"
+            "- `processed/zoning/qc_zoning_summary.csv`"
+        )
+        st.stop()
+
+    # ── Sidebar filters ──
+    all_zone_types = sorted(
+        zoning_gdf["zone_type"].dropna().unique().tolist()
+    )
+
+    # exclude X (unknown/unclassified) and ROAD from default
+    default_zones = [
+        z for z in all_zone_types
+        if z not in ("X", "ROAD")
+    ]
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Filters")
+
+    selected_zones = st.sidebar.multiselect(
+        "Zone types to show",
+        all_zone_types,
+        default=default_zones,
+        key="zoning_zone_filter"
+    )
+
+    all_barangays = ["All barangays"] + sorted(
+        zoning_gdf["barangay"].dropna().unique().tolist()
+    )
+
+    selected_barangay = st.sidebar.selectbox(
+        "Filter by barangay",
+        all_barangays,
+        key="zoning_brgy_filter"
+    )
+
+    # ── Filter GeoDataFrame ──
+    gdf_filtered = zoning_gdf.copy()
+
+    if selected_zones:
+        gdf_filtered = gdf_filtered[
+            gdf_filtered["zone_type"].isin(selected_zones)
+        ]
+
+    if selected_barangay != "All barangays":
+        gdf_filtered = gdf_filtered[
+            gdf_filtered["barangay"] == selected_barangay
+        ]
+
+    if gdf_filtered.empty:
+        st.warning(
+            "No zones match the current filters."
+        )
+        st.stop()
+
+    # ── Add fill color column ──
+    gdf_filtered = gdf_filtered.copy()
+    gdf_filtered["fill_color"] = gdf_filtered["zone_type"].apply(
+        lambda z: ZONE_COLORS.get(z, DEFAULT_COLOR)
+    )
+
+    # ── KPI row ──
+    col_k1, col_k2, col_k3 = st.columns(3)
+
+    with col_k1:
+        with st.container(border=True):
+            st.metric(
+                "Barangays",
+                gdf_filtered["barangay"].nunique()
+            )
+    with col_k2:
+        with st.container(border=True):
+            st.metric(
+                "Zone polygons shown",
+                f"{len(gdf_filtered):,}"
+            )
+    with col_k3:
+        with st.container(border=True):
+            st.metric(
+                "Zone types shown",
+                gdf_filtered["zone_type"].nunique()
+            )
+
+    # ── Map ──
+    center_lat = float(gdf_filtered.geometry.centroid.y.mean())
+    center_lon = float(gdf_filtered.geometry.centroid.x.mean())
+
+    zoom = 11 if selected_barangay == "All barangays" else 14
+
+    geojson_data = json.loads(gdf_filtered.to_json())
+
+    zoning_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=geojson_data,
+        stroked=True,
+        filled=True,
+        get_fill_color="properties.fill_color",
+        get_line_color=[80, 80, 80, 100],
+        line_width_min_pixels=0.5,
+        pickable=True,
+        auto_highlight=True,
+    )
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=zoom,
+        pitch=0,
+        min_zoom=10,
+        max_zoom=18,
+    )
+
+    tooltip = {
+        "html": (
+            "<b>{barangay}</b><br/>"
+            "Zone: {zone_type}"
+        ),
+        "style": {
+            "backgroundColor": "white",
+            "color": "black",
+            "fontSize": "12px"
+        }
+    }
+
+    deck = pdk.Deck(
+        layers=[zoning_layer],
+        initial_view_state=view_state,
+        tooltip=tooltip,
+        map_style="light"
+    )
+
+    with st.container(border=True):
+        st.pydeck_chart(deck, height=600, width="stretch")
+
+    # ── Legend ──
+    legend_items = [
+        f'<span style="display:inline-block;width:14px;height:14px;'
+        f'background:rgba({c[0]},{c[1]},{c[2]},0.8);'
+        f'border-radius:2px;margin-right:6px;vertical-align:middle;">'
+        f'</span>{zone}'
+        for zone, c in ZONE_COLORS.items()
+        if zone in selected_zones
+    ]
+
+    if legend_items:
+        st.markdown(
+            "<div style='display:flex;flex-wrap:wrap;gap:12px;"
+            "font-size:12px;margin-top:8px;'>"
+            + "".join(
+                f"<div>{item}</div>" for item in legend_items
+            )
+            + "</div>",
+            unsafe_allow_html=True
+        )
+
+    # ── Summary table ──
+    st.subheader("Zone Type Breakdown by Barangay")
+    st.caption(
+        "Number of zone polygons per zone type per barangay "
+        "(polygon count, not area). Private/restricted zone "
+        "records are excluded at source."
+    )
+
+    if selected_barangay != "All barangays":
+        summary_show = summary_df[
+            summary_df["barangay"] == selected_barangay
+        ]
+    else:
+        summary_show = summary_df.copy()
+
+    zone_cols = [
+        c for c in summary_show.columns
+        if c not in ("barangay_id", "barangay", "total_polygons")
+        and c in selected_zones
+    ]
+
+    display_cols = ["barangay", "total_polygons"] + zone_cols
+
+    with st.container(border=True):
+        st.dataframe(
+            summary_show[
+                [c for c in display_cols if c in summary_show.columns]
+            ].sort_values("total_polygons", ascending=False),
+            width="stretch"
+        )
