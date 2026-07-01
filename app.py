@@ -10540,17 +10540,28 @@ elif page == "Zoning Map":
     }
     DEFAULT_COLOR = [160, 160, 160, 120]
 
-    # ── Load data ──
+    # ── Cached data loader ──
+    # (runs once on first load, then stays in memory across all
+    # interactions — the main source of slowness was re-running
+    # gpd.read_file on every selectbox change. Simplification
+    # tolerance of 0.00005 degrees (~5m) is invisible at city
+    # zoom levels but cuts vertex count significantly, speeding
+    # up both serialisation and browser rendering.)
+    @st.cache_data(show_spinner="Loading zoning data...")
+    def load_zoning_data():
+        zoning = gpd.read_file("processed/zoning/qc_zoning.geojson")
+        borders = gpd.read_file("processed/qc_barangays.geojson")
+        zoning["geometry"] = zoning["geometry"].simplify(
+            0.00005, preserve_topology=True
+        )
+        borders["geometry"] = borders["geometry"].simplify(
+            0.00005, preserve_topology=True
+        )
+        summary = pd.read_csv("processed/zoning/qc_zoning_summary.csv")
+        return zoning, borders, summary
+
     try:
-        zoning_gdf = gpd.read_file(
-            "processed/zoning/qc_zoning.geojson"
-        )
-        summary_df = pd.read_csv(
-            "processed/zoning/qc_zoning_summary.csv"
-        )
-        barangay_borders = gpd.read_file(
-            "processed/qc_barangays.geojson"
-        )
+        zoning_gdf, barangay_borders, summary_df = load_zoning_data()
     except Exception as e:
         st.error(
             f"Could not load zoning data: {e}\n\n"
