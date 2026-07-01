@@ -10524,19 +10524,19 @@ elif page == "Zoning Map":
 
     # ── Zone type colour palette (matches QC viewer legend) ──
     ZONE_COLORS = {
-        "R-3 HIGH DENSITY RESIDENTIAL ZONE": [180, 90,  40,  180],
+        "R-3 HIGH DENSITY RESIDENTIAL ZONE":         [180, 90,  40,  180],
         "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": [220, 140, 80,  180],
-        "R-1 LOW DENSITY RESIDENTIAL ZONE":  [240, 190, 130, 180],
-        "C-1 MINOR COMMERCIAL ZONE":         [220, 80,  80,  180],
-        "C-2 MAJOR COMMERCIAL ZONE":         [180, 30,  30,  180],
-        "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": [160, 80, 200, 180],
-        "I-1 LIGHT INTENSITY INDUSTRIAL ZONE":  [200, 140, 230, 180],
-        "INSTITUTIONAL":                     [80,  120, 200, 180],
-        "CEMETERY":                          [80,  160, 80,  180],
-        "UTILITY":                           [100, 100, 100, 180],
-        "ROAD":                              [200, 200, 200, 120],
-        "WATER":                             [80,  160, 220, 180],
-        "X":                                 [180, 180, 180, 60],
+        "R-1 LOW DENSITY RESIDENTIAL ZONE":          [240, 190, 130, 180],
+        "C-1 MINOR COMMERCIAL ZONE":                 [220, 80,  80,  180],
+        "C-2 MAJOR COMMERCIAL ZONE":                 [180, 30,  30,  180],
+        "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE":      [160, 80,  200, 180],
+        "I-1 LIGHT INTENSITY INDUSTRIAL ZONE":       [200, 140, 230, 180],
+        "INSTITUTIONAL":                             [80,  120, 200, 180],
+        "CEMETERY":                                  [80,  160, 80,  180],
+        "UTILITY":                                   [100, 100, 100, 180],
+        "ROAD":                                      [200, 200, 200, 120],
+        "WATER":                                     [80,  160, 220, 180],
+        "X":                                         [180, 180, 180, 60],
     }
     DEFAULT_COLOR = [160, 160, 160, 120]
 
@@ -10548,6 +10548,9 @@ elif page == "Zoning Map":
         summary_df = pd.read_csv(
             "processed/zoning/qc_zoning_summary.csv"
         )
+        barangay_borders = gpd.read_file(
+            "processed/qc_barangays.geojson"
+        )
     except Exception as e:
         st.error(
             f"Could not load zoning data: {e}\n\n"
@@ -10557,110 +10560,132 @@ elif page == "Zoning Map":
         )
         st.stop()
 
-    # ── Sidebar filters ──
     all_zone_types = sorted(
         zoning_gdf["zone_type"].dropna().unique().tolist()
     )
-
-    # exclude X (unknown/unclassified) and ROAD from default
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Filters")
-
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Zone Types")
-
-    selected_zones = []
-    for zone in all_zone_types:
-        color = ZONE_COLORS.get(zone, DEFAULT_COLOR)
-        r, g, b = color[0], color[1], color[2]
-        label = (
-            f'<span style="display:inline-block;width:12px;height:12px;'
-            f'background:rgba({r},{g},{b},0.85);border-radius:2px;'
-            f'margin-right:6px;vertical-align:middle;"></span>{zone}'
-        )
-        checked = st.sidebar.checkbox(
-            zone,
-            value=True,
-            key=f"zone_toggle_{zone}"
-        )
-        if checked:
-            selected_zones.append(zone)
-
-    all_barangays = ["All barangays"] + sorted(
+    all_barangays = sorted(
         zoning_gdf["barangay"].dropna().unique().tolist()
     )
 
-    selected_barangay = st.sidebar.selectbox(
-        "Filter by barangay",
-        all_barangays,
+    # ── Sidebar: colour legend ──
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("## Zone Types")
+    for zone in all_zone_types:
+        color = ZONE_COLORS.get(zone, DEFAULT_COLOR)
+        r, g, b = color[0], color[1], color[2]
+        st.sidebar.markdown(
+            f'<span style="color:rgba({r},{g},{b},1);font-size:22px;">■</span> '
+            f'<b>{zone}</b>',
+            unsafe_allow_html=True
+        )
+
+    # ── Main-area: barangay filter only ──
+    selected_barangay = st.selectbox(
+        "Select barangay",
+        ["All"] + all_barangays,
         key="zoning_brgy_filter"
     )
 
-    # ── Filter GeoDataFrame ──
+    st.info("Hover over a zone polygon to view barangay and zone type.")
+
+    # ── Filter ──
     gdf_filtered = zoning_gdf.copy()
 
-    if selected_zones:
-        gdf_filtered = gdf_filtered[
-            gdf_filtered["zone_type"].isin(selected_zones)
-        ]
-
-    if selected_barangay != "All barangays":
+    if selected_barangay != "All":
         gdf_filtered = gdf_filtered[
             gdf_filtered["barangay"] == selected_barangay
         ]
 
     if gdf_filtered.empty:
-        st.warning(
-            "No zones match the current filters."
-        )
+        st.warning("No zones match the current filters.")
         st.stop()
 
-    # ── Add fill color column ──
-    gdf_filtered = gdf_filtered.copy()
+    # ── Filter barangay borders ──
+    if selected_barangay != "All":
+        name_col = next(
+            (c for c in barangay_borders.columns
+             if c.lower() in ("barangay", "name", "brgy_name", "brgy")),
+            None
+        )
+        borders_filtered = (
+            barangay_borders[
+                barangay_borders[name_col].str.lower()
+                == selected_barangay.lower()
+            ]
+            if name_col else barangay_borders
+        )
+    else:
+        borders_filtered = barangay_borders
+
+    # ── Add fill color ──
     gdf_filtered["fill_color"] = gdf_filtered["zone_type"].apply(
         lambda z: ZONE_COLORS.get(z, DEFAULT_COLOR)
     )
 
     # ── KPI row ──
     col_k1, col_k2, col_k3 = st.columns(3)
-
     with col_k1:
         with st.container(border=True):
-            st.metric(
-                "Barangays",
-                gdf_filtered["barangay"].nunique()
-            )
+            st.metric("Barangays", gdf_filtered["barangay"].nunique())
     with col_k2:
         with st.container(border=True):
-            st.metric(
-                "Zone polygons shown",
-                f"{len(gdf_filtered):,}"
-            )
+            st.metric("Zone polygons", f"{len(gdf_filtered):,}")
     with col_k3:
         with st.container(border=True):
-            st.metric(
-                "Zone types shown",
-                gdf_filtered["zone_type"].nunique()
-            )
+            st.metric("Zone types", gdf_filtered["zone_type"].nunique())
+
+    # ── Legend above map — explicit dark text for dark-mode readability ──
+    legend_items = "".join([
+        f'<div style="display:flex;align-items:center;gap:6px;">'
+        f'<span style="display:inline-block;width:14px;height:14px;'
+        f'background:rgba({ZONE_COLORS.get(z, DEFAULT_COLOR)[0]},'
+        f'{ZONE_COLORS.get(z, DEFAULT_COLOR)[1]},'
+        f'{ZONE_COLORS.get(z, DEFAULT_COLOR)[2]},0.85);'
+        f'border-radius:2px;flex-shrink:0;"></span>'
+        f'<span style="font-size:12px;color:#1a1a1a;">{z}</span></div>'
+        for z in all_zone_types
+        if z in gdf_filtered["zone_type"].unique()
+    ])
+
+    st.markdown(
+        f'<div style="display:flex;flex-wrap:wrap;gap:10px 20px;'
+        f'padding:10px 14px;background:#ffffff;border:1px solid #e0e0e0;'
+        f'border-radius:6px;margin-bottom:8px;">{legend_items}</div>',
+        unsafe_allow_html=True
+    )
 
     # ── Map ──
-    center_lat = float(gdf_filtered.geometry.centroid.y.mean())
-    center_lon = float(gdf_filtered.geometry.centroid.x.mean())
+    _centroids = (
+        gdf_filtered.geometry
+        .to_crs("EPSG:3123")
+        .centroid
+        .to_crs("EPSG:4326")
+    )
+    center_lat = float(_centroids.y.mean())
+    center_lon = float(_centroids.x.mean())
 
-    zoom = 11 if selected_barangay == "All barangays" else 14
-
-    geojson_data = json.loads(gdf_filtered.to_json())
+    zoom = 11 if selected_barangay == "All" else 14
 
     zoning_layer = pdk.Layer(
         "GeoJsonLayer",
-        data=geojson_data,
+        data=json.loads(gdf_filtered.to_json()),
         stroked=True,
         filled=True,
         get_fill_color="properties.fill_color",
-        get_line_color=[80, 80, 80, 100],
-        line_width_min_pixels=0.5,
+        get_line_color=[80, 80, 80, 60],
+        line_width_min_pixels=0.4,
         pickable=True,
         auto_highlight=True,
+    )
+
+    border_layer = pdk.Layer(
+        "GeoJsonLayer",
+        data=json.loads(borders_filtered.to_json()),
+        stroked=True,
+        filled=False,
+        get_line_color=[80, 80, 80, 120],
+        line_width_min_pixels=1.0,
+        pickable=False,
     )
 
     view_state = pdk.ViewState(
@@ -10668,52 +10693,26 @@ elif page == "Zoning Map":
         longitude=center_lon,
         zoom=zoom,
         pitch=0,
-        min_zoom=10,
+        min_zoom=11,
         max_zoom=18,
     )
 
-    tooltip = {
-        "html": (
-            "<b>{barangay}</b><br/>"
-            "Zone: {zone_type}"
-        ),
-        "style": {
-            "backgroundColor": "white",
-            "color": "black",
-            "fontSize": "12px"
-        }
-    }
-
     deck = pdk.Deck(
-        layers=[zoning_layer],
+        layers=[zoning_layer, border_layer],
         initial_view_state=view_state,
-        tooltip=tooltip,
+        tooltip={
+            "html": "<b>{barangay}</b><br/>Zone: {zone_type}",
+            "style": {
+                "backgroundColor": "white",
+                "color": "black",
+                "fontSize": "12px"
+            }
+        },
         map_style="light"
     )
 
     with st.container(border=True):
-        st.pydeck_chart(deck, height=600, width="stretch")
-
-    # ── Legend ──
-    legend_items = [
-        f'<span style="display:inline-block;width:14px;height:14px;'
-        f'background:rgba({c[0]},{c[1]},{c[2]},0.8);'
-        f'border-radius:2px;margin-right:6px;vertical-align:middle;">'
-        f'</span>{zone}'
-        for zone, c in ZONE_COLORS.items()
-        if zone in selected_zones
-    ]
-
-    if legend_items:
-        st.markdown(
-            "<div style='display:flex;flex-wrap:wrap;gap:12px;"
-            "font-size:12px;margin-top:8px;'>"
-            + "".join(
-                f"<div>{item}</div>" for item in legend_items
-            )
-            + "</div>",
-            unsafe_allow_html=True
-        )
+        st.pydeck_chart(deck, height=620, width="stretch")
 
     # ── Summary table ──
     st.subheader("Zone Type Breakdown by Barangay")
@@ -10723,17 +10722,15 @@ elif page == "Zoning Map":
         "records are excluded at source."
     )
 
-    if selected_barangay != "All barangays":
-        summary_show = summary_df[
-            summary_df["barangay"] == selected_barangay
-        ]
-    else:
-        summary_show = summary_df.copy()
+    summary_show = (
+        summary_df[summary_df["barangay"] == selected_barangay]
+        if selected_barangay != "All"
+        else summary_df.copy()
+    )
 
     zone_cols = [
         c for c in summary_show.columns
         if c not in ("barangay_id", "barangay", "total_polygons")
-        and c in selected_zones
     ]
 
     display_cols = ["barangay", "total_polygons"] + zone_cols
