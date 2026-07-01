@@ -10563,20 +10563,28 @@ elif page == "Zoning Map":
     )
 
     # exclude X (unknown/unclassified) and ROAD from default
-    default_zones = [
-        z for z in all_zone_types
-        if z not in ("X", "ROAD")
-    ]
-
     st.sidebar.markdown("---")
     st.sidebar.markdown("### Filters")
 
-    selected_zones = st.sidebar.multiselect(
-        "Zone types to show",
-        all_zone_types,
-        default=default_zones,
-        key="zoning_zone_filter"
-    )
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Zone Types")
+
+    selected_zones = []
+    for zone in all_zone_types:
+        color = ZONE_COLORS.get(zone, DEFAULT_COLOR)
+        r, g, b = color[0], color[1], color[2]
+        label = (
+            f'<span style="display:inline-block;width:12px;height:12px;'
+            f'background:rgba({r},{g},{b},0.85);border-radius:2px;'
+            f'margin-right:6px;vertical-align:middle;"></span>{zone}'
+        )
+        checked = st.sidebar.checkbox(
+            zone,
+            value=True,
+            key=f"zone_toggle_{zone}"
+        )
+        if checked:
+            selected_zones.append(zone)
 
     all_barangays = ["All barangays"] + sorted(
         zoning_gdf["barangay"].dropna().unique().tolist()
