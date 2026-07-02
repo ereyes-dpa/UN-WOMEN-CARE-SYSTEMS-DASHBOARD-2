@@ -7656,36 +7656,43 @@ elif page == "Accessibility Analysis":
         # MOST UNDERSERVED BARANGAYS (by the selected ratio)
         # ==================================================
 
-        underserved = (
-            barangay_access
-            .dropna(subset=[selected_ratio_label])
-            .sort_values(
-                selected_ratio_label
-            )
-            .head(20)
-        )
+        # ── Zero-facility barangays callout ──
+        # (the bar chart was removed — barangays with zero
+        # facilities dominate the "most underserved" list and
+        # produce invisible bars; the Priority Barangays table
+        # below already shows the full ranked breakdown with
+        # district and zone context. Zero-facility barangays
+        # are surfaced here as a KPI + expandable list instead.)
 
-        fig = px.bar(
-            underserved,
-            x=selected_ratio_label,
-            y="Barangay",
-            orientation="h",
-            color=selected_ratio_label,
-            # Reversed ("_r") so the lowest ratio in this
-            # already-worst-20 subset — the most underserved
-            # barangay — gets the darkest red, matching the
-            # "darker = underserved" convention used elsewhere on
-            # this page, instead of the default where the least-
-            # bad barangay in the list would appear darkest.
-            color_continuous_scale="Reds_r",
-            title=f"Most Underserved Barangays — {selected_ratio_label}"
-        )
+        _all = barangay_access.dropna(subset=[selected_ratio_label])
+        _zero = _all[_all[selected_ratio_label] == 0]
 
-        with st.container(border=True, key="qcd-chart-62"):
-            st.plotly_chart(
-                fig,
-                width="stretch"
-            )
+        if len(_zero) > 0:
+            z1, z2 = st.columns([1, 3])
+            with z1:
+                with st.container(border=True):
+                    st.metric(
+                        "Barangays with no facilities",
+                        len(_zero),
+                        help=(
+                            f"Barangays where {selected_ratio_label} "
+                            "is zero — no registered facilities of "
+                            "this type were found. These represent "
+                            "the most acute gaps and should be "
+                            "prioritised for new facility placement."
+                        )
+                    )
+            with z2:
+                with st.expander(
+                    f"View {len(_zero)} barangays with zero facilities"
+                ):
+                    st.dataframe(
+                        _zero[[
+                            "Barangay", "District", "Total"
+                        ]].sort_values("Total", ascending=False)
+                        .rename(columns={"Total": "Population"}),
+                        width="stretch"
+                    )
 
         # ==================================================
         # POPULATION VS FACILITIES
