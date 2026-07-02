@@ -3161,22 +3161,229 @@ if page == "Childcare Centers":
     # TABLE
     # --------------------------------------------------
 
+
+    # ── Zoning siting compatibility helper ──────────────────
+    # (checks whether the dominant zone of each facility's
+    # barangay is compatible with that facility type under QC's
+    # Comprehensive Zoning Ordinance. ✓ = compatible,
+    # ✗ = likely restricted, ? = unclear or non-applicable)
+    _ZONE_COMPAT = {
+        "childcare": {
+            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "✓",
+            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "✓",
+            "R-1 LOW DENSITY RESIDENTIAL ZONE": "✓",
+            "C-1 MINOR COMMERCIAL ZONE": "✓",
+            "C-2 MAJOR COMMERCIAL ZONE": "✓",
+            "C-3 METROPOLITAN COMMERCIAL ZONE": "✓",
+            "INSTITUTIONAL": "✓",
+            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "✗",
+            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "✗",
+            "CEMETERY": "?", "UTILITY": "?",
+            "ROAD": "?", "WATER": "?", "X": "?",
+        },
+        "school": {
+            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "✓",
+            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "✓",
+            "R-1 LOW DENSITY RESIDENTIAL ZONE": "✓",
+            "C-1 MINOR COMMERCIAL ZONE": "✓",
+            "C-2 MAJOR COMMERCIAL ZONE": "✓",
+            "C-3 METROPOLITAN COMMERCIAL ZONE": "✓",
+            "INSTITUTIONAL": "✓",
+            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "✗",
+            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "✗",
+            "CEMETERY": "?", "UTILITY": "?",
+            "ROAD": "?", "WATER": "?", "X": "?",
+        },
+        "care": {
+            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "✓",
+            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "✓",
+            "R-1 LOW DENSITY RESIDENTIAL ZONE": "✓",
+            "C-1 MINOR COMMERCIAL ZONE": "✓",
+            "C-2 MAJOR COMMERCIAL ZONE": "✓",
+            "C-3 METROPOLITAN COMMERCIAL ZONE": "✓",
+            "INSTITUTIONAL": "✓",
+            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "✗",
+            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "✗",
+            "CEMETERY": "?", "UTILITY": "?",
+            "ROAD": "?", "WATER": "?", "X": "?",
+        },
+        "office": {
+            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "✓",
+            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "✓",
+            "R-1 LOW DENSITY RESIDENTIAL ZONE": "✓",
+            "C-1 MINOR COMMERCIAL ZONE": "✓",
+            "C-2 MAJOR COMMERCIAL ZONE": "✓",
+            "C-3 METROPOLITAN COMMERCIAL ZONE": "✓",
+            "INSTITUTIONAL": "✓",
+            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "✓",
+            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "✓",
+            "CEMETERY": "?", "UTILITY": "?",
+            "ROAD": "?", "WATER": "?", "X": "?",
+        },
+    }
+    try:
+        import pandas as _pd_fc
+        _zs_fc = _pd_fc.read_csv(
+            "processed/zoning/qc_zoning_summary.csv"
+        )
+        _nlu_fc = {"ROAD", "WATER", "X"}
+        _zc_fc = [
+            c for c in _zs_fc.columns
+            if c not in (
+                "barangay_id", "barangay", "total_polygons"
+            ) and c not in _nlu_fc
+        ]
+        def _dom_fc(row):
+            vals = {
+                c: row[c] for c in _zc_fc
+                if c in row and _pd_fc.notna(row[c])
+                and row[c] > 0
+            }
+            return max(vals, key=vals.get) if vals else "Unknown"
+        _zs_fc["_dom"] = _zs_fc.apply(_dom_fc, axis=1)
+        _brgy_zone_fc = dict(zip(
+            _zs_fc["barangay"].str.strip().str.title(),
+            _zs_fc["_dom"]
+        ))
+        _zoning_fc_loaded = True
+    except Exception:
+        _brgy_zone_fc = {}
+        _zoning_fc_loaded = False
+
+    def _zone_compat(barangay_name, facility_type):
+        if not _zoning_fc_loaded:
+            return "?"
+        zone = _brgy_zone_fc.get(
+            str(barangay_name).strip().title(), "Unknown"
+        )
+        return _ZONE_COMPAT.get(facility_type, {}).get(zone, "?")
+
+    # ── Zoning siting compatibility helper ──────────────────
+    # (Compatibility is determined by the dominant zone type of
+    # each facility's barangay from qc_zoning_summary.csv.
+    # Rules are based on QC's Comprehensive Zoning Ordinance:
+    # residential and institutional zones permit social care;
+    # industrial zones restrict childcare/health/schools;
+    # commercial zones generally allow most service types.
+    # Socialized housing and special development zones are
+    # treated as residential-equivalent.)
+    try:
+        import pandas as _pd_fc
+        _zs_fc = _pd_fc.read_csv(
+            "processed/zoning/qc_zoning_summary.csv"
+        )
+        _nlu_fc = {"ROAD", "WATER", "X"}
+        _zc_fc = [
+            c for c in _zs_fc.columns
+            if c not in (
+                "barangay_id", "barangay", "total_polygons"
+            ) and c not in _nlu_fc
+        ]
+        def _dom_fc(row):
+            vals = {c: row[c] for c in _zc_fc
+                    if c in row and _pd_fc.notna(row[c]) and row[c] > 0}
+            return max(vals, key=vals.get) if vals else "Unknown"
+        _zs_fc["_dom"] = _zs_fc.apply(_dom_fc, axis=1)
+        _brgy_zone_fc = dict(zip(
+            _zs_fc["barangay"].str.strip().str.title(),
+            _zs_fc["_dom"]
+        ))
+        _zoning_fc_loaded = True
+    except Exception:
+        _brgy_zone_fc = {}
+        _zoning_fc_loaded = False
+
+    # Full zone coverage including all types found in QC data
+    _RESIDENTIAL = [
+        "R-3 HIGH DENSITY RESIDENTIAL ZONE",
+        "R-2 MEDIUM DENSITY RESIDENTIAL ZONE",
+        "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE",
+        "R-1 LOW DENSITY RESIDENTIAL ZONE",
+        "R-1-A LOW DENSITY RESIDENTIAL SUB-ZONE",
+        "SOCIALIZED HOUSING",
+        "SPECIAL URBAN DEVELOPMENT ZONE",
+    ]
+    _COMMERCIAL = [
+        "C-1 MINOR COMMERCIAL ZONE",
+        "C-2 MAJOR COMMERCIAL ZONE",
+        "C-3 METROPOLITAN COMMERCIAL ZONE",
+    ]
+    _INSTITUTIONAL = ["INSTITUTIONAL"]
+    _INDUSTRIAL = [
+        "I-1 LIGHT INTENSITY INDUSTRIAL ZONE",
+        "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE",
+    ]
+    _UNCLEAR = [
+        "CEMETERY", "UTILITY", "ROAD", "WATER",
+        "PARKS AND OPEN SPACE", "X", "Unknown",
+    ]
+
+    _ZONE_COMPAT = {
+        t: {
+            **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
+            **{z: "✗" for z in _INDUSTRIAL},
+            **{z: "?" for z in _UNCLEAR},
+        }
+        for t in ("childcare", "school", "care")
+    }
+    # Offices are compatible with industrial zones too
+    _ZONE_COMPAT["office"] = {
+        **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
+        **{z: "?" for z in _UNCLEAR},
+    }
+
+    def _zone_compat(barangay_name, facility_type):
+        if not _zoning_fc_loaded:
+            return "?"
+        zone = _brgy_zone_fc.get(
+            str(barangay_name).strip().title(), "Unknown"
+        )
+        return _ZONE_COMPAT.get(facility_type, {}).get(zone, "?")
+
     st.subheader("Facilities")
 
+    st.caption(
+        "**Zoning Compatibility** indicates whether the facility's "
+        "barangay is zoned for this use under QC's Comprehensive "
+        "Zoning Ordinance: ✓ compatible, ✗ likely restricted, "
+        "? unclear or non-applicable land use."
+    )
+
+    with st.expander("How is Zoning Compatibility calculated?"):
+        st.markdown("""
+**Zoning Compatibility** is determined by matching each facility's barangay
+to its **dominant zone type** — the most common land-use classification in
+that barangay based on polygon count from QC's Zoning Administration Unit
+(excluding roads, water bodies, and unclassified zones).
+
+The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
+
+| Symbol | Meaning | Zone types |
+|--------|---------|------------|
+| ✓ | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
+| ✗ | Likely restricted | Industrial zones (I-1, I-2) — social care facilities typically require rezoning or a special use permit in these areas |
+| ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
+
+**Important caveats:**
+- This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
+  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows ✗.
+- Zoning rules are simplified — actual permitting depends on the specific use classification and
+  any variances or conditional use permits already granted.
+- To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
+        """)
+
+
+    _cc_disp = cc[["Name","Category","Sector","District","barangay","Address"]].copy()
+    _cc_disp["Zoning Compatibility"] = _cc_disp["barangay"].apply(
+        lambda b: _zone_compat(b, "childcare")
+    )
     with st.container(border=True, key="qcd-chart-13"):
         st.dataframe(
-            cc[
-                [
-                    "Name",
-                    "Category",
-                    "Sector",
-                    "District",
-                    "Address"
-                ]
-            ].rename(
+            _cc_disp[["Name","Category","Sector","District",
+                       "Address","Zoning Compatibility"]].rename(
                 columns={"Sector": "Provider Type"}
             ),
-            width = 'stretch'
+            width='stretch'
         )
 
 
@@ -3605,20 +3812,129 @@ elif page == "Schools":
     # TABLE
     # --------------------------------------------------
 
+    # ── Zoning siting compatibility helper ──────────────────
+    # (Compatibility is determined by the dominant zone type of
+    # each facility's barangay from qc_zoning_summary.csv.
+    # Rules are based on QC's Comprehensive Zoning Ordinance:
+    # residential and institutional zones permit social care;
+    # industrial zones restrict childcare/health/schools;
+    # commercial zones generally allow most service types.
+    # Socialized housing and special development zones are
+    # treated as residential-equivalent.)
+    try:
+        import pandas as _pd_fc
+        _zs_fc = _pd_fc.read_csv(
+            "processed/zoning/qc_zoning_summary.csv"
+        )
+        _nlu_fc = {"ROAD", "WATER", "X"}
+        _zc_fc = [
+            c for c in _zs_fc.columns
+            if c not in (
+                "barangay_id", "barangay", "total_polygons"
+            ) and c not in _nlu_fc
+        ]
+        def _dom_fc(row):
+            vals = {c: row[c] for c in _zc_fc
+                    if c in row and _pd_fc.notna(row[c]) and row[c] > 0}
+            return max(vals, key=vals.get) if vals else "Unknown"
+        _zs_fc["_dom"] = _zs_fc.apply(_dom_fc, axis=1)
+        _brgy_zone_fc = dict(zip(
+            _zs_fc["barangay"].str.strip().str.title(),
+            _zs_fc["_dom"]
+        ))
+        _zoning_fc_loaded = True
+    except Exception:
+        _brgy_zone_fc = {}
+        _zoning_fc_loaded = False
+
+    # Full zone coverage including all types found in QC data
+    _RESIDENTIAL = [
+        "R-3 HIGH DENSITY RESIDENTIAL ZONE",
+        "R-2 MEDIUM DENSITY RESIDENTIAL ZONE",
+        "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE",
+        "R-1 LOW DENSITY RESIDENTIAL ZONE",
+        "R-1-A LOW DENSITY RESIDENTIAL SUB-ZONE",
+        "SOCIALIZED HOUSING",
+        "SPECIAL URBAN DEVELOPMENT ZONE",
+    ]
+    _COMMERCIAL = [
+        "C-1 MINOR COMMERCIAL ZONE",
+        "C-2 MAJOR COMMERCIAL ZONE",
+        "C-3 METROPOLITAN COMMERCIAL ZONE",
+    ]
+    _INSTITUTIONAL = ["INSTITUTIONAL"]
+    _INDUSTRIAL = [
+        "I-1 LIGHT INTENSITY INDUSTRIAL ZONE",
+        "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE",
+    ]
+    _UNCLEAR = [
+        "CEMETERY", "UTILITY", "ROAD", "WATER",
+        "PARKS AND OPEN SPACE", "X", "Unknown",
+    ]
+
+    _ZONE_COMPAT = {
+        t: {
+            **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
+            **{z: "✗" for z in _INDUSTRIAL},
+            **{z: "?" for z in _UNCLEAR},
+        }
+        for t in ("childcare", "school", "care")
+    }
+    # Offices are compatible with industrial zones too
+    _ZONE_COMPAT["office"] = {
+        **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
+        **{z: "?" for z in _UNCLEAR},
+    }
+
+    def _zone_compat(barangay_name, facility_type):
+        if not _zoning_fc_loaded:
+            return "?"
+        zone = _brgy_zone_fc.get(
+            str(barangay_name).strip().title(), "Unknown"
+        )
+        return _ZONE_COMPAT.get(facility_type, {}).get(zone, "?")
+
     st.subheader("Schools")
 
+    st.caption(
+        "**Zoning Compatibility** indicates whether each school's "
+        "barangay permits educational use under QC's zoning "
+        "ordinance: ✓ compatible, ✗ likely restricted, ? unclear."
+    )
+
+    with st.expander("How is Zoning Compatibility calculated?"):
+        st.markdown("""
+**Zoning Compatibility** is determined by matching each facility's barangay
+to its **dominant zone type** — the most common land-use classification in
+that barangay based on polygon count from QC's Zoning Administration Unit
+(excluding roads, water bodies, and unclassified zones).
+
+The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
+
+| Symbol | Meaning | Zone types |
+|--------|---------|------------|
+| ✓ | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
+| ✗ | Likely restricted | Industrial zones (I-1, I-2) — social care facilities typically require rezoning or a special use permit in these areas |
+| ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
+
+**Important caveats:**
+- This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
+  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows ✗.
+- Zoning rules are simplified — actual permitting depends on the specific use classification and
+  any variances or conditional use permits already granted.
+- To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
+        """)
+
+
+    _sch_disp = sch[["Name","Sector","Category","District","barangay","Address"]].copy()
+    _sch_disp["Zoning Compatibility"] = _sch_disp["barangay"].apply(
+        lambda b: _zone_compat(b, "school")
+    )
     with st.container(border=True, key="qcd-chart-17"):
         st.dataframe(
-            sch[
-                [
-                    "Name",
-                    "Sector",
-                    "Category",
-                    "District",
-                    "Address"
-                ]
-            ],
-            width = 'stretch'
+            _sch_disp[["Name","Sector","Category","District",
+                        "Address","Zoning Compatibility"]],
+            width='stretch'
         )
 
 
@@ -5239,19 +5555,129 @@ elif page == "Long-Term Care & Rehabilitation":
     # TABLE
     # ----------------------------------
 
+    # ── Zoning siting compatibility helper ──────────────────
+    # (Compatibility is determined by the dominant zone type of
+    # each facility's barangay from qc_zoning_summary.csv.
+    # Rules are based on QC's Comprehensive Zoning Ordinance:
+    # residential and institutional zones permit social care;
+    # industrial zones restrict childcare/health/schools;
+    # commercial zones generally allow most service types.
+    # Socialized housing and special development zones are
+    # treated as residential-equivalent.)
+    try:
+        import pandas as _pd_fc
+        _zs_fc = _pd_fc.read_csv(
+            "processed/zoning/qc_zoning_summary.csv"
+        )
+        _nlu_fc = {"ROAD", "WATER", "X"}
+        _zc_fc = [
+            c for c in _zs_fc.columns
+            if c not in (
+                "barangay_id", "barangay", "total_polygons"
+            ) and c not in _nlu_fc
+        ]
+        def _dom_fc(row):
+            vals = {c: row[c] for c in _zc_fc
+                    if c in row and _pd_fc.notna(row[c]) and row[c] > 0}
+            return max(vals, key=vals.get) if vals else "Unknown"
+        _zs_fc["_dom"] = _zs_fc.apply(_dom_fc, axis=1)
+        _brgy_zone_fc = dict(zip(
+            _zs_fc["barangay"].str.strip().str.title(),
+            _zs_fc["_dom"]
+        ))
+        _zoning_fc_loaded = True
+    except Exception:
+        _brgy_zone_fc = {}
+        _zoning_fc_loaded = False
+
+    # Full zone coverage including all types found in QC data
+    _RESIDENTIAL = [
+        "R-3 HIGH DENSITY RESIDENTIAL ZONE",
+        "R-2 MEDIUM DENSITY RESIDENTIAL ZONE",
+        "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE",
+        "R-1 LOW DENSITY RESIDENTIAL ZONE",
+        "R-1-A LOW DENSITY RESIDENTIAL SUB-ZONE",
+        "SOCIALIZED HOUSING",
+        "SPECIAL URBAN DEVELOPMENT ZONE",
+    ]
+    _COMMERCIAL = [
+        "C-1 MINOR COMMERCIAL ZONE",
+        "C-2 MAJOR COMMERCIAL ZONE",
+        "C-3 METROPOLITAN COMMERCIAL ZONE",
+    ]
+    _INSTITUTIONAL = ["INSTITUTIONAL"]
+    _INDUSTRIAL = [
+        "I-1 LIGHT INTENSITY INDUSTRIAL ZONE",
+        "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE",
+    ]
+    _UNCLEAR = [
+        "CEMETERY", "UTILITY", "ROAD", "WATER",
+        "PARKS AND OPEN SPACE", "X", "Unknown",
+    ]
+
+    _ZONE_COMPAT = {
+        t: {
+            **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
+            **{z: "✗" for z in _INDUSTRIAL},
+            **{z: "?" for z in _UNCLEAR},
+        }
+        for t in ("childcare", "school", "care")
+    }
+    # Offices are compatible with industrial zones too
+    _ZONE_COMPAT["office"] = {
+        **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
+        **{z: "?" for z in _UNCLEAR},
+    }
+
+    def _zone_compat(barangay_name, facility_type):
+        if not _zoning_fc_loaded:
+            return "?"
+        zone = _brgy_zone_fc.get(
+            str(barangay_name).strip().title(), "Unknown"
+        )
+        return _ZONE_COMPAT.get(facility_type, {}).get(zone, "?")
+
     st.subheader("Facilities")
 
+    st.caption(
+        "**Zoning Compatibility** indicates whether the facility's "
+        "barangay is zoned for care use under QC's zoning ordinance: "
+        "✓ compatible, ✗ likely restricted, ? unclear."
+    )
+
+    with st.expander("How is Zoning Compatibility calculated?"):
+        st.markdown("""
+**Zoning Compatibility** is determined by matching each facility's barangay
+to its **dominant zone type** — the most common land-use classification in
+that barangay based on polygon count from QC's Zoning Administration Unit
+(excluding roads, water bodies, and unclassified zones).
+
+The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
+
+| Symbol | Meaning | Zone types |
+|--------|---------|------------|
+| ✓ | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
+| ✗ | Likely restricted | Industrial zones (I-1, I-2) — social care facilities typically require rezoning or a special use permit in these areas |
+| ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
+
+**Important caveats:**
+- This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
+  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows ✗.
+- Zoning rules are simplified — actual permitting depends on the specific use classification and
+  any variances or conditional use permits already granted.
+- To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
+        """)
+
+
+    _ltc_disp = ltc[["Name","Category","District","barangay","Address"]].copy()
+    _ltc_disp["Zoning Compatibility"] = _ltc_disp["barangay"].apply(
+        lambda b: _zone_compat(b, "care")
+    )
     with st.container(border=True, key="qcd-chart-36"):
         st.dataframe(
-            ltc[
-                [
-                    "Name",
-                    "Category",
-                    "District",
-                    "Address"
-                ]
-            ],
-            width = 'stretch'
+            _ltc_disp[["Name","Category","District",
+                        "Address","Zoning Compatibility"]],
+            width='stretch'
         )
 
     # --------------------------------------------------
@@ -6085,17 +6511,129 @@ elif page == "Action Offices":
     # TABLE
     # ----------------------------------
 
+    # ── Zoning siting compatibility helper ──────────────────
+    # (Compatibility is determined by the dominant zone type of
+    # each facility's barangay from qc_zoning_summary.csv.
+    # Rules are based on QC's Comprehensive Zoning Ordinance:
+    # residential and institutional zones permit social care;
+    # industrial zones restrict childcare/health/schools;
+    # commercial zones generally allow most service types.
+    # Socialized housing and special development zones are
+    # treated as residential-equivalent.)
+    try:
+        import pandas as _pd_fc
+        _zs_fc = _pd_fc.read_csv(
+            "processed/zoning/qc_zoning_summary.csv"
+        )
+        _nlu_fc = {"ROAD", "WATER", "X"}
+        _zc_fc = [
+            c for c in _zs_fc.columns
+            if c not in (
+                "barangay_id", "barangay", "total_polygons"
+            ) and c not in _nlu_fc
+        ]
+        def _dom_fc(row):
+            vals = {c: row[c] for c in _zc_fc
+                    if c in row and _pd_fc.notna(row[c]) and row[c] > 0}
+            return max(vals, key=vals.get) if vals else "Unknown"
+        _zs_fc["_dom"] = _zs_fc.apply(_dom_fc, axis=1)
+        _brgy_zone_fc = dict(zip(
+            _zs_fc["barangay"].str.strip().str.title(),
+            _zs_fc["_dom"]
+        ))
+        _zoning_fc_loaded = True
+    except Exception:
+        _brgy_zone_fc = {}
+        _zoning_fc_loaded = False
+
+    # Full zone coverage including all types found in QC data
+    _RESIDENTIAL = [
+        "R-3 HIGH DENSITY RESIDENTIAL ZONE",
+        "R-2 MEDIUM DENSITY RESIDENTIAL ZONE",
+        "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE",
+        "R-1 LOW DENSITY RESIDENTIAL ZONE",
+        "R-1-A LOW DENSITY RESIDENTIAL SUB-ZONE",
+        "SOCIALIZED HOUSING",
+        "SPECIAL URBAN DEVELOPMENT ZONE",
+    ]
+    _COMMERCIAL = [
+        "C-1 MINOR COMMERCIAL ZONE",
+        "C-2 MAJOR COMMERCIAL ZONE",
+        "C-3 METROPOLITAN COMMERCIAL ZONE",
+    ]
+    _INSTITUTIONAL = ["INSTITUTIONAL"]
+    _INDUSTRIAL = [
+        "I-1 LIGHT INTENSITY INDUSTRIAL ZONE",
+        "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE",
+    ]
+    _UNCLEAR = [
+        "CEMETERY", "UTILITY", "ROAD", "WATER",
+        "PARKS AND OPEN SPACE", "X", "Unknown",
+    ]
+
+    _ZONE_COMPAT = {
+        t: {
+            **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
+            **{z: "✗" for z in _INDUSTRIAL},
+            **{z: "?" for z in _UNCLEAR},
+        }
+        for t in ("childcare", "school", "care")
+    }
+    # Offices are compatible with industrial zones too
+    _ZONE_COMPAT["office"] = {
+        **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
+        **{z: "?" for z in _UNCLEAR},
+    }
+
+    def _zone_compat(barangay_name, facility_type):
+        if not _zoning_fc_loaded:
+            return "?"
+        zone = _brgy_zone_fc.get(
+            str(barangay_name).strip().title(), "Unknown"
+        )
+        return _ZONE_COMPAT.get(facility_type, {}).get(zone, "?")
+
     st.subheader("Action Offices")
 
+    st.caption(
+        "**Zoning Compatibility** indicates whether each office's "
+        "barangay permits this use under QC's zoning ordinance. "
+        "Action offices are generally compatible across most zone "
+        "types including industrial: ✓ compatible, ? unclear."
+    )
+
+    with st.expander("How is Zoning Compatibility calculated?"):
+        st.markdown("""
+**Zoning Compatibility** is determined by matching each facility's barangay
+to its **dominant zone type** — the most common land-use classification in
+that barangay based on polygon count from QC's Zoning Administration Unit
+(excluding roads, water bodies, and unclassified zones).
+
+The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
+
+| Symbol | Meaning | Zone types |
+|--------|---------|------------|
+| ✓ | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
+| ✗ | Likely restricted | Industrial zones (I-1, I-2) — social care facilities typically require rezoning or a special use permit in these areas |
+| ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
+
+**Important caveats:**
+- This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
+  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows ✗.
+- Zoning rules are simplified — actual permitting depends on the specific use classification and
+  any variances or conditional use permits already granted.
+- To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
+        """)
+
+
+    _sat_disp = sat[["District","barangay","Address"]].copy()
+    _sat_disp["Zoning Compatibility"] = _sat_disp["barangay"].apply(
+        lambda b: _zone_compat(b, "office")
+    )
     with st.container(border=True, key="qcd-chart-50"):
         st.dataframe(
-            sat[
-                [
-                    "District",
-                    "Address"
-                ]
-            ],
-            width = 'stretch'
+            _sat_disp[["District","Address","Zoning Compatibility"]],
+            width='stretch'
         )
 
 elif page == "Migration Resource Center":
@@ -6334,20 +6872,109 @@ elif page == "Migration Resource Center":
     )
 
     display_cols = [
-        c for c in [
-            "Name",
-            "Category",
-            "District",
-            "Address"
-        ]
+        c for c in ["Name","Category","District","Address"]
         if c in mig.columns
     ]
 
-    with st.container(border=True, key="qcd-chart-52"):
-        st.dataframe(
-            mig[display_cols],
-            width="stretch"
+    # ── Zoning siting compatibility helper ──────────────────
+    # (Compatibility is determined by the dominant zone type of
+    # each facility's barangay from qc_zoning_summary.csv.
+    # Rules are based on QC's Comprehensive Zoning Ordinance:
+    # residential and institutional zones permit social care;
+    # industrial zones restrict childcare/health/schools;
+    # commercial zones generally allow most service types.
+    # Socialized housing and special development zones are
+    # treated as residential-equivalent.)
+    try:
+        import pandas as _pd_fc
+        _zs_fc = _pd_fc.read_csv(
+            "processed/zoning/qc_zoning_summary.csv"
         )
+        _nlu_fc = {"ROAD", "WATER", "X"}
+        _zc_fc = [
+            c for c in _zs_fc.columns
+            if c not in (
+                "barangay_id", "barangay", "total_polygons"
+            ) and c not in _nlu_fc
+        ]
+        def _dom_fc(row):
+            vals = {c: row[c] for c in _zc_fc
+                    if c in row and _pd_fc.notna(row[c]) and row[c] > 0}
+            return max(vals, key=vals.get) if vals else "Unknown"
+        _zs_fc["_dom"] = _zs_fc.apply(_dom_fc, axis=1)
+        _brgy_zone_fc = dict(zip(
+            _zs_fc["barangay"].str.strip().str.title(),
+            _zs_fc["_dom"]
+        ))
+        _zoning_fc_loaded = True
+    except Exception:
+        _brgy_zone_fc = {}
+        _zoning_fc_loaded = False
+
+    # Full zone coverage including all types found in QC data
+    _RESIDENTIAL = [
+        "R-3 HIGH DENSITY RESIDENTIAL ZONE",
+        "R-2 MEDIUM DENSITY RESIDENTIAL ZONE",
+        "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE",
+        "R-1 LOW DENSITY RESIDENTIAL ZONE",
+        "R-1-A LOW DENSITY RESIDENTIAL SUB-ZONE",
+        "SOCIALIZED HOUSING",
+        "SPECIAL URBAN DEVELOPMENT ZONE",
+    ]
+    _COMMERCIAL = [
+        "C-1 MINOR COMMERCIAL ZONE",
+        "C-2 MAJOR COMMERCIAL ZONE",
+        "C-3 METROPOLITAN COMMERCIAL ZONE",
+    ]
+    _INSTITUTIONAL = ["INSTITUTIONAL"]
+    _INDUSTRIAL = [
+        "I-1 LIGHT INTENSITY INDUSTRIAL ZONE",
+        "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE",
+    ]
+    _UNCLEAR = [
+        "CEMETERY", "UTILITY", "ROAD", "WATER",
+        "PARKS AND OPEN SPACE", "X", "Unknown",
+    ]
+
+    _ZONE_COMPAT = {
+        t: {
+            **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
+            **{z: "✗" for z in _INDUSTRIAL},
+            **{z: "?" for z in _UNCLEAR},
+        }
+        for t in ("childcare", "school", "care")
+    }
+    # Offices are compatible with industrial zones too
+    _ZONE_COMPAT["office"] = {
+        **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
+        **{z: "?" for z in _UNCLEAR},
+    }
+
+    def _zone_compat(barangay_name, facility_type):
+        if not _zoning_fc_loaded:
+            return "?"
+        zone = _brgy_zone_fc.get(
+            str(barangay_name).strip().title(), "Unknown"
+        )
+        return _ZONE_COMPAT.get(facility_type, {}).get(zone, "?")
+
+    st.caption(
+        "**Zoning Compatibility** indicates whether each center's "
+        "barangay permits social care use under QC's zoning ordinance: "
+        "✓ compatible, ✗ likely restricted, ? unclear."
+    )
+
+    _mig_disp = mig[
+        display_cols + (["barangay"] if "barangay" in mig.columns else [])
+    ].copy()
+    if "barangay" in _mig_disp.columns:
+        _mig_disp["Zoning Compatibility"] = _mig_disp["barangay"].apply(
+            lambda b: _zone_compat(b, "care")
+        )
+        _mig_disp = _mig_disp.drop(columns=["barangay"])
+
+    with st.container(border=True, key="qcd-chart-52"):
+        st.dataframe(_mig_disp, width="stretch")
 
 elif page == "Care Services Explorer":
 
@@ -7663,36 +8290,43 @@ elif page == "Accessibility Analysis":
         # MOST UNDERSERVED BARANGAYS (by the selected ratio)
         # ==================================================
 
-        underserved = (
-            barangay_access
-            .dropna(subset=[selected_ratio_label])
-            .sort_values(
-                selected_ratio_label
-            )
-            .head(20)
-        )
+        # ── Zero-facility barangays callout ──
+        # (the bar chart was removed — barangays with zero
+        # facilities dominate the "most underserved" list and
+        # produce invisible bars; the Priority Barangays table
+        # below already shows the full ranked breakdown with
+        # district and zone context. Zero-facility barangays
+        # are surfaced here as a KPI + expandable list instead.)
 
-        fig = px.bar(
-            underserved,
-            x=selected_ratio_label,
-            y="Barangay",
-            orientation="h",
-            color=selected_ratio_label,
-            # Reversed ("_r") so the lowest ratio in this
-            # already-worst-20 subset — the most underserved
-            # barangay — gets the darkest red, matching the
-            # "darker = underserved" convention used elsewhere on
-            # this page, instead of the default where the least-
-            # bad barangay in the list would appear darkest.
-            color_continuous_scale="Reds_r",
-            title=f"Most Underserved Barangays — {selected_ratio_label}"
-        )
+        _all = barangay_access.dropna(subset=[selected_ratio_label])
+        _zero = _all[_all[selected_ratio_label] == 0]
 
-        with st.container(border=True, key="qcd-chart-62"):
-            st.plotly_chart(
-                fig,
-                width="stretch"
-            )
+        if len(_zero) > 0:
+            z1, z2 = st.columns([1, 3])
+            with z1:
+                with st.container(border=True):
+                    st.metric(
+                        "Barangays with no facilities",
+                        len(_zero),
+                        help=(
+                            f"Barangays where {selected_ratio_label} "
+                            "is zero — no registered facilities of "
+                            "this type were found. These represent "
+                            "the most acute gaps and should be "
+                            "prioritised for new facility placement."
+                        )
+                    )
+            with z2:
+                with st.expander(
+                    f"View {len(_zero)} barangays with zero facilities"
+                ):
+                    st.dataframe(
+                        _zero[[
+                            "Barangay", "District", "Total"
+                        ]].sort_values("Total", ascending=False)
+                        .rename(columns={"Total": "Population"}),
+                        width="stretch"
+                    )
 
         # ==================================================
         # POPULATION VS FACILITIES
@@ -7731,36 +8365,74 @@ elif page == "Accessibility Analysis":
         st.caption(
             f"Ranked by lowest {selected_ratio_label}, then by "
             "highest population (areas where the gap affects "
-            "the most people)."
+            "the most people). The **Dominant Zone** column shows "
+            "the most common land-use designation in each barangay "
+            "from QC's zoning data — a low ratio in a dense R-3 "
+            "residential barangay signals a genuine care facility "
+            "shortage, while the same ratio in an industrial or "
+            "utility zone may reflect land-use constraints rather "
+            "than unmet need."
         )
 
         priority_barangays = (
             barangay_access
             .dropna(subset=[selected_ratio_label])
             .sort_values(
-                [
-                    selected_ratio_label,
-                    "Total"
-                ],
-                ascending=[
-                    True,
-                    False
-                ]
+                [selected_ratio_label, "Total"],
+                ascending=[True, False]
             )
             .head(25)
         )
 
+        # ── Enrich with dominant zone ──
+        try:
+            import pandas as _pd_z
+            _zs_p = _pd_z.read_csv(
+                "processed/zoning/qc_zoning_summary.csv"
+            )
+            _nlu_p = {"ROAD", "WATER", "X"}
+            _zc_p = [
+                c for c in _zs_p.columns
+                if c not in (
+                    "barangay_id", "barangay", "total_polygons"
+                ) and c not in _nlu_p
+            ]
+            def _dom_p(row):
+                vals = {
+                    c: row[c] for c in _zc_p
+                    if c in row and _pd_z.notna(row[c])
+                    and row[c] > 0
+                }
+                return max(vals, key=vals.get) if vals else "Unknown"
+            _zs_p["Dominant Zone"] = _zs_p.apply(_dom_p, axis=1)
+            _zs_p["_join"] = (
+                _zs_p["barangay"].astype(str).str.strip().str.title()
+            )
+            priority_barangays = priority_barangays.copy()
+            priority_barangays["_join"] = (
+                priority_barangays["Barangay"]
+                .astype(str).str.strip().str.title()
+            )
+            priority_barangays = priority_barangays.merge(
+                _zs_p[["_join", "Dominant Zone"]],
+                on="_join", how="left"
+            ).drop(columns=["_join"])
+            priority_cols = [
+                "Barangay", "District", "Total", "Facilities",
+                selected_ratio_label, "Accessibility Index",
+                "Dominant Zone"
+            ]
+        except Exception:
+            priority_cols = [
+                "Barangay", "District", "Total", "Facilities",
+                selected_ratio_label, "Accessibility Index"
+            ]
+
         with st.container(border=True, key="qcd-chart-64"):
             st.dataframe(
                 priority_barangays[
-                    [
-                        "Barangay",
-                        "District",
-                        "Total",
-                        "Facilities",
-                        selected_ratio_label,
-                        "Accessibility Index"
-                    ]
+                    [c for c in priority_cols
+                     if c in priority_barangays.columns]
                 ],
                 width="stretch"
             )
@@ -10495,18 +11167,6 @@ elif page == "Climate, Hazard and Population Analysis":
                 width="stretch"
             )
 
-# ==============================================================
-# ZONING MAP
-# (Visualization-only page for QC zoning polygon data scraped
-# from zaulb.quezoncity.gov.ph/index.php/zau_viewer/zau_public_viewer
-# via the get_zau_zones_brgyid_v2 endpoint. Data lives at
-# processed/zoning/qc_zoning.geojson and qc_zoning_summary.csv.
-# Intended as a reference layer for the dashboard — future
-# integration with Accessibility Analysis for siting/gap context
-# can build on top of this page once the team decides the
-# analytical use case.)
-# ==============================================================
-
 elif page == "Zoning Map":
 
     import geopandas as gpd
@@ -10522,234 +11182,831 @@ elif page == "Zoning Map":
         "private/restricted zone records are excluded by the source."
     )
 
-    # ── Zone type colour palette (matches QC viewer legend) ──
-    ZONE_COLORS = {
-        "R-3 HIGH DENSITY RESIDENTIAL ZONE":         [180, 90,  40,  180],
-        "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": [220, 140, 80,  180],
-        "R-1 LOW DENSITY RESIDENTIAL ZONE":          [240, 190, 130, 180],
-        "C-1 MINOR COMMERCIAL ZONE":                 [220, 80,  80,  180],
-        "C-2 MAJOR COMMERCIAL ZONE":                 [180, 30,  30,  180],
-        "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE":      [160, 80,  200, 180],
-        "I-1 LIGHT INTENSITY INDUSTRIAL ZONE":       [200, 140, 230, 180],
-        "INSTITUTIONAL":                             [80,  120, 200, 180],
-        "CEMETERY":                                  [80,  160, 80,  180],
-        "UTILITY":                                   [100, 100, 100, 180],
-        "ROAD":                                      [200, 200, 200, 120],
-        "WATER":                                     [80,  160, 220, 180],
-        "X":                                         [180, 180, 180, 60],
+    # ── Load shared data for all tabs ──────────────────────
+    # (loaded once here so all tabs can use it without
+    # re-reading from disk on every tab switch)
+    @st.cache_data(show_spinner=False)
+    def _load_zoning_merged():
+        import pandas as _pd
+        _zs = _pd.read_csv("processed/zoning/qc_zoning_summary.csv")
+        _dm = _pd.read_csv("processed/indicators/demographics.csv")
+        _nlu = {"ROAD", "WATER", "X"}
+        _zcols = [
+            c for c in _zs.columns
+            if c not in ("barangay_id", "barangay", "total_polygons")
+            and c not in _nlu
+        ]
+        def _dom(row):
+            vals = {c: row[c] for c in _zcols
+                    if c in row and _pd.notna(row[c]) and row[c] > 0}
+            return max(vals, key=vals.get) if vals else "Unknown"
+        _zs["Dominant Zone"] = _zs.apply(_dom, axis=1)
+        _merged = _dm.merge(
+            _zs[["barangay", "Dominant Zone"]],
+            left_on=_dm["barangay"].str.strip().str.title(),
+            right_on=_zs["barangay"].str.strip().str.title(),
+            how="left",
+            suffixes=("", "_z")
+        ).drop(columns=["key_0"], errors="ignore")
+        if "barangay_z" in _merged.columns:
+            _merged = _merged.drop(columns=["barangay_z"])
+        _merged["Dominant Zone"] = _merged["Dominant Zone"].fillna("Unknown")
+        return _zs, _dm, _merged
+
+    _zoning_summary, _demographics, _zoning_merged = _load_zoning_merged()
+
+    # ── City-wide KPI summary stats ─────────────────────────
+    _nlu_kpi = {"ROAD", "WATER", "X", "Unknown"}
+    _total_brgy = len(_zoning_summary[
+        ~_zoning_summary["Dominant Zone"].isin(_nlu_kpi)
+    ])
+
+    _zone_groups = {
+        "Residential": [
+            "R-3 HIGH DENSITY RESIDENTIAL ZONE",
+            "R-2 MEDIUM DENSITY RESIDENTIAL ZONE",
+            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE",
+            "R-1 LOW DENSITY RESIDENTIAL ZONE",
+            "R-1-A LOW DENSITY RESIDENTIAL SUB-ZONE",
+            "SOCIALIZED HOUSING",
+            "SPECIAL URBAN DEVELOPMENT ZONE",
+        ],
+        "Commercial": [
+            "C-1 MINOR COMMERCIAL ZONE",
+            "C-2 MAJOR COMMERCIAL ZONE",
+            "C-3 METROPOLITAN COMMERCIAL ZONE",
+        ],
+        "Industrial": [
+            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE",
+            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE",
+        ],
+        "Institutional / Other": [
+            "INSTITUTIONAL", "CEMETERY", "UTILITY",
+            "PARKS AND OPEN SPACE",
+        ],
     }
-    DEFAULT_COLOR = [160, 160, 160, 120]
 
-    # ── Cached data loader ──
-    # (runs once on first load, then stays in memory across all
-    # interactions — the main source of slowness was re-running
-    # gpd.read_file on every selectbox change. Simplification
-    # tolerance of 0.00005 degrees (~5m) is invisible at city
-    # zoom levels but cuts vertex count significantly, speeding
-    # up both serialisation and browser rendering.)
-    @st.cache_data(show_spinner="Loading zoning data...")
-    def load_zoning_data():
-        zoning = gpd.read_file("processed/zoning/qc_zoning.geojson")
-        borders = gpd.read_file("processed/qc_barangays.geojson")
-        zoning["geometry"] = zoning["geometry"].simplify(
-            0.00005, preserve_topology=True
-        )
-        borders["geometry"] = borders["geometry"].simplify(
-            0.00005, preserve_topology=True
-        )
-        summary = pd.read_csv("processed/zoning/qc_zoning_summary.csv")
-        return zoning, borders, summary
+    _dom_counts = _zoning_summary["Dominant Zone"].value_counts()
 
-    try:
-        zoning_gdf, barangay_borders, summary_df = load_zoning_data()
-    except Exception as e:
-        st.error(
-            f"Could not load zoning data: {e}\n\n"
-            "Make sure the files are at:\n"
-            "- `processed/zoning/qc_zoning.geojson`\n"
-            "- `processed/zoning/qc_zoning_summary.csv`"
-        )
-        st.stop()
+    def _group_count(zones):
+        return sum(_dom_counts.get(z, 0) for z in zones)
 
-    all_zone_types = sorted(
-        zoning_gdf["zone_type"].dropna().unique().tolist()
-    )
-    all_barangays = sorted(
-        zoning_gdf["barangay"].dropna().unique().tolist()
+    _res_n   = _group_count(_zone_groups["Residential"])
+    _com_n   = _group_count(_zone_groups["Commercial"])
+    _ind_n   = _group_count(_zone_groups["Industrial"])
+    _oth_n   = _group_count(_zone_groups["Institutional / Other"])
+
+    st.markdown("#### Citywide Land-Use Overview")
+    st.caption(
+        "Based on the dominant zone type per barangay "
+        "(excluding road, water, and unclassified zones)."
     )
 
-    # ── Sidebar: colour legend ──
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("## Zone Types")
-    for zone in all_zone_types:
-        color = ZONE_COLORS.get(zone, DEFAULT_COLOR)
-        r, g, b = color[0], color[1], color[2]
-        st.sidebar.markdown(
-            f'<span style="color:rgba({r},{g},{b},1);font-size:22px;">■</span> '
-            f'<b>{zone}</b>',
+    _k1, _k2, _k3, _k4 = st.columns(4)
+    with _k1:
+        with st.container(border=True):
+            st.metric(
+                "Residential barangays",
+                _res_n,
+                help="R-1 through R-3, Socialized Housing, Special Urban Development"
+            )
+    with _k2:
+        with st.container(border=True):
+            st.metric(
+                "Commercial barangays",
+                _com_n,
+                help="C-1, C-2, C-3 commercial zones"
+            )
+    with _k3:
+        with st.container(border=True):
+            st.metric(
+                "Industrial barangays",
+                _ind_n,
+                help="I-1 light and I-2 medium intensity industrial zones"
+            )
+    with _k4:
+        with st.container(border=True):
+            st.metric(
+                "Institutional / Other",
+                _oth_n,
+                help="Institutional, Cemetery, Utility, Parks"
+            )
+
+    st.divider()
+
+    ztab1, ztab2, ztab3, ztab4 = st.tabs([
+        "Zone Polygon Viewer",
+        "Dominant Zone by Barangay",
+        "Facility–Zone Gap Analysis",
+        "Zone × Facility Cross-Table",
+    ])
+
+    with ztab1:
+
+        # ── Zone type colour palette (matches QC viewer legend) ──
+        ZONE_COLORS = {
+            "R-3 HIGH DENSITY RESIDENTIAL ZONE":         [180, 90,  40,  180],
+            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": [220, 140, 80,  180],
+            "R-1 LOW DENSITY RESIDENTIAL ZONE":          [240, 190, 130, 180],
+            "C-1 MINOR COMMERCIAL ZONE":                 [220, 80,  80,  180],
+            "C-2 MAJOR COMMERCIAL ZONE":                 [180, 30,  30,  180],
+            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE":      [160, 80,  200, 180],
+            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE":       [200, 140, 230, 180],
+            "INSTITUTIONAL":                             [80,  120, 200, 180],
+            "CEMETERY":                                  [80,  160, 80,  180],
+            "UTILITY":                                   [100, 100, 100, 180],
+            "ROAD":                                      [200, 200, 200, 120],
+            "WATER":                                     [80,  160, 220, 180],
+            "X":                                         [180, 180, 180, 60],
+        }
+        DEFAULT_COLOR = [160, 160, 160, 120]
+
+        # ── Cached data loader ──
+        # (runs once on first load, then stays in memory across all
+        # interactions — the main source of slowness was re-running
+        # gpd.read_file on every selectbox change. Simplification
+        # tolerance of 0.00005 degrees (~5m) is invisible at city
+        # zoom levels but cuts vertex count significantly, speeding
+        # up both serialisation and browser rendering.)
+        @st.cache_data(show_spinner="Loading zoning data...")
+        def load_zoning_data():
+            zoning = gpd.read_file("processed/zoning/qc_zoning.geojson")
+            borders = gpd.read_file("processed/qc_barangays.geojson")
+            zoning["geometry"] = zoning["geometry"].simplify(
+                0.00005, preserve_topology=True
+            )
+            borders["geometry"] = borders["geometry"].simplify(
+                0.00005, preserve_topology=True
+            )
+            summary = pd.read_csv("processed/zoning/qc_zoning_summary.csv")
+            return zoning, borders, summary
+
+        try:
+            zoning_gdf, barangay_borders, summary_df = load_zoning_data()
+        except Exception as e:
+            st.error(
+                f"Could not load zoning data: {e}\n\n"
+                "Make sure the files are at:\n"
+                "- `processed/zoning/qc_zoning.geojson`\n"
+                "- `processed/zoning/qc_zoning_summary.csv`"
+            )
+            st.stop()
+
+        all_zone_types = sorted(
+            zoning_gdf["zone_type"].dropna().unique().tolist()
+        )
+        all_barangays = sorted(
+            zoning_gdf["barangay"].dropna().unique().tolist()
+        )
+
+        # ── Sidebar: colour legend ──
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("## Zone Types")
+        for zone in all_zone_types:
+            color = ZONE_COLORS.get(zone, DEFAULT_COLOR)
+            r, g, b = color[0], color[1], color[2]
+            st.sidebar.markdown(
+                f'<span style="color:rgba({r},{g},{b},1);font-size:22px;">■</span> '
+                f'<b>{zone}</b>',
+                unsafe_allow_html=True
+            )
+
+        # ── Main-area: barangay filter only ──
+        selected_barangay = st.selectbox(
+            "Select barangay",
+            ["All"] + all_barangays,
+            key="zoning_brgy_filter"
+        )
+
+        st.info("Hover over a zone polygon to view barangay and zone type.")
+
+        # ── Filter ──
+        gdf_filtered = zoning_gdf.copy()
+
+        if selected_barangay != "All":
+            gdf_filtered = gdf_filtered[
+                gdf_filtered["barangay"] == selected_barangay
+            ]
+
+        if gdf_filtered.empty:
+            st.warning("No zones match the current filters.")
+            st.stop()
+
+        # ── Filter barangay borders ──
+        if selected_barangay != "All":
+            name_col = next(
+                (c for c in barangay_borders.columns
+                 if c.lower() in (
+                     "barangay_name", "barangay", "name",
+                     "brgy_name", "brgy"
+                 )),
+                None
+            )
+            borders_filtered = (
+                barangay_borders[
+                    barangay_borders[name_col].str.strip().str.title()
+                    == selected_barangay.strip().title()
+                ]
+                if name_col else barangay_borders
+            )
+        else:
+            borders_filtered = barangay_borders
+
+        # ── Add fill color ──
+        gdf_filtered["fill_color"] = gdf_filtered["zone_type"].apply(
+            lambda z: ZONE_COLORS.get(z, DEFAULT_COLOR)
+        )
+
+        # ── KPI row ──
+        col_k1, col_k2, col_k3 = st.columns(3)
+        with col_k1:
+            with st.container(border=True):
+                st.metric("Barangays", gdf_filtered["barangay"].nunique())
+        with col_k2:
+            with st.container(border=True):
+                st.metric("Zone polygons", f"{len(gdf_filtered):,}")
+        with col_k3:
+            with st.container(border=True):
+                st.metric("Zone types", gdf_filtered["zone_type"].nunique())
+
+        # ── Legend above map — explicit dark text for dark-mode readability ──
+        legend_items = "".join([
+            f'<div style="display:flex;align-items:center;gap:6px;">'
+            f'<span style="display:inline-block;width:14px;height:14px;'
+            f'background:rgba({ZONE_COLORS.get(z, DEFAULT_COLOR)[0]},'
+            f'{ZONE_COLORS.get(z, DEFAULT_COLOR)[1]},'
+            f'{ZONE_COLORS.get(z, DEFAULT_COLOR)[2]},0.85);'
+            f'border-radius:2px;flex-shrink:0;"></span>'
+            f'<span style="font-size:12px;color:#1a1a1a;">{z}</span></div>'
+            for z in all_zone_types
+            if z in gdf_filtered["zone_type"].unique()
+        ])
+
+        st.markdown(
+            f'<div style="display:flex;flex-wrap:wrap;gap:10px 20px;'
+            f'padding:10px 14px;background:#ffffff;border:1px solid #e0e0e0;'
+            f'border-radius:6px;margin-bottom:8px;">{legend_items}</div>',
             unsafe_allow_html=True
         )
 
-    # ── Main-area: barangay filter only ──
-    selected_barangay = st.selectbox(
-        "Select barangay",
-        ["All"] + all_barangays,
-        key="zoning_brgy_filter"
-    )
+        # ── Map ──
+        _centroids = (
+            gdf_filtered.geometry
+            .to_crs("EPSG:3123")
+            .centroid
+            .to_crs("EPSG:4326")
+        )
+        center_lat = float(_centroids.y.mean())
+        center_lon = float(_centroids.x.mean())
 
-    st.info("Hover over a zone polygon to view barangay and zone type.")
+        zoom = 11 if selected_barangay == "All" else 14
 
-    # ── Filter ──
-    gdf_filtered = zoning_gdf.copy()
+        zoning_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=json.loads(gdf_filtered.to_json()),
+            stroked=True,
+            filled=True,
+            get_fill_color="properties.fill_color",
+            get_line_color=[80, 80, 80, 60],
+            line_width_min_pixels=0.4,
+            pickable=True,
+            auto_highlight=True,
+        )
 
-    if selected_barangay != "All":
-        gdf_filtered = gdf_filtered[
-            gdf_filtered["barangay"] == selected_barangay
+        border_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=json.loads(borders_filtered.to_json()),
+            stroked=True,
+            filled=False,
+            get_line_color=[80, 80, 80, 120],
+            line_width_min_pixels=1.0,
+            pickable=False,
+        )
+
+        view_state = pdk.ViewState(
+            latitude=center_lat,
+            longitude=center_lon,
+            zoom=zoom,
+            pitch=0,
+            min_zoom=11,
+            max_zoom=18,
+        )
+
+        deck = pdk.Deck(
+            layers=[zoning_layer, border_layer],
+            initial_view_state=view_state,
+            tooltip={
+                "html": "<b>{barangay}</b><br/>Zone: {zone_type}",
+                "style": {
+                    "backgroundColor": "white",
+                    "color": "black",
+                    "fontSize": "12px"
+                }
+            },
+            map_style="light"
+        )
+
+        with st.container(border=True):
+            st.pydeck_chart(deck, height=620, width="stretch")
+
+        # ── Summary table ──
+        st.subheader("Zone Type Breakdown by Barangay")
+        st.caption(
+            "Number of zone polygons per zone type per barangay "
+            "(polygon count, not area). Private/restricted zone "
+            "records are excluded at source."
+        )
+
+        summary_show = (
+            summary_df[summary_df["barangay"] == selected_barangay]
+            if selected_barangay != "All"
+            else summary_df.copy()
+        )
+
+        zone_cols = [
+            c for c in summary_show.columns
+            if c not in ("barangay_id", "barangay", "total_polygons")
         ]
 
-    if gdf_filtered.empty:
-        st.warning("No zones match the current filters.")
-        st.stop()
+        display_cols = ["barangay", "total_polygons"] + zone_cols
 
-    # ── Filter barangay borders ──
-    if selected_barangay != "All":
-        name_col = next(
-            (c for c in barangay_borders.columns
-             if c.lower() in ("barangay", "name", "brgy_name", "brgy")),
-            None
+        with st.container(border=True):
+            st.dataframe(
+                summary_show[
+                    [c for c in display_cols if c in summary_show.columns]
+                ].sort_values("total_polygons", ascending=False),
+                width="stretch"
+            )
+
+
+    with ztab2:
+
+        st.markdown("### Dominant Zone Type by Barangay")
+
+        st.caption(
+            "Each barangay is coloured by its most common "
+            "land-use zone type (by polygon count, excluding "
+            "ROAD, WATER, and unclassified zones). Useful for "
+            "interpreting accessibility gaps — barangays with "
+            "few care facilities in R-3/R-2-A residential zones "
+            "represent genuine unmet demand, while gaps in "
+            "industrial or utility zones may reflect land-use "
+            "constraints rather than policy failures."
         )
-        borders_filtered = (
-            barangay_borders[
-                barangay_borders[name_col].str.lower()
-                == selected_barangay.lower()
+
+        try:
+            import pandas as _pd3
+            _zs2 = _pd3.read_csv(
+                "processed/zoning/qc_zoning_summary.csv"
+            )
+            _nlu2 = {"ROAD", "WATER", "X"}
+            _zcols2 = [
+                c for c in _zs2.columns
+                if c not in (
+                    "barangay_id", "barangay", "total_polygons"
+                ) and c not in _nlu2
             ]
-            if name_col else barangay_borders
-        )
-    else:
-        borders_filtered = barangay_borders
 
-    # ── Add fill color ──
-    gdf_filtered["fill_color"] = gdf_filtered["zone_type"].apply(
-        lambda z: ZONE_COLORS.get(z, DEFAULT_COLOR)
-    )
+            def _dom2(row):
+                vals = {
+                    c: row[c] for c in _zcols2
+                    if c in row and _pd3.notna(row[c]) and row[c] > 0
+                }
+                return max(vals, key=vals.get) if vals else "Unknown"
 
-    # ── KPI row ──
-    col_k1, col_k2, col_k3 = st.columns(3)
-    with col_k1:
-        with st.container(border=True):
-            st.metric("Barangays", gdf_filtered["barangay"].nunique())
-    with col_k2:
-        with st.container(border=True):
-            st.metric("Zone polygons", f"{len(gdf_filtered):,}")
-    with col_k3:
-        with st.container(border=True):
-            st.metric("Zone types", gdf_filtered["zone_type"].nunique())
+            _zs2["Dominant Zone"] = _zs2.apply(_dom2, axis=1)
 
-    # ── Legend above map — explicit dark text for dark-mode readability ──
-    legend_items = "".join([
-        f'<div style="display:flex;align-items:center;gap:6px;">'
-        f'<span style="display:inline-block;width:14px;height:14px;'
-        f'background:rgba({ZONE_COLORS.get(z, DEFAULT_COLOR)[0]},'
-        f'{ZONE_COLORS.get(z, DEFAULT_COLOR)[1]},'
-        f'{ZONE_COLORS.get(z, DEFAULT_COLOR)[2]},0.85);'
-        f'border-radius:2px;flex-shrink:0;"></span>'
-        f'<span style="font-size:12px;color:#1a1a1a;">{z}</span></div>'
-        for z in all_zone_types
-        if z in gdf_filtered["zone_type"].unique()
-    ])
+            _brgy_gdf2 = barangay_borders.copy()
+            # qc_barangays.geojson uses "barangay_name" column
+            _name_col2 = next(
+                (c for c in _brgy_gdf2.columns
+                 if c.lower() in (
+                     "barangay_name", "barangay", "name",
+                     "brgy_name", "brgy"
+                 )), None
+            )
 
-    st.markdown(
-        f'<div style="display:flex;flex-wrap:wrap;gap:10px 20px;'
-        f'padding:10px 14px;background:#ffffff;border:1px solid #e0e0e0;'
-        f'border-radius:6px;margin-bottom:8px;">{legend_items}</div>',
-        unsafe_allow_html=True
-    )
+            if _name_col2:
+                _brgy_gdf2["_join_key"] = (
+                    _brgy_gdf2[_name_col2].astype(str).str.strip().str.title()
+                )
+                _zs2["_join_key"] = (
+                    _zs2["barangay"].astype(str).str.strip().str.title()
+                )
+                _brgy_gdf2 = _brgy_gdf2.merge(
+                    _zs2[["_join_key", "Dominant Zone"]],
+                    on="_join_key",
+                    how="left"
+                ).drop(columns=["_join_key"])
+                _zs2 = _zs2.drop(columns=["_join_key"])
+                # expose as "barangay" so pydeck {barangay} resolves
+                _brgy_gdf2["barangay"] = (
+                    _brgy_gdf2[_name_col2].astype(str)
+                )
+            else:
+                _brgy_gdf2["Dominant Zone"] = "Unknown"
+                _brgy_gdf2["barangay"] = ""
 
-    # ── Map ──
-    _centroids = (
-        gdf_filtered.geometry
-        .to_crs("EPSG:3123")
-        .centroid
-        .to_crs("EPSG:4326")
-    )
-    center_lat = float(_centroids.y.mean())
-    center_lon = float(_centroids.x.mean())
-
-    zoom = 11 if selected_barangay == "All" else 14
-
-    zoning_layer = pdk.Layer(
-        "GeoJsonLayer",
-        data=json.loads(gdf_filtered.to_json()),
-        stroked=True,
-        filled=True,
-        get_fill_color="properties.fill_color",
-        get_line_color=[80, 80, 80, 60],
-        line_width_min_pixels=0.4,
-        pickable=True,
-        auto_highlight=True,
-    )
-
-    border_layer = pdk.Layer(
-        "GeoJsonLayer",
-        data=json.loads(borders_filtered.to_json()),
-        stroked=True,
-        filled=False,
-        get_line_color=[80, 80, 80, 120],
-        line_width_min_pixels=1.0,
-        pickable=False,
-    )
-
-    view_state = pdk.ViewState(
-        latitude=center_lat,
-        longitude=center_lon,
-        zoom=zoom,
-        pitch=0,
-        min_zoom=11,
-        max_zoom=18,
-    )
-
-    deck = pdk.Deck(
-        layers=[zoning_layer, border_layer],
-        initial_view_state=view_state,
-        tooltip={
-            "html": "<b>{barangay}</b><br/>Zone: {zone_type}",
-            "style": {
-                "backgroundColor": "white",
-                "color": "black",
-                "fontSize": "12px"
+            # Build colour palette from ZONE_COLORS (already defined
+            # above for the polygon viewer), falling back to grey for
+            # any zone name in the data not in the palette — handles
+            # minor naming differences between the scraper output and
+            # the hardcoded legend keys.
+            _CHORO_COLORS = {
+                k: [v[0], v[1], v[2], 200]
+                for k, v in ZONE_COLORS.items()
             }
-        },
-        map_style="light"
-    )
+            _CHORO_COLORS["Unknown"] = [200, 200, 200, 120]
 
-    with st.container(border=True):
-        st.pydeck_chart(deck, height=620, width="stretch")
+            _brgy_gdf2["fill_color"] = _brgy_gdf2["Dominant Zone"].apply(
+                lambda z: _CHORO_COLORS.get(
+                    str(z) if z else "Unknown",
+                    [200, 200, 200, 120]
+                )
+            )
 
-    # ── Summary table ──
-    st.subheader("Zone Type Breakdown by Barangay")
-    st.caption(
-        "Number of zone polygons per zone type per barangay "
-        "(polygon count, not area). Private/restricted zone "
-        "records are excluded at source."
-    )
+            _present = sorted(
+                _brgy_gdf2["Dominant Zone"].dropna().unique()
+            )
+            _leg2 = "".join([
+                f'<div style="display:flex;align-items:center;gap:6px;">'                f'<span style="display:inline-block;width:14px;height:14px;'                f'background:rgba({_CHORO_COLORS.get(z,[200,200,200,120])[0]},'                f'{_CHORO_COLORS.get(z,[200,200,200,120])[1]},'                f'{_CHORO_COLORS.get(z,[200,200,200,120])[2]},0.85);'                f'border-radius:2px;flex-shrink:0;"></span>'                f'<span style="font-size:12px;color:#1a1a1a;">{z}</span></div>'
+                for z in _present
+            ])
+            st.markdown(
+                f'<div style="display:flex;flex-wrap:wrap;gap:10px 20px;'                f'padding:10px 14px;background:#ffffff;'                f'border:1px solid #e0e0e0;border-radius:6px;'                f'margin-bottom:8px;">{_leg2}</div>',
+                unsafe_allow_html=True
+            )
 
-    summary_show = (
-        summary_df[summary_df["barangay"] == selected_barangay]
-        if selected_barangay != "All"
-        else summary_df.copy()
-    )
+            _choro_layer = pdk.Layer(
+                "GeoJsonLayer",
+                data=json.loads(_brgy_gdf2.to_json()),
+                stroked=True,
+                filled=True,
+                get_fill_color="properties.fill_color",
+                get_line_color=[80, 80, 80, 80],
+                line_width_min_pixels=0.8,
+                pickable=True,
+                auto_highlight=True,
+            )
 
-    zone_cols = [
-        c for c in summary_show.columns
-        if c not in ("barangay_id", "barangay", "total_polygons")
-    ]
+            with st.container(border=True):
+                st.pydeck_chart(
+                    pdk.Deck(
+                        layers=[_choro_layer],
+                        initial_view_state=pdk.ViewState(
+                            latitude=14.676, longitude=121.043,
+                            zoom=11, pitch=0, min_zoom=11, max_zoom=17,
+                        ),
+                        tooltip={
+                            "html": "<b>{barangay}</b><br/>Dominant Zone: {Dominant Zone}",
+                            "style": {"backgroundColor": "white",
+                                      "color": "black", "fontSize": "12px"}
+                        },
+                        map_style="light"
+                    ),
+                    height=600, width="stretch"
+                )
 
-    display_cols = ["barangay", "total_polygons"] + zone_cols
+            st.subheader("Dominant Zone per Barangay")
+            st.caption(
+                "Full list sorted alphabetically. Use alongside "
+                "the Accessibility Analysis to interpret whether "
+                "gaps reflect genuine care deficits or land-use "
+                "constraints."
+            )
+            with st.container(border=True):
+                st.dataframe(
+                    _zs2[["barangay", "Dominant Zone", "total_polygons"]]
+                    .rename(columns={
+                        "barangay": "Barangay",
+                        "total_polygons": "Total Polygons"
+                    })
+                    .sort_values("Barangay"),
+                    width="stretch"
+                )
 
-    with st.container(border=True):
-        st.dataframe(
-            summary_show[
-                [c for c in display_cols if c in summary_show.columns]
-            ].sort_values("total_polygons", ascending=False),
-            width="stretch"
+        except Exception as _e2:
+            st.warning(f"Could not load dominant zone data: {_e2}")
+
+    with ztab3:
+
+        st.markdown("### Facility–Zone Gap Analysis")
+
+        st.caption(
+            "Barangays where land use indicates genuine care demand "
+            "(residential zones) but facility coverage is low. "
+            "These are the most actionable locations for new facility "
+            "siting — residential zoning means both that residents "
+            "need services and that planning permission is likely "
+            "obtainable. Sort by any column to prioritise by "
+            "population size, facility type, or accessibility ratio."
+        )
+
+        import pandas as _pd3
+
+        _RESIDENTIAL_ZONES = [
+            "R-3 HIGH DENSITY RESIDENTIAL ZONE",
+            "R-2 MEDIUM DENSITY RESIDENTIAL ZONE",
+            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE",
+            "R-1 LOW DENSITY RESIDENTIAL ZONE",
+            "R-1-A LOW DENSITY RESIDENTIAL SUB-ZONE",
+            "SOCIALIZED HOUSING",
+            "SPECIAL URBAN DEVELOPMENT ZONE",
+        ]
+
+        _FAC_COLS = {
+            "Childcare": "ratio_childcare",
+            "Schools": "ratio_school_6_17",
+            "Health Centers": "ratio_pop_health",
+            "Older Persons Care": "ratio_old_60",
+            "Long-Term Care": "ratio_old_80",
+        }
+
+        _gap_facility = st.selectbox(
+            "Facility type to analyse",
+            list(_FAC_COLS.keys()),
+            key="gap_facility_select"
+        )
+
+        _gap_ratio_col = _FAC_COLS[_gap_facility]
+
+        _gap_df = _zoning_merged[
+            _zoning_merged["Dominant Zone"].isin(_RESIDENTIAL_ZONES)
+        ].copy()
+
+        _gap_df = _gap_df[[
+            "barangay", "district", "pop_census",
+            _gap_ratio_col, "Dominant Zone"
+        ]].dropna(subset=[_gap_ratio_col]).rename(columns={
+            "barangay": "Barangay",
+            "district": "District",
+            "pop_census": "Population",
+            _gap_ratio_col: f"{_gap_facility} per 1,000",
+            "Dominant Zone": "Zone",
+        })
+
+        _gap_df[f"{_gap_facility} per 1,000"] = (
+            _gap_df[f"{_gap_facility} per 1,000"]
+        ).round(2)
+
+        _gap_max_val = float(
+            _gap_df[f"{_gap_facility} per 1,000"].quantile(0.75)
+        )
+        _gap_med_val = float(
+            _gap_df[f"{_gap_facility} per 1,000"].median()
+        )
+
+        # If all values are 0 (e.g. no Older Persons Care
+        # facilities in any residential barangay), the slider
+        # min==max==0 which crashes Streamlit. Show a plain
+        # number_input fallback instead — also more useful since
+        # a slider with range 0–0 conveys nothing.
+        if _gap_max_val <= 0:
+            st.info(
+                f"All residential barangays have zero "
+                f"{_gap_facility} facilities — no ratio range "
+                "to filter. All barangays are shown below."
+            )
+            _gap_threshold = 0.0
+        else:
+            _gap_threshold = st.slider(
+                f"Show barangays below this {_gap_facility} ratio",
+                min_value=0.0,
+                max_value=_gap_max_val,
+                value=min(_gap_med_val, _gap_max_val),
+                step=round(_gap_max_val / 100, 4) or 0.01,
+                key="gap_threshold_slider",
+                help=(
+                    "Barangays with a ratio below this value are "
+                    "shown — lower = more underserved relative to "
+                    "their residential zone population."
+                )
+            )
+
+        _gap_filtered = (
+            _gap_df[
+                _gap_df[f"{_gap_facility} per 1,000"]
+                <= _gap_threshold
+            ]
+            .sort_values(
+                [f"{_gap_facility} per 1,000", "Population"],
+                ascending=[True, False]
+            )
+        )
+
+        _g1, _g2, _g3 = st.columns(3)
+        with _g1:
+            with st.container(border=True):
+                st.metric(
+                    "Residential barangays below threshold",
+                    len(_gap_filtered)
+                )
+        with _g2:
+            with st.container(border=True):
+                st.metric(
+                    "Total population in gap barangays",
+                    f"{int(_gap_filtered['Population'].sum()):,}"
+                )
+        with _g3:
+            with st.container(border=True):
+                st.metric(
+                    "Zero-facility barangays",
+                    int((_gap_filtered[f"{_gap_facility} per 1,000"] == 0).sum())
+                )
+
+        if _gap_filtered.empty:
+            st.info(
+                "No residential barangays below this threshold. "
+                "Try raising the slider."
+            )
+        else:
+            import plotly.express as _px3
+
+            _ratio_col = f"{_gap_facility} per 1,000"
+            _zero_gap  = _gap_filtered[_gap_filtered[_ratio_col] == 0]
+            _nz_gap    = _gap_filtered[_gap_filtered[_ratio_col] >  0]
+
+            if _nz_gap.empty:
+                st.info(
+                    "All residential barangays below the threshold "
+                    "have zero facilities — see the table below."
+                )
+            else:
+                _fig_gap = _px3.bar(
+                    _nz_gap.sort_values(_ratio_col, ascending=True).head(20),
+                    x=_ratio_col,
+                    y="Barangay",
+                    orientation="h",
+                    color=_ratio_col,
+                    color_continuous_scale="Reds_r",
+                    title=(
+                        f"Top 20 Residential Barangays with Lowest "
+                        f"{_gap_facility} Coverage (excl. zero-facility)"
+                    ),
+                    text=_ratio_col,
+                    hover_data=["District", "Zone", "Population"],
+                )
+                _fig_gap.update_traces(
+                    texttemplate="%{text:.2f}",
+                    textposition="outside"
+                )
+                _fig_gap.update_layout(
+                    xaxis=dict(
+                        range=[0, _nz_gap[_ratio_col].max() * 1.3],
+                        title=f"{_gap_facility} per 1,000 population"
+                    ),
+                    coloraxis_showscale=False,
+                    height=max(380, min(len(_nz_gap), 20) * 22 + 80),
+                    margin=dict(l=160, r=80, t=60, b=40),
+                )
+                with st.container(border=True):
+                    st.plotly_chart(_fig_gap, width="stretch")
+
+        st.subheader("Full Gap Table")
+        st.caption(
+            "Residential barangays below the selected threshold "
+            "with at least one facility, sorted by lowest ratio "
+            "then highest population. Zero-facility barangays are "
+            "shown separately below."
+        )
+
+        _ratio_col = f"{_gap_facility} per 1,000"
+        _table_nz = _gap_filtered[
+            _gap_filtered[_ratio_col] > 0
+        ].reset_index(drop=True)
+
+        with st.container(border=True):
+            st.dataframe(_table_nz, width="stretch")
+
+        st.download_button(
+            label="Download gap table as CSV",
+            data=_table_nz.to_csv(index=False).encode("utf-8"),
+            file_name=f"qc_facility_zone_gap_{_gap_facility.lower().replace(' ','_')}.csv",
+            mime="text/csv",
+        )
+
+        # Zero-facility barangays shown separately below the table
+        _zero_table = _gap_filtered[
+            _gap_filtered[_ratio_col] == 0
+        ].reset_index(drop=True)
+
+        if len(_zero_table) > 0:
+            st.subheader("Barangays with Zero Facilities")
+            st.caption(
+                f"{len(_zero_table)} residential barangays have no "
+                f"{_gap_facility} facilities at all — these represent "
+                "the most critical gaps and should be prioritised "
+                "for new facility siting. Sorted by population "
+                "to surface highest-impact locations first."
+            )
+            with st.container(border=True):
+                st.dataframe(
+                    _zero_table[
+                        ["Barangay", "District", "Population", "Zone"]
+                    ].sort_values("Population", ascending=False)
+                    .reset_index(drop=True),
+                    width="stretch"
+                )
+            st.download_button(
+                label="Download zero-facility barangays as CSV",
+                data=_zero_table.to_csv(index=False).encode("utf-8"),
+                file_name=f"qc_zero_facility_{_gap_facility.lower().replace(' ','_')}.csv",
+                mime="text/csv",
+            )
+
+    with ztab4:
+
+        st.markdown("### Zone × Facility Type Cross-Table")
+
+        st.caption(
+            "For each dominant zone type, how many facilities of "
+            "each type exist across all barangays with that zone. "
+            "Answers: are we placing facilities in the right zones? "
+            "Residential zones should have the most childcare, "
+            "schools, and health centers; institutional zones should "
+            "anchor older persons care and long-term care. "
+            "Gaps (0s) in residential rows for care facility types "
+            "indicate potential siting opportunities."
+        )
+
+        import pandas as _pd4
+
+        _FAC_COLS_ALL = [
+            "Childcare",
+            "Schools",
+            "Health centers",
+            "Older persons care",
+            "Long-term care and rehabilitation services",
+            "Quezon City satellite offices for services",
+        ]
+
+        _cross = (
+            _zoning_merged
+            .groupby("Dominant Zone")[
+                [c for c in _FAC_COLS_ALL
+                 if c in _zoning_merged.columns]
+            ]
+            .sum()
+            .astype(int)
+            .reset_index()
+        )
+
+        # Sort by total facilities descending
+        _cross["Total"] = _cross[
+            [c for c in _FAC_COLS_ALL if c in _cross.columns]
+        ].sum(axis=1)
+        _cross = _cross.sort_values("Total", ascending=False)
+
+        # Rename for display
+        _cross = _cross.rename(columns={
+            "Dominant Zone": "Zone",
+            "Long-term care and rehabilitation services": "Long-Term Care",
+            "Quezon City satellite offices for services": "Action Offices",
+            "Health centers": "Health Centers",
+            "Older persons care": "Older Persons Care",
+        })
+
+        with st.container(border=True):
+            st.dataframe(
+                _cross.set_index("Zone"),
+                width="stretch"
+            )
+
+        st.caption(
+            "Rows sorted by total facility count. "
+            "Unknown = barangays where zoning data could not be matched."
+        )
+
+        # Heatmap view
+        import plotly.express as _px4
+
+        _heat_cols = [
+            c for c in [
+                "Childcare", "Schools", "Health Centers",
+                "Older Persons Care", "Long-Term Care", "Action Offices"
+            ] if c in _cross.columns
+        ]
+
+        _fig_heat = _px4.imshow(
+            _cross.set_index("Zone")[_heat_cols],
+            text_auto=True,
+            color_continuous_scale="Purples",
+            title="Facility Count by Zone Type",
+            aspect="auto",
+        )
+        _fig_heat.update_layout(
+            xaxis_title="Facility Type",
+            yaxis_title="",
+            coloraxis_showscale=False,
+            margin=dict(l=300, r=40, t=60, b=40),
+        )
+
+        with st.container(border=True):
+            st.plotly_chart(_fig_heat, width="stretch")
+
+        st.download_button(
+            label="Download cross-table as CSV",
+            data=_cross.to_csv(index=False).encode("utf-8"),
+            file_name="qc_zone_facility_cross_table.csv",
+            mime="text/csv",
         )
