@@ -656,7 +656,7 @@ def build_explorer_map(
             "binary": False
         },
         "Flood Inundation (100-yr)": {
-            "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+            "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
             "colormap": "Blues",
             "binary": True
         }
@@ -943,9 +943,6 @@ if st.sidebar.button(
     st.session_state.page = "Home"
     st.rerun()
 
-st.sidebar.subheader("Care Maps")
-
-
 # --------------------------------------------------
 # POPULATION
 # --------------------------------------------------
@@ -956,6 +953,8 @@ if st.sidebar.button(
 ):
     st.session_state.page = "Population Overview"
     st.rerun()
+
+st.sidebar.subheader("Care Maps")
 
 
 # --------------------------------------------------
@@ -1148,10 +1147,10 @@ if st.sidebar.button(
 st.sidebar.subheader("Additional Tools")
 
 if st.sidebar.button(
-    "Care Services Explorer",
+    "Supply and Climate",
     width='stretch'
 ):
-    st.session_state.page = "Care Services Explorer"
+    st.session_state.page = "Supply and Climate"
     st.rerun()
 
 if st.sidebar.button(
@@ -1195,7 +1194,7 @@ if st.sidebar.button(
 
 page = st.session_state.page
 
-if page == "Care Services Explorer":
+if page == "Supply and Climate":
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("## Child Care")
@@ -1403,7 +1402,7 @@ if page == "Home":
             (
                 "#7F47ED",
                 "Analysis Tools",
-                "Care Services Explorer, Accessibility Analysis, "
+                "Supply and Climate, Accessibility Analysis, "
                 "Care Planning & Investment Priorities, and "
                 "Barangay Clusters."
             ),
@@ -1620,11 +1619,10 @@ elif page == "Population Overview":
     # TABS
     # =====================================================
 
-    tab1, tab2, tab3 = st.tabs(
+    tab1, tab2 = st.tabs(
         [
             "Barangay Analysis",
-            "District Analysis",
-            "Socio-Economic Indicators"
+            "District Analysis"
         ]
     )
 
@@ -2196,6 +2194,11 @@ elif page == "Population Overview":
             value_name="Population"
         )
 
+        # Format district names for consistency across all pages
+        district_age_long["District"] = format_district(
+            district_age_long["District"]
+        )
+
         fig_age = px.bar(
             district_age_long,
             x="District",
@@ -2267,8 +2270,17 @@ elif page == "Population Overview":
                 st.plotly_chart(fig_pyramid, width="stretch")
 
         with col_pyr2:
+            # Format district names for consistency
+            ratio_data = district_pop.sort_values(
+                "Sex Ratio",
+                ascending=False
+            ).copy()
+            ratio_data["District"] = format_district(
+                ratio_data["District"]
+            )
+
             fig_ratio = px.bar(
-                district_pop.sort_values("Sex Ratio", ascending=False),
+                ratio_data,
                 x="District",
                 y="Sex Ratio",
                 title="Sex Ratio (M/F ×100) by District",
@@ -2336,536 +2348,6 @@ elif page == "Population Overview":
     # =====================================================
     # SOCIO-ECONOMIC TAB
     # =====================================================
-    with tab3:
-
-        st.markdown("""
-        Contextual socio-economic indicators at the barangay
-        level — household composition, food insecurity, and
-        housing conditions (2024 CBMS), plus sex ratio and the
-        share of working-age women.
-        """)
-
-        st.info(
-            "**CBMS coverage note.** The household-survey "
-            "indicators below (household size, nuclear families "
-            "per household, food insecurity, housing inadequacy) "
-            "come from the 2024 Community-Based Monitoring System, "
-            "which covers roughly 71% of Quezon City's census "
-            "population — not a full count. They should be read "
-            "as indicative of conditions in responding households, "
-            "not as exact citywide totals."
-        )
-
-        # ---------------------------------------------------
-        # MAP DATA
-        # ---------------------------------------------------
-
-        # Domestic worker counts live in a separate source
-        # (domestic_workers_barangay, from
-        # load_domestic_workers() in functions.py) rather than
-        # demographics.csv, so they're merged in here, once,
-        # before the indicator dict below — everything
-        # downstream (KPIs, map, top-15 table) just sees three
-        # more plain numeric columns and treats them exactly
-        # like every other socio-economic indicator.
-        demographics_with_dw = demographics.copy()
-
-        demographics_with_dw["barangay_key"] = (
-            demographics_with_dw["barangay"]
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
-
-        demographics_with_dw = demographics_with_dw.merge(
-            domestic_workers_barangay[
-                [
-                    "barangay_key",
-                    "domestic_workers_female",
-                    "domestic_workers_male",
-                    "domestic_workers_total"
-                ]
-            ],
-            on="barangay_key",
-            how="left"
-        )
-
-        demographics_with_dw["domestic_workers_per_1000_total"] = (
-            demographics_with_dw["domestic_workers_total"]
-            / demographics_with_dw["pop_census"]
-            * 1000
-        )
-
-        demographics_with_dw["domestic_workers_per_1000_female"] = (
-            demographics_with_dw["domestic_workers_female"]
-            / demographics_with_dw["pop_female"]
-            * 1000
-        )
-
-        demographics_with_dw["domestic_workers_per_1000_male"] = (
-            demographics_with_dw["domestic_workers_male"]
-            / demographics_with_dw["pop_male"]
-            * 1000
-        )
-
-        socio_indicators = {
-            "Population (Census)": {
-                "col": "pop_census",
-                "description": (
-                    "Total population, by barangay (2024 "
-                    "census). Standalone population "
-                    "distribution map, separate from the "
-                    "per-1,000 domestic worker rates above — "
-                    "for seeing raw population scale on its "
-                    "own, in the same map/table format as "
-                    "every other indicator here."
-                )
-            },
-            "Sex Ratio (Males per 100 Females)": {
-                "col": "sex_ratio_m_per_100f",
-                "description": (
-                    "Males per 100 females per barangay."
-                )
-            },
-            "Share of Working-Age Women (%)": {
-                "col": "share_women_18_59_pct",
-                "description": (
-                    "Women aged 18–59 as a share of total "
-                    "population — a proxy for female labor "
-                    "available for paid work and unpaid care."
-                )
-            },
-            "Average Household Size": {
-                "col": "cbms_avg_household_size",
-                "description": (
-                    "Average number of persons per household. "
-                    "Context on household dependency load."
-                )
-            },
-            "Average Nuclear Families per Household": {
-                "col": "cbms_avg_nuclear_families_per_hh",
-                "description": (
-                    "Average number of nuclear families per "
-                    "household; values above 1 indicate "
-                    "doubling-up or shared dwellings."
-                )
-            },
-            "Food Insecurity Prevalence (%)": {
-                "col": "cbms_food_insecurity_prevalence_pct",
-                "description": (
-                    "Share of households worried about not "
-                    "having enough food to eat (mild / headline "
-                    "food insecurity)."
-                )
-            },
-            "Severe Food Insecurity (%)": {
-                "col": "cbms_food_severe_wholeday_pct",
-                "description": (
-                    "Share of households that went without "
-                    "eating for a whole day (most severe food "
-                    "insecurity)."
-                )
-            },
-            "Food Insecurity Intensity Score": {
-                "col": "cbms_food_intensity_score",
-                "description": (
-                    "Severity-weighted score across all eight "
-                    "food insecurity items (1 = worried, 8 = "
-                    "whole day without eating)."
-                )
-            },
-            "Housing Inadequacy Index (%)": {
-                "col": "cbms_housing_inadequacy_index_pct",
-                "description": (
-                    "Average share of households with unimproved "
-                    "(natural, light, or salvaged) roof, walls, "
-                    "and floor."
-                )
-            },
-            "Severe Housing Deprivation (%)": {
-                "col": "cbms_housing_makeshift_severe_pct",
-                "description": (
-                    "Share of households using makeshift / "
-                    "salvaged / improvised building materials."
-                )
-            },
-            "Total Domestic Workers (Count)": {
-                "col": "domestic_workers_total",
-                "description": (
-                    "Total registered domestic workers, by "
-                    "barangay (raw count, not a rate). "
-                    "Source: processed/indicators/"
-                    "domestic_workers.csv."
-                )
-            },
-            "Female Domestic Workers (Count)": {
-                "col": "domestic_workers_female",
-                "description": (
-                    "Registered female domestic workers, by "
-                    "barangay (raw count, not a rate)."
-                )
-            },
-            "Male Domestic Workers (Count)": {
-                "col": "domestic_workers_male",
-                "description": (
-                    "Registered male domestic workers, by "
-                    "barangay (raw count, not a rate)."
-                )
-            },
-            "Population Distribution vs. Total Domestic Workers": {
-                "col": "domestic_workers_per_1000_total",
-                "description": (
-                    "Registered domestic workers per 1,000 "
-                    "residents, by barangay. Source: "
-                    "processed/indicators/domestic_workers.csv "
-                    "(separate from the CBMS indicators below)."
-                )
-            },
-            "Population Distribution vs. Female Domestic Workers": {
-                "col": "domestic_workers_per_1000_female",
-                "description": (
-                    "Registered female domestic workers per "
-                    "1,000 female residents, by barangay."
-                )
-            },
-            "Population Distribution vs. Male Domestic Workers": {
-                "col": "domestic_workers_per_1000_male",
-                "description": (
-                    "Registered male domestic workers per "
-                    "1,000 male residents, by barangay."
-                )
-            }
-        }
-
-        selected_socio_label = st.selectbox(
-            "Select Socio-Economic Indicator",
-            list(socio_indicators.keys()),
-            key="socio_indicator_select"
-        )
-
-        selected_socio_col = (
-            socio_indicators[selected_socio_label]["col"]
-        )
-
-        st.caption(
-            socio_indicators[selected_socio_label]["description"]
-        )
-
-        # Normalize join keys defensively, same convention used
-        # throughout this dashboard.
-        demographics_socio = demographics_with_dw[
-            ["barangay", "district", selected_socio_col]
-        ].copy()
-
-        demographics_socio["barangay"] = (
-            demographics_socio["barangay"]
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
-
-        socio_map = barangay_map.merge(
-            demographics_socio,
-            left_on="barangay_name",
-            right_on="barangay",
-            how="left"
-        )
-
-        socio_map = socio_map.rename(
-            columns={"district": "District"}
-        )
-
-        # ---------------------------------------------------
-        # KPI CARDS
-        # ---------------------------------------------------
-
-        socio_avg = socio_map[selected_socio_col].mean()
-        socio_max_row = socio_map.loc[
-            socio_map[selected_socio_col].idxmax()
-        ]
-        socio_min_row = socio_map.loc[
-            socio_map[selected_socio_col].idxmin()
-        ]
-
-        sc1, sc2, sc3 = st.columns(3)
-
-        kpi_card(
-            sc1,
-            "Citywide Average",
-            f"{socio_avg:,.2f}"
-        )
-
-        kpi_card(
-            sc2,
-            "Highest Barangay",
-            f"{socio_max_row['barangay_name'].title()} "
-            f"({socio_max_row[selected_socio_col]:,.2f})"
-        )
-
-        kpi_card(
-            sc3,
-            "Lowest Barangay",
-            f"{socio_min_row['barangay_name'].title()} "
-            f"({socio_min_row[selected_socio_col]:,.2f})"
-        )
-
-        st.divider()
-
-        # ---------------------------------------------------
-        # MAP
-        # ---------------------------------------------------
-
-        st.subheader(
-            f"Barangay Map — {selected_socio_label}"
-        )
-
-        socio_vmin = socio_map[selected_socio_col].quantile(0.05)
-        socio_vmax = socio_map[selected_socio_col].quantile(0.95)
-
-        socio_map["fill_color"] = (
-            socio_map[selected_socio_col].apply(
-                lambda v: value_to_rgba(v, socio_vmin, socio_vmax)
-            )
-        )
-
-        socio_geojson = json.loads(
-            socio_map.to_json()
-        )
-
-        view_state = pdk.ViewState(
-            latitude=center_lat,
-            longitude=center_lon,
-            zoom=11,
-            pitch=0,
-            min_zoom=11,
-            max_zoom=17,
-        )
-
-        socio_layer = pdk.Layer(
-            "GeoJsonLayer",
-            data=socio_geojson,
-            stroked=True,
-            filled=True,
-            get_fill_color="properties.fill_color",
-            get_line_color=[102, 102, 102],
-            line_width_min_pixels=0.5,
-            pickable=True,
-            auto_highlight=True
-        )
-
-        tooltip = {
-            "html": f"""
-            <b>{{barangay_name}}</b><br/>
-            {selected_socio_label}: {{{selected_socio_col}}}
-            """,
-            "style": {
-                "backgroundColor": "white",
-                "color": "black",
-                "fontSize": "12px"
-            }
-        }
-
-        deck = pdk.Deck(
-            layers=[
-                socio_layer
-            ],
-            initial_view_state=view_state,
-            tooltip=tooltip,
-            map_style="light"
-        )
-
-        with st.container(border=True, key="qcd-chart-10"):
-            st.pydeck_chart(
-                deck,
-                height=650,
-                width="stretch"
-            )
-
-            # Same gap as the Barangay/District Analysis maps —
-            # pydeck draws the fill color but never explains it.
-            # Unit is derived from the column name itself rather
-            # than a separate hand-maintained lookup, since these
-            # columns follow a consistent naming convention
-            # (_pct, per_1000, per_100f) that would otherwise need
-            # to be kept in sync with socio_indicators by hand.
-            if selected_socio_col.endswith("_pct"):
-                socio_unit = "%"
-            elif "per_1000" in selected_socio_col:
-                socio_unit = "per 1,000"
-            elif "per_100f" in selected_socio_col:
-                socio_unit = "per 100 females"
-            else:
-                socio_unit = ""
-
-            st.markdown(
-                render_colormap_legend_html(
-                    "Purples",
-                    socio_vmin,
-                    socio_vmax,
-                    unit=socio_unit,
-                    label=f"{selected_socio_label} (darker = higher)"
-                ),
-                unsafe_allow_html=True
-            )
-
-        st.divider()
-
-        # ---------------------------------------------------
-        # TOP / BOTTOM BARANGAYS
-        # ---------------------------------------------------
-
-        st.subheader(
-            f"Top 15 Barangays by {selected_socio_label}"
-        )
-
-        with st.container(border=True, key="qcd-chart-11"):
-            st.dataframe(
-                socio_map[
-                    ["barangay_name", "District", selected_socio_col]
-                ]
-                .rename(
-                    columns={
-                        "barangay_name": "Barangay",
-                        selected_socio_col: selected_socio_label
-                    }
-                )
-                .dropna(subset=[selected_socio_label])
-                .sort_values(selected_socio_label, ascending=False)
-                .head(15),
-                width="stretch"
-            )
-
-        st.divider()
-
-        # ---------------------------------------------------
-        # POPULATION vs. DOMESTIC WORKERS (SIDE BY SIDE)
-        # (Cecilia's original ask, per Zainab's Slack
-        # clarification: population distribution shown
-        # alongside domestic worker counts as two separate
-        # values per barangay — not blended into the per-1,000
-        # rate used by the "Population Distribution vs.
-        # Domestic Workers" choropleths above. Both views stay
-        # on the dashboard per Zainab's "we can keep both".
-        # Uses the same demographics_with_dw frame already
-        # merged with domestic worker counts earlier in this
-        # tab, so no second data load/merge is needed here.)
-        # ---------------------------------------------------
-
-        st.subheader("Domestic Worker Concentration")
-
-        st.caption(
-            "Barangays ranked by raw domestic worker count "
-            "(not population, and not a per-1,000 rate) — for "
-            "resource and outreach planning where what matters "
-            "is where domestic workers are physically "
-            "concentrated, regardless of barangay population "
-            "size. The full table below also includes "
-            "population for reference, alongside the per-1,000 "
-            "rate charts above."
-        )
-
-        dw_compare_sex = st.radio(
-            "Domestic worker count to compare",
-            ["Total", "Female", "Male"],
-            horizontal=True,
-            key="dw_compare_sex"
-        )
-
-        dw_compare_col_map = {
-            "Total": (
-                "domestic_workers_total", "pop_census",
-                "Total Population"
-            ),
-            "Female": (
-                "domestic_workers_female", "pop_female",
-                "Female Population"
-            ),
-            "Male": (
-                "domestic_workers_male", "pop_male",
-                "Male Population"
-            ),
-        }
-
-        dw_col, pop_col, pop_label = (
-            dw_compare_col_map[dw_compare_sex]
-        )
-
-        dw_compare_df = demographics_with_dw[
-            ["barangay", "district", pop_col, dw_col]
-        ].dropna(subset=[pop_col, dw_col]).copy()
-
-        dw_compare_df = dw_compare_df.rename(
-            columns={
-                "barangay": "Barangay",
-                "district": "District",
-                pop_col: pop_label,
-                dw_col: f"{dw_compare_sex} Domestic Workers"
-            }
-        )
-
-        # Ranked purely by domestic worker count, not
-        # population — the question this chart answers is
-        # "where are domestic workers concentrated", a
-        # resource-planning/headcount question, not a rate or
-        # correlation question. Population is intentionally left
-        # off this chart; it doesn't help answer that question
-        # and was the source of the earlier scale-mismatch issue
-        # (population in the hundreds of thousands flattening
-        # domestic worker bars to near-invisible). Horizontal
-        # orientation since up to 15 barangay names are easier
-        # to read as y-axis labels than rotated/crowded x-axis
-        # labels.
-        dw_top15 = (
-            dw_compare_df
-            .sort_values(
-                f"{dw_compare_sex} Domestic Workers",
-                ascending=False
-            )
-            .head(15)
-        )
-
-        fig_dw_compare = px.bar(
-            dw_top15.sort_values(
-                f"{dw_compare_sex} Domestic Workers",
-                ascending=True
-            ),
-            x=f"{dw_compare_sex} Domestic Workers",
-            y="Barangay",
-            orientation="h",
-            color=f"{dw_compare_sex} Domestic Workers",
-            color_continuous_scale="Purples",
-            title=(
-                f"Top 15 Barangays by {dw_compare_sex} "
-                "Domestic Worker Count"
-            )
-        )
-
-        fig_dw_compare.update_layout(
-            yaxis_title="",
-            xaxis_title=(
-                f"{dw_compare_sex} Domestic Workers (count)"
-            ),
-            coloraxis_showscale=False
-        )
-
-        with st.container(border=True, key="qcd-chart-88"):
-            st.plotly_chart(
-                fig_dw_compare,
-                width="stretch"
-            )
-
-        with st.expander(
-            "Full barangay table — population vs. domestic "
-            "workers"
-        ):
-            with st.container(border=True, key="qcd-chart-89"):
-                st.dataframe(
-                    dw_compare_df.sort_values(
-                        pop_label, ascending=False
-                    ),
-                    width="stretch"
-                )
-
 if page == "Childcare Centers":
 
     st.markdown(
@@ -3431,6 +2913,11 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
                 "Facilities",
                 ascending=False
             )
+        )
+
+        # Format district names for consistency
+        district_counts["District"] = format_district(
+            district_counts["District"]
         )
 
         fig = px.bar(
@@ -4024,6 +3511,11 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
             )
         )
 
+        # Format district names for consistency
+        district_counts["District"] = format_district(
+            district_counts["District"]
+        )
+
         fig = px.bar(
             district_counts,
             x="District",
@@ -4512,8 +4004,19 @@ elif page == "Health Centers Map":
         != "TOTAL"
     ]
 
+    # Format district names for consistency
+    # Extract numeric part and reformat
+    district_capacity_chart = district_capacity.copy()
+    district_capacity_chart["district"] = district_capacity_chart[
+        "district"
+    ].apply(
+        lambda x: format_district(
+            extract_district_number(x)
+        ) if "District" not in str(x) else x
+    )
+
     fig = px.bar(
-        district_capacity,
+        district_capacity_chart,
         x="district",
         y="health_centers",
         title="Health Centers by District",
@@ -5173,6 +4676,11 @@ elif page == "Older Persons Center Map":
         .reset_index()
     )
 
+    # Format district names for consistency
+    district_seniors["District"] = format_district(
+        district_seniors["District"]
+    )
+
     fig = px.bar(
         district_seniors,
         x="District",
@@ -5195,11 +4703,9 @@ elif page == "Older Persons Center Map":
         .reset_index(name="Facilities")
     )
 
-    facility_counts["District"] = (
-        "District "
-        + facility_counts["District"]
-        .astype(int)
-        .astype(str)
+    # Use standardized format_district function for consistency
+    facility_counts["District"] = format_district(
+        facility_counts["District"]
     )
 
     coverage = district_seniors.merge(
@@ -5762,6 +5268,11 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
         .reset_index(name="Facilities")
     )
 
+    # Format district names for consistency
+    district_counts["District"] = format_district(
+        district_counts["District"]
+    )
+
     fig = px.bar(
         district_counts,
         x="District",
@@ -6050,9 +5561,9 @@ elif page == "Persons with Disabilities":
 
     district_display = demand_district_context.copy()
 
-    district_display["District"] = (
-        "District "
-        + district_display["district"].astype(str)
+    # Use standardized format_district function for consistency
+    district_display["District"] = format_district(
+        district_display["district"]
     )
 
     fig = px.bar(
@@ -6976,7 +6487,7 @@ elif page == "Migration Resource Center":
     with st.container(border=True, key="qcd-chart-52"):
         st.dataframe(_mig_disp, width="stretch")
 
-elif page == "Care Services Explorer":
+elif page == "Supply and Climate":
 
     st.markdown(
         """
@@ -6987,7 +6498,7 @@ elif page == "Care Services Explorer":
             margin-bottom:10px;
             padding-top:0px;
         ">
-            Care Services Explorer
+            Supply and Climate
         </h2>
         """,
         unsafe_allow_html=True
@@ -6995,12 +6506,10 @@ elif page == "Care Services Explorer":
 
     st.caption(
         """
-        Explore childcare centers, schools, health facilities,
-        older persons facilities, rehabilitation centers,
-        migration resource centers, and Quezon City
-        Action Offices on a single map — optionally overlaid
-        with land-surface temperature, vegetation, or flood
-        exposure layers.
+        Visualize care service supply across Quezon City overlaid with
+        climate and hazard data. Identify facilities at risk from flooding,
+        urban heat stress, and vegetation loss — critical for planning
+        climate-resilient care infrastructure.
         """
     )
 
@@ -7138,7 +6647,7 @@ elif page == "Care Services Explorer":
             "binary": False
         },
         "Flood Inundation (100-yr)": {
-            "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+            "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
             "colormap": "Blues",
             "binary": True
         }
@@ -7256,42 +6765,111 @@ elif page == "Care Services Explorer":
     st.divider()
 
     # --------------------------------------------------
-    # SUPPLY-SIDE FLOOD EXPOSURE SUMMARY
-    # (counts, across the *currently selected* service layers
-    # and district, how many facilities sit inside the 100-yr
-    # flood footprint — see flag_facilities_at_risk in
-    # functions.py. The map above no longer offers an at-risk-
-    # only filter or red rings on this page — see the Care
-    # Services Explorer tab inside Climate, Hazard and
-    # Population Analysis for that view — but this summary
-    # stays here since it's a useful count regardless of how
-    # the map is displayed.)
+    # CLIMATE RISK EXPOSURE SUMMARY
+    # Multi-hazard analysis: flood, urban heat, and vegetation
+    # across the currently selected service layers and district
     # --------------------------------------------------
 
-    st.markdown("### Facilities at Risk of Flooding")
+    st.markdown("### Climate Risk Analysis")
 
     st.caption(
         """
-        Facilities whose location falls inside the 100-year
-        flood inundation footprint (>30cm depth), among the
-        service layers and district currently selected above.
+        Facilities exposed to multiple climate hazards: 100-year flood zones (>50cm),
+        urban heat stress (high land-surface temperature), and vegetation loss stress
+        (low NDVI). Counts shown among the service layers and district selected above.
         """
     )
+
+    # --------------------------------------------------
+    # METHODOLOGY EXPLANATIONS
+    # --------------------------------------------------
+
+    with st.expander("📊 How Are These Indicators Calculated?"):
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**🌊 Flood Risk**")
+            st.info(
+                """
+                **Definition:** Facilities located within 100-year flood inundation
+                zones where water depth exceeds 50cm.
+
+                **Data Source:** IPCC flood modeling for Quezon City
+
+                **Threshold:** Inundation depth > 50cm
+
+                **Interpretation:** Higher thresholds indicate more severe flood events.
+                Facilities in these zones face risks to service delivery during extreme
+                weather events.
+                """
+            )
+
+            st.markdown("**🌡️ Urban Heat Stress**")
+            st.info(
+                """
+                **Definition:** Facilities located in the highest-temperature urban areas.
+
+                **Data Source:** Landsat 8 Land-Surface Temperature (LST) satellite data,
+                7-year summer average
+
+                **Threshold:** Top 25% of LST values (highest quartile)
+
+                **Interpretation:** These areas experience the most intense urban heat
+                island effect. Staff and service users face heat-related health risks,
+                and infrastructure may require additional cooling/resilience measures.
+                """
+            )
+
+        with col2:
+            st.markdown("**🌱 Vegetation Loss (Stress)**")
+            st.info(
+                """
+                **Definition:** Facilities in areas with low vegetation coverage and health.
+
+                **Data Source:** NDVI (Normalized Difference Vegetation Index)
+                from Landsat 8, 2025 mean
+
+                **Threshold:** Bottom 25% of NDVI values (lowest quartile)
+
+                **Interpretation:** Low vegetation indicates urban areas lacking green space,
+                trees, or grass. These areas have reduced cooling benefits, increased
+                runoff during flooding, and lower environmental quality around facilities.
+                """
+            )
+
+        st.markdown("**⚠️ Multi-Hazard Exposure**")
+        st.warning(
+            """
+            **Definition:** Facilities exposed to 2 or more climate hazards simultaneously.
+
+            **Calculation:** A facility is counted as multi-hazard exposed if it meets
+            the thresholds for at least 2 of these conditions:
+            - Located in 100-year flood zone (>50cm depth), AND/OR
+            - Located in top 25% heat stress area, AND/OR
+            - Located in bottom 25% vegetation area
+
+            **Interpretation:** Compounded climate risks. Facilities with multiple exposures
+            face cascading climate impacts and require comprehensive resilience planning.
+            For example: a facility in a flood zone AND high heat area needs both flood
+            protection and cooling systems.
+            """
+        )
 
     if not selected_layers:
 
         st.info(
             "Select at least one service layer above to see "
-            "flood exposure counts."
+            "climate risk exposure."
         )
 
     else:
 
-        exposure_rows = []
+        climate_risk_rows = []
 
         for layer_name in selected_layers:
 
-            layer_df = service_layers[layer_name]["df"]
+            layer_df = service_layers[layer_name]["df"].copy()
 
             if selected_district != "All":
 
@@ -7305,79 +6883,184 @@ elif page == "Care Services Explorer":
 
             total_n = len(layer_df)
 
-            at_risk_n = int(
+            # Flood risk (existing column)
+            flood_risk_n = int(
                 layer_df.get(
                     "flood_risk",
                     pd.Series(False, index=layer_df.index)
                 ).sum()
             )
 
-            exposure_rows.append({
+            # Urban heat risk (high LST > 35°C or top quartile)
+            heat_risk_n = 0
+            if "lst_value" in layer_df.columns:
+                heat_threshold = layer_df["lst_value"].quantile(0.75)
+                heat_risk_n = int((layer_df["lst_value"] >= heat_threshold).sum())
+
+            # Vegetation stress (low NDVI < 25th percentile)
+            veg_risk_n = 0
+            if "ndvi_value" in layer_df.columns:
+                veg_threshold = layer_df["ndvi_value"].quantile(0.25)
+                veg_risk_n = int((layer_df["ndvi_value"] <= veg_threshold).sum())
+
+            # Combined exposure (at least 2 of 3 hazards)
+            combined_hazards = 0
+            if "lst_value" in layer_df.columns and "ndvi_value" in layer_df.columns:
+                heat_thresh = layer_df["lst_value"].quantile(0.75)
+                veg_thresh = layer_df["ndvi_value"].quantile(0.25)
+                flood_exposed = layer_df.get("flood_risk", pd.Series(False, index=layer_df.index))
+                heat_exposed = layer_df["lst_value"] >= heat_thresh
+                veg_exposed = layer_df["ndvi_value"] <= veg_thresh
+
+                hazard_count = flood_exposed.astype(int) + heat_exposed.astype(int) + veg_exposed.astype(int)
+                combined_hazards = int((hazard_count >= 2).sum())
+
+            climate_risk_rows.append({
                 "Service Type": layer_name,
                 "Total Facilities": total_n,
-                "In Flood Zone": at_risk_n,
-                "% At Risk": (
-                    round(100 * at_risk_n / total_n, 1)
-                    if total_n > 0 else 0.0
-                )
+                "Flood Risk": flood_risk_n,
+                "Heat Risk": heat_risk_n,
+                "Vegetation Stress": veg_risk_n,
+                "Multi-Hazard Exposure": combined_hazards
             })
 
-        exposure_df = pd.DataFrame(exposure_rows)
+        climate_risk_df = pd.DataFrame(climate_risk_rows)
 
-        total_facilities = exposure_df["Total Facilities"].sum()
-        total_at_risk = exposure_df["In Flood Zone"].sum()
+        total_facilities = climate_risk_df["Total Facilities"].sum()
+        total_flood = climate_risk_df["Flood Risk"].sum()
+        total_heat = climate_risk_df["Heat Risk"].sum()
+        total_veg = climate_risk_df["Vegetation Stress"].sum()
+        total_combined = climate_risk_df["Multi-Hazard Exposure"].sum()
 
-        kpi1, kpi2, kpi3 = st.columns(3)
+        # KPI Cards
+        st.markdown("**Hazard Exposure Summary**")
+
+        kpi_cols = st.columns(5)
 
         kpi_card(
-            kpi1,
-            "Facilities Selected",
+            kpi_cols[0],
+            "Total Facilities",
             f"{total_facilities:,}"
         )
 
         kpi_card(
-            kpi2,
-            "In Flood Zone",
-            f"{total_at_risk:,}",
+            kpi_cols[1],
+            "Flood Risk",
+            f"{total_flood:,}",
             "down_good"
         )
 
         kpi_card(
-            kpi3,
-            "% At Risk",
-            f"{(100 * total_at_risk / total_facilities):.1f}%"
-            if total_facilities > 0 else "0.0%",
+            kpi_cols[2],
+            "Heat Stress",
+            f"{total_heat:,}",
             "down_good"
         )
 
-        fig_exposure = px.bar(
-            exposure_df.sort_values(
-                "In Flood Zone",
-                ascending=False
-            ),
-            x="Service Type",
-            y="In Flood Zone",
-            color="% At Risk",
-            color_continuous_scale="Reds",
-            title="Facilities in 100-yr Flood Zone, by Service Type"
+        kpi_card(
+            kpi_cols[3],
+            "Vegetation Loss",
+            f"{total_veg:,}",
+            "down_good"
         )
 
-        fig_exposure.update_layout(
-            xaxis_title="",
-            yaxis_title="Facilities in Flood Zone"
+        kpi_card(
+            kpi_cols[4],
+            "Multi-Hazard Risk",
+            f"{total_combined:,}",
+            "down_good"
         )
 
-        with st.container(border=True, key="qcd-chart-53"):
-            st.plotly_chart(
-                fig_exposure,
-                width="stretch"
+        # Quick reference tooltips
+        st.markdown(
+            """
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 10px; margin-top: 8px; font-size: 0.75rem; color: #666;">
+                <div style="text-align: center;"><strong>All Selected</strong></div>
+                <div style="text-align: center;"><strong>In Flood Zone</strong><br><span style="font-size: 0.7rem;">(>50cm depth)</span></div>
+                <div style="text-align: center;"><strong>Top Heat Areas</strong><br><span style="font-size: 0.7rem;">(Highest LST)</span></div>
+                <div style="text-align: center;"><strong>Low Vegetation</strong><br><span style="font-size: 0.7rem;">(Lowest NDVI)</span></div>
+                <div style="text-align: center;"><strong>2+ Hazards</strong><br><span style="font-size: 0.7rem;">(Combined Risk)</span></div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.divider()
+
+        # Visualization tabs
+        vis_tab1, vis_tab2, vis_tab3 = st.tabs([
+            "Hazard Breakdown",
+            "Service Type Comparison",
+            "Detailed Table"
+        ])
+
+        with vis_tab1:
+            # Stacked bar chart showing all three hazards
+            hazard_summary = pd.DataFrame({
+                "Hazard": ["Flood Risk", "Heat Stress", "Vegetation Loss", "Multi-Hazard"],
+                "Count": [total_flood, total_heat, total_veg, total_combined]
+            })
+
+            fig_hazards = px.bar(
+                hazard_summary,
+                x="Hazard",
+                y="Count",
+                color="Hazard",
+                color_discrete_map={
+                    "Flood Risk": "#1E40AF",
+                    "Heat Stress": "#DC2626",
+                    "Vegetation Loss": "#16A34A",
+                    "Multi-Hazard": "#9333EA"
+                },
+                title="Climate Risk Exposure by Hazard Type"
             )
 
-        with st.container(border=True, key="qcd-chart-54"):
-            st.dataframe(
-                exposure_df,
-                width="stretch"
+            fig_hazards.update_layout(
+                xaxis_title="",
+                yaxis_title="Number of Facilities",
+                showlegend=False
             )
+
+            with st.container(border=True, key="qcd-chart-53"):
+                st.plotly_chart(
+                    fig_hazards,
+                    width="stretch"
+                )
+
+        with vis_tab2:
+            # Service type comparison
+            fig_service = px.bar(
+                climate_risk_df.sort_values("Multi-Hazard Exposure", ascending=False),
+                x="Service Type",
+                y=["Flood Risk", "Heat Risk", "Vegetation Stress"],
+                title="Climate Risk Exposure by Service Type",
+                barmode="group",
+                color_discrete_map={
+                    "Flood Risk": "#1E40AF",
+                    "Heat Risk": "#DC2626",
+                    "Vegetation Stress": "#16A34A"
+                }
+            )
+
+            fig_service.update_layout(
+                xaxis_title="",
+                yaxis_title="Number of Facilities",
+                hovermode="x unified"
+            )
+
+            with st.container(border=True, key="qcd-chart-55"):
+                st.plotly_chart(
+                    fig_service,
+                    width="stretch"
+                )
+
+        with vis_tab3:
+            # Detailed data table
+            with st.container(border=True, key="qcd-chart-56"):
+                st.dataframe(
+                    climate_risk_df,
+                    width="stretch"
+                )
 
 
 elif page == "Accessibility Analysis":
@@ -7399,6 +7082,21 @@ elif page == "Accessibility Analysis":
     )
 
     # ==================================================
+    # LOAD MAPS (for Socio-Economic Indicators tab)
+    # ==================================================
+    barangay_map = gpd.read_file(
+        "processed/qc_barangays.geojson"
+    )
+
+    # Normalize barangay_name for matching with demographics data
+    barangay_map["barangay_name"] = (
+        barangay_map["barangay_name"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    # ==================================================
     # FACILITY-PER-1,000 RATIO INDICATORS
     # (shared with the Accessibility Map page — see
     # ACCESSIBILITY_RATIO_INDICATORS in functions.py)
@@ -7413,10 +7111,11 @@ elif page == "Accessibility Analysis":
 
     selected_ratio = ratio_indicators[selected_ratio_label]
 
-    tab1, tab2 = st.tabs(
+    tab1, tab2, tab3 = st.tabs(
         [
             "District Analysis",
-            "Barangay Analysis"
+            "Barangay Analysis",
+            "Socio-Economic Indicators"
         ]
     )
 
@@ -7818,12 +7517,16 @@ elif page == "Accessibility Analysis":
         # CHARTS
         # ==================================================
 
+        # Format district names for consistency across all pages
+        access_chart = access.copy()
+        access_chart["District"] = format_district(access_chart["District"])
+
         left, right = st.columns(2)
 
         with left:
 
             fig = px.bar(
-                access.sort_values(
+                access_chart.sort_values(
                     selected_ratio_label,
                     ascending=False
                 ),
@@ -7848,7 +7551,7 @@ elif page == "Accessibility Analysis":
         with right:
 
             fig = px.bar(
-                access.sort_values(
+                access_chart.sort_values(
                     "Accessibility Index",
                     ascending=False
                 ),
@@ -7876,7 +7579,7 @@ elif page == "Accessibility Analysis":
         # ==================================================
 
         fig = px.scatter(
-            access,
+            access_chart,
             x="Relevant_Population",
             y="Facility_Type_Count",
             size="Facility_Type_Count",
@@ -8463,6 +8166,379 @@ elif page == "Accessibility Analysis":
                 ],
                 width="stretch"
             )
+
+    with tab3:
+
+        st.markdown("""
+        Contextual socio-economic indicators at the barangay
+        level — household composition, food insecurity, and
+        housing conditions (2024 CBMS), plus sex ratio and the
+        share of working-age women.
+        """)
+
+        st.info(
+            "**CBMS coverage note.** The household-survey "
+            "indicators below (household size, nuclear families "
+            "per household, food insecurity, housing inadequacy) "
+            "come from the 2024 Community-Based Monitoring System, "
+            "which covers roughly 71% of Quezon City's census "
+            "population — not a full count. They should be read "
+            "as indicative of conditions in responding households, "
+            "not as exact citywide totals."
+        )
+
+        # ---------------------------------------------------
+        # MAP DATA
+        # ---------------------------------------------------
+
+        # Domestic worker counts live in a separate source
+        # (domestic_workers_barangay, from
+        # load_domestic_workers() in functions.py) rather than
+        # demographics.csv, so they're merged in here, once,
+        # before the indicator dict below — everything
+        # downstream (KPIs, map, top-15 table) just sees three
+        # more plain numeric columns and treats them exactly
+        # like every other socio-economic indicator.
+        demographics_with_dw = demographics.copy()
+
+        demographics_with_dw["barangay_key"] = (
+            demographics_with_dw["barangay"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+        demographics_with_dw = demographics_with_dw.merge(
+            domestic_workers_barangay[
+                [
+                    "barangay_key",
+                    "domestic_workers_female",
+                    "domestic_workers_male",
+                    "domestic_workers_total"
+                ]
+            ],
+            on="barangay_key",
+            how="left"
+        )
+
+        demographics_with_dw["domestic_workers_per_1000_total"] = (
+            demographics_with_dw["domestic_workers_total"]
+            / demographics_with_dw["pop_census"]
+            * 1000
+        )
+
+        demographics_with_dw["domestic_workers_per_1000_female"] = (
+            demographics_with_dw["domestic_workers_female"]
+            / demographics_with_dw["pop_female"]
+            * 1000
+        )
+
+        demographics_with_dw["domestic_workers_per_1000_male"] = (
+            demographics_with_dw["domestic_workers_male"]
+            / demographics_with_dw["pop_male"]
+            * 1000
+        )
+
+        socio_indicators = {
+            "Population (Census)": {
+                "col": "pop_census",
+                "description": (
+                    "Total population, by barangay (2024 "
+                    "census). Standalone population "
+                    "distribution map, separate from the "
+                    "per-1,000 domestic worker rates above — "
+                    "for seeing raw population scale on its "
+                    "own, in the same map/table format as "
+                    "every other indicator here."
+                )
+            },
+            "Sex Ratio (Males per 100 Females)": {
+                "col": "sex_ratio_m_per_100f",
+                "description": (
+                    "Males per 100 females per barangay."
+                )
+            },
+            "Share of Working-Age Women (%)": {
+                "col": "share_women_18_59_pct",
+                "description": (
+                    "Women aged 18–59 as a share of total "
+                    "population — a proxy for female labor "
+                    "available for paid work and unpaid care."
+                )
+            },
+            "Average Household Size": {
+                "col": "cbms_avg_household_size",
+                "description": (
+                    "Average number of persons per household. "
+                    "Context on household dependency load."
+                )
+            },
+            "Average Nuclear Families per Household": {
+                "col": "cbms_avg_nuclear_families_per_hh",
+                "description": (
+                    "Average number of nuclear families per "
+                    "household; values above 1 indicate "
+                    "doubling-up or shared dwellings."
+                )
+            },
+            "Food Insecurity Prevalence (%)": {
+                "col": "cbms_food_insecurity_prevalence_pct",
+                "description": (
+                    "Share of households worried about not "
+                    "having enough food to eat (mild / headline "
+                    "food insecurity)."
+                )
+            },
+            "Severe Food Insecurity (%)": {
+                "col": "cbms_food_severe_wholeday_pct",
+                "description": (
+                    "Share of households that went without "
+                    "eating for a whole day (most severe food "
+                    "insecurity)."
+                )
+            },
+            "Food Insecurity Intensity Score": {
+                "col": "cbms_food_intensity_score",
+                "description": (
+                    "Severity-weighted score across all eight "
+                    "food insecurity items (1 = worried, 8 = "
+                    "whole day without eating)."
+                )
+            },
+            "Housing Inadequacy Index (%)": {
+                "col": "cbms_housing_inadequacy_index_pct",
+                "description": (
+                    "Average share of households with unimproved "
+                    "(natural, light, or salvaged) roof, walls, "
+                    "and floor."
+                )
+            },
+            "Severe Housing Deprivation (%)": {
+                "col": "cbms_housing_makeshift_severe_pct",
+                "description": (
+                    "Share of households using makeshift / "
+                    "salvaged / improvised building materials."
+                )
+            },
+            "Total Domestic Workers (Count)": {
+                "col": "domestic_workers_total",
+                "description": (
+                    "Total registered domestic workers, by "
+                    "barangay (raw count, not a rate). "
+                    "Source: processed/indicators/"
+                    "domestic_workers.csv."
+                )
+            },
+            "Female Domestic Workers (Count)": {
+                "col": "domestic_workers_female",
+                "description": (
+                    "Registered female domestic workers, by "
+                    "barangay (raw count, not a rate)."
+                )
+            },
+            "Male Domestic Workers (Count)": {
+                "col": "domestic_workers_male",
+                "description": (
+                    "Registered male domestic workers, by "
+                    "barangay (raw count, not a rate)."
+                )
+            },
+            "Population Distribution vs. Total Domestic Workers": {
+                "col": "domestic_workers_per_1000_total",
+                "description": (
+                    "Registered domestic workers per 1,000 "
+                    "residents, by barangay. Source: "
+                    "processed/indicators/domestic_workers.csv "
+                    "(separate from the CBMS indicators below)."
+                )
+            },
+            "Population Distribution vs. Female Domestic Workers": {
+                "col": "domestic_workers_per_1000_female",
+                "description": (
+                    "Registered female domestic workers per "
+                    "1,000 female residents, by barangay."
+                )
+            },
+            "Population Distribution vs. Male Domestic Workers": {
+                "col": "domestic_workers_per_1000_male",
+                "description": (
+                    "Registered male domestic workers per "
+                    "1,000 male residents, by barangay."
+                )
+            }
+        }
+
+        selected_socio_label = st.selectbox(
+            "Select Socio-Economic Indicator",
+            list(socio_indicators.keys()),
+            key="socio_indicator_select"
+        )
+
+        selected_socio_col = (
+            socio_indicators[selected_socio_label]["col"]
+        )
+
+        st.caption(
+            socio_indicators[selected_socio_label]["description"]
+        )
+
+        # Normalize join keys defensively, same convention used
+        # throughout this dashboard.
+        demographics_socio = demographics_with_dw[
+            ["barangay", "district", selected_socio_col]
+        ].copy()
+
+        demographics_socio["barangay"] = (
+            demographics_socio["barangay"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+        socio_map = barangay_map.merge(
+            demographics_socio,
+            left_on="barangay_name",
+            right_on="barangay",
+            how="left"
+        )
+
+        socio_map = socio_map.rename(
+            columns={"district": "District"}
+        )
+
+        # ---------------------------------------------------
+        # KPI CARDS
+        # ---------------------------------------------------
+
+        socio_avg = socio_map[selected_socio_col].mean()
+        socio_max_row = socio_map.loc[
+            socio_map[selected_socio_col].idxmax()
+        ]
+        socio_min_row = socio_map.loc[
+            socio_map[selected_socio_col].idxmin()
+        ]
+
+        sc1, sc2, sc3 = st.columns(3)
+
+        kpi_card(
+            sc1,
+            "Citywide Average",
+            f"{socio_avg:,.2f}"
+        )
+
+        kpi_card(
+            sc2,
+            "Highest Barangay",
+            f"{socio_max_row['barangay_name'].title()} "
+            f"({socio_max_row[selected_socio_col]:,.2f})"
+        )
+
+        kpi_card(
+            sc3,
+            "Lowest Barangay",
+            f"{socio_min_row['barangay_name'].title()} "
+            f"({socio_min_row[selected_socio_col]:,.2f})"
+        )
+
+        st.divider()
+
+        # ---------------------------------------------------
+        # MAP
+        # ---------------------------------------------------
+
+        st.subheader(
+            f"Barangay Map — {selected_socio_label}"
+        )
+
+        socio_vmin = socio_map[selected_socio_col].quantile(0.05)
+        socio_vmax = socio_map[selected_socio_col].quantile(0.95)
+
+        socio_map["fill_color"] = (
+            socio_map[selected_socio_col].apply(
+                lambda v: value_to_rgba(v, socio_vmin, socio_vmax)
+            )
+        )
+
+        socio_geojson = json.loads(
+            socio_map.to_json()
+        )
+
+        view_state = pdk.ViewState(
+            latitude=center_lat,
+            longitude=center_lon,
+            zoom=11,
+            pitch=0,
+            min_zoom=11,
+            max_zoom=17,
+        )
+
+        socio_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=socio_geojson,
+            stroked=True,
+            filled=True,
+            get_fill_color="properties.fill_color",
+            get_line_color=[102, 102, 102],
+            line_width_min_pixels=0.5,
+            pickable=True,
+            auto_highlight=True
+        )
+
+        tooltip = {
+            "html": f"""
+            <b>{{barangay_name}}</b><br/>
+            {selected_socio_label}: {{{selected_socio_col}}}
+            """,
+            "style": {
+                "backgroundColor": "white",
+                "color": "black",
+                "fontSize": "12px"
+            }
+        }
+
+        deck = pdk.Deck(
+            layers=[
+                socio_layer
+            ],
+            initial_view_state=view_state,
+            tooltip=tooltip,
+            map_style="light"
+        )
+
+        with st.container(border=True, key="qcd-chart-10"):
+            st.pydeck_chart(
+                deck,
+                height=650,
+                width="stretch"
+            )
+
+            # Same gap as the Barangay/District Analysis maps —
+            # pydeck draws the fill color but never explains it.
+            # Unit is derived from the column name itself rather
+            # than a separate hand-maintained lookup, since these
+            # columns follow a consistent naming convention
+            # (_pct, per_1000, per_100f) that would otherwise need
+            # to be kept in sync with socio_indicators by hand.
+            if selected_socio_col.endswith("_pct"):
+                socio_unit = "%"
+            elif "per_1000" in selected_socio_col:
+                socio_unit = "per 1,000"
+            elif "per_100f" in selected_socio_col:
+                socio_unit = "per 100 females"
+            else:
+                socio_unit = ""
+
+            st.markdown(
+                render_colormap_legend_html(
+                    "Purples",
+                    socio_vmin,
+                    socio_vmax,
+                    unit=socio_unit,
+                    label=f"{selected_socio_label} (darker = higher)"
+                ),
+                unsafe_allow_html=True
+            )
+
 
 elif page == "Care Planning & Investment Priorities":
 
@@ -10510,7 +10586,7 @@ elif page == "Climate, Hazard and Population Analysis":
                 "binary": False
             },
             "Flood Inundation (100-yr)": {
-                "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+                "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
                 "colormap": "Blues",
                 "binary": True
             }
@@ -10993,7 +11069,7 @@ elif page == "Climate, Hazard and Population Analysis":
             )
         },
         "Flood Inundation (100-yr)": {
-            "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+            "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
             "colormap": "Blues",
             "binary": True,
             "unit": "flooded / not flooded",
@@ -11672,7 +11748,11 @@ elif page == "Zoning Map":
                 "Full list sorted alphabetically. Use alongside "
                 "the Accessibility Analysis to interpret whether "
                 "gaps reflect genuine care deficits or land-use "
-                "constraints."
+                "constraints. "
+                "**Note:** Unknown = no polygon data in source "
+                "(e.g. Reservoir). Where two zone types tie on "
+                "polygon count, the first alphabetically is used "
+                "— only Mangga and West Kamias are affected."
             )
             with st.container(border=True):
                 st.dataframe(
