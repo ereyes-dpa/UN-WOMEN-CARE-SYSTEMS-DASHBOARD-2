@@ -50,6 +50,70 @@ pio.templates["qcd_transparent"] = _qcd_transparent_template
 pio.templates.default = "plotly+qcd_transparent"
 
 # --------------------------------------------------
+# DISTRICT NAMING CONSISTENCY
+# (single source of truth for district labels,
+# ensuring consistent formatting across all pages,
+# charts, dropdowns, and maps — always "District 1"
+# format, never just "1" in user-facing text)
+# --------------------------------------------------
+
+def format_district(district_val):
+    """
+    Formats a district value (int or str) consistently
+    as 'District X' for all user-facing displays.
+    Used across all pages to ensure consistency.
+
+    Args:
+        district_val: int, str, or pandas Series of district numbers
+
+    Returns:
+        Formatted string(s) as "District 1", "District 2", etc.
+    """
+    if isinstance(district_val, pd.Series):
+        return "District " + district_val.astype(str)
+    elif isinstance(district_val, (int, float)):
+        return f"District {int(district_val)}"
+    else:
+        return f"District {str(district_val)}"
+
+def extract_district_number(district_label):
+    """
+    Extracts numeric district from formatted label.
+    Inverse of format_district().
+
+    Args:
+        district_label: str like "District 1" or just "1"
+
+    Returns:
+        int: district number
+    """
+    if isinstance(district_label, str):
+        return int(district_label.replace("District ", "").strip())
+    return int(district_label)
+
+DISTRICT_COLORS_MAP = {
+    1: "#055B52",   # green gradient — darkest
+    2: "#257268",   # green gradient
+    3: "#45897E",   # green gradient
+    4: "#66A195",   # green gradient
+    5: "#86B8AB",   # green gradient
+    6: "#A6CFC1"    # green gradient — lightest
+}
+
+def format_district_list(districts):
+    """
+    Formats a list of district numbers for dropdowns/filters.
+
+    Args:
+        districts: list or array of district numbers
+
+    Returns:
+        list: ["All"] + ["District 1", "District 2", ...]
+    """
+    sorted_districts = sorted([int(d) for d in districts if pd.notna(d)])
+    return ["All"] + [f"District {d}" for d in sorted_districts]
+
+# --------------------------------------------------
 # ACCESSIBILITY RATIO INDICATORS
 # (facility-per-1,000 ratios from demographics.csv's
 # pre-computed ratio_* columns — facility count for the
@@ -456,27 +520,58 @@ def ltc_hex(category):
 # --------------------------------------------------
 # ACTION OFFICES FUNCTIONS
 # --------------------------------------------------
-DISTRICT_COLORS = {
-    1: "#055B52",   # green gradient — darkest
-    2: "#257268",   # green gradient
-    3: "#45897E",   # green gradient
-    4: "#66A195",   # green gradient
-    5: "#86B8AB",   # green gradient
-    6: "#A6CFC1"    # green gradient — lightest (still visible on map)
-}
 
 def district_color(district):
-
+    """
+    Returns the color for a given district.
+    Uses the centralized DISTRICT_COLORS_MAP defined above.
+    """
     try:
         district = int(district)
-        return DISTRICT_COLORS.get(
+        return DISTRICT_COLORS_MAP.get(
             district,
             "#DDD6FE"
         )
 
     except:
         return "#DDD6FE"
-    
+
+# --------------------------------------------------
+# SCHOOL TYPE COLOR MAPPING
+# (New classification system for schools by type:
+# Preschool, Elementary, Junior High, Senior High,
+# High School, Special Education Program.
+# Uses distinct blue gradient to avoid confusion
+# with district colors.)
+# --------------------------------------------------
+
+SCHOOL_TYPE_COLORS_MAP = {
+    "Preschool": "#1E40AF",                  # dark blue
+    "Elementary school": "#2563EB",          # bright blue
+    "Junior high school": "#3B82F6",         # medium blue
+    "Senior high school": "#60A5FA",         # light blue
+    "High school": "#93C5FD",                # lighter blue
+    "Special Education Program": "#DBEAFE"   # very light blue
+}
+
+def school_type_color(school_type):
+    """
+    Returns the color for a given school type.
+    Uses the centralized SCHOOL_TYPE_COLORS_MAP defined above.
+
+    Args:
+        school_type: str, the school type category
+
+    Returns:
+        str: hex color code
+    """
+    try:
+        school_type = str(school_type).strip()
+        return SCHOOL_TYPE_COLORS_MAP.get(school_type, "#E5E7EB")
+    except:
+        return "#E5E7EB"
+
+
 def category_color(cat):
 
     cat = str(cat).upper()
@@ -1289,7 +1384,7 @@ def sample_raster_at_points(path, lats, lons):
 
 def flag_facilities_at_risk(
     df,
-    raster_path="processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+    raster_path="processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
     lat_col="latitude",
     lon_col="longitude",
     out_col="flood_risk"
