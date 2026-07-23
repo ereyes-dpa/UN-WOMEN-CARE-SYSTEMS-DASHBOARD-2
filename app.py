@@ -656,7 +656,7 @@ def build_explorer_map(
             "binary": False
         },
         "Flood Inundation (100-yr)": {
-            "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
+            "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
             "colormap": "Blues",
             "binary": True
         }
@@ -1147,10 +1147,10 @@ if st.sidebar.button(
 st.sidebar.subheader("Additional Tools")
 
 if st.sidebar.button(
-    "Supply and Climate",
+    "Care Services Explorer",
     width='stretch'
 ):
-    st.session_state.page = "Supply and Climate"
+    st.session_state.page = "Care Services Explorer"
     st.rerun()
 
 if st.sidebar.button(
@@ -1194,7 +1194,7 @@ if st.sidebar.button(
 
 page = st.session_state.page
 
-if page == "Supply and Climate":
+if page == "Care Services Explorer":
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("## Child Care")
@@ -1402,7 +1402,7 @@ if page == "Home":
             (
                 "#7F47ED",
                 "Analysis Tools",
-                "Supply and Climate, Accessibility Analysis, "
+                "Care Services Explorer, Accessibility Analysis, "
                 "Care Planning & Investment Priorities, and "
                 "Barangay Clusters."
             ),
@@ -6487,7 +6487,7 @@ elif page == "Migration Resource Center":
     with st.container(border=True, key="qcd-chart-52"):
         st.dataframe(_mig_disp, width="stretch")
 
-elif page == "Supply and Climate":
+elif page == "Care Services Explorer":
 
     st.markdown(
         """
@@ -6498,7 +6498,7 @@ elif page == "Supply and Climate":
             margin-bottom:10px;
             padding-top:0px;
         ">
-            Supply and Climate
+            Care Services Explorer
         </h2>
         """,
         unsafe_allow_html=True
@@ -6506,10 +6506,12 @@ elif page == "Supply and Climate":
 
     st.caption(
         """
-        Visualize care service supply across Quezon City overlaid with
-        climate and hazard data. Identify facilities at risk from flooding,
-        urban heat stress, and vegetation loss — critical for planning
-        climate-resilient care infrastructure.
+        Explore childcare centers, schools, health facilities,
+        older persons facilities, rehabilitation centers,
+        migration resource centers, and Quezon City
+        Action Offices on a single map — optionally overlaid
+        with land-surface temperature, vegetation, or flood
+        exposure layers.
         """
     )
 
@@ -6647,7 +6649,7 @@ elif page == "Supply and Climate":
             "binary": False
         },
         "Flood Inundation (100-yr)": {
-            "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
+            "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
             "colormap": "Blues",
             "binary": True
         }
@@ -6765,111 +6767,42 @@ elif page == "Supply and Climate":
     st.divider()
 
     # --------------------------------------------------
-    # CLIMATE RISK EXPOSURE SUMMARY
-    # Multi-hazard analysis: flood, urban heat, and vegetation
-    # across the currently selected service layers and district
+    # SUPPLY-SIDE FLOOD EXPOSURE SUMMARY
+    # (counts, across the *currently selected* service layers
+    # and district, how many facilities sit inside the 100-yr
+    # flood footprint — see flag_facilities_at_risk in
+    # functions.py. The map above no longer offers an at-risk-
+    # only filter or red rings on this page — see the Care
+    # Services Explorer tab inside Climate, Hazard and
+    # Population Analysis for that view — but this summary
+    # stays here since it's a useful count regardless of how
+    # the map is displayed.)
     # --------------------------------------------------
 
-    st.markdown("### Climate Risk Analysis")
+    st.markdown("### Facilities at Risk of Flooding")
 
     st.caption(
         """
-        Facilities exposed to multiple climate hazards: 100-year flood zones (>50cm),
-        urban heat stress (high land-surface temperature), and vegetation loss stress
-        (low NDVI). Counts shown among the service layers and district selected above.
+        Facilities whose location falls inside the 100-year
+        flood inundation footprint (>30cm depth), among the
+        service layers and district currently selected above.
         """
     )
-
-    # --------------------------------------------------
-    # METHODOLOGY EXPLANATIONS
-    # --------------------------------------------------
-
-    with st.expander("📊 How Are These Indicators Calculated?"):
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.markdown("**🌊 Flood Risk**")
-            st.info(
-                """
-                **Definition:** Facilities located within 100-year flood inundation
-                zones where water depth exceeds 50cm.
-
-                **Data Source:** IPCC flood modeling for Quezon City
-
-                **Threshold:** Inundation depth > 50cm
-
-                **Interpretation:** Higher thresholds indicate more severe flood events.
-                Facilities in these zones face risks to service delivery during extreme
-                weather events.
-                """
-            )
-
-            st.markdown("**🌡️ Urban Heat Stress**")
-            st.info(
-                """
-                **Definition:** Facilities located in the highest-temperature urban areas.
-
-                **Data Source:** Landsat 8 Land-Surface Temperature (LST) satellite data,
-                7-year summer average
-
-                **Threshold:** Top 25% of LST values (highest quartile)
-
-                **Interpretation:** These areas experience the most intense urban heat
-                island effect. Staff and service users face heat-related health risks,
-                and infrastructure may require additional cooling/resilience measures.
-                """
-            )
-
-        with col2:
-            st.markdown("**🌱 Vegetation Loss (Stress)**")
-            st.info(
-                """
-                **Definition:** Facilities in areas with low vegetation coverage and health.
-
-                **Data Source:** NDVI (Normalized Difference Vegetation Index)
-                from Landsat 8, 2025 mean
-
-                **Threshold:** Bottom 25% of NDVI values (lowest quartile)
-
-                **Interpretation:** Low vegetation indicates urban areas lacking green space,
-                trees, or grass. These areas have reduced cooling benefits, increased
-                runoff during flooding, and lower environmental quality around facilities.
-                """
-            )
-
-        st.markdown("**⚠️ Multi-Hazard Exposure**")
-        st.warning(
-            """
-            **Definition:** Facilities exposed to 2 or more climate hazards simultaneously.
-
-            **Calculation:** A facility is counted as multi-hazard exposed if it meets
-            the thresholds for at least 2 of these conditions:
-            - Located in 100-year flood zone (>50cm depth), AND/OR
-            - Located in top 25% heat stress area, AND/OR
-            - Located in bottom 25% vegetation area
-
-            **Interpretation:** Compounded climate risks. Facilities with multiple exposures
-            face cascading climate impacts and require comprehensive resilience planning.
-            For example: a facility in a flood zone AND high heat area needs both flood
-            protection and cooling systems.
-            """
-        )
 
     if not selected_layers:
 
         st.info(
             "Select at least one service layer above to see "
-            "climate risk exposure."
+            "flood exposure counts."
         )
 
     else:
 
-        climate_risk_rows = []
+        exposure_rows = []
 
         for layer_name in selected_layers:
 
-            layer_df = service_layers[layer_name]["df"].copy()
+            layer_df = service_layers[layer_name]["df"]
 
             if selected_district != "All":
 
@@ -6883,184 +6816,79 @@ elif page == "Supply and Climate":
 
             total_n = len(layer_df)
 
-            # Flood risk (existing column)
-            flood_risk_n = int(
+            at_risk_n = int(
                 layer_df.get(
                     "flood_risk",
                     pd.Series(False, index=layer_df.index)
                 ).sum()
             )
 
-            # Urban heat risk (high LST > 35°C or top quartile)
-            heat_risk_n = 0
-            if "lst_value" in layer_df.columns:
-                heat_threshold = layer_df["lst_value"].quantile(0.75)
-                heat_risk_n = int((layer_df["lst_value"] >= heat_threshold).sum())
-
-            # Vegetation stress (low NDVI < 25th percentile)
-            veg_risk_n = 0
-            if "ndvi_value" in layer_df.columns:
-                veg_threshold = layer_df["ndvi_value"].quantile(0.25)
-                veg_risk_n = int((layer_df["ndvi_value"] <= veg_threshold).sum())
-
-            # Combined exposure (at least 2 of 3 hazards)
-            combined_hazards = 0
-            if "lst_value" in layer_df.columns and "ndvi_value" in layer_df.columns:
-                heat_thresh = layer_df["lst_value"].quantile(0.75)
-                veg_thresh = layer_df["ndvi_value"].quantile(0.25)
-                flood_exposed = layer_df.get("flood_risk", pd.Series(False, index=layer_df.index))
-                heat_exposed = layer_df["lst_value"] >= heat_thresh
-                veg_exposed = layer_df["ndvi_value"] <= veg_thresh
-
-                hazard_count = flood_exposed.astype(int) + heat_exposed.astype(int) + veg_exposed.astype(int)
-                combined_hazards = int((hazard_count >= 2).sum())
-
-            climate_risk_rows.append({
+            exposure_rows.append({
                 "Service Type": layer_name,
                 "Total Facilities": total_n,
-                "Flood Risk": flood_risk_n,
-                "Heat Risk": heat_risk_n,
-                "Vegetation Stress": veg_risk_n,
-                "Multi-Hazard Exposure": combined_hazards
+                "In Flood Zone": at_risk_n,
+                "% At Risk": (
+                    round(100 * at_risk_n / total_n, 1)
+                    if total_n > 0 else 0.0
+                )
             })
 
-        climate_risk_df = pd.DataFrame(climate_risk_rows)
+        exposure_df = pd.DataFrame(exposure_rows)
 
-        total_facilities = climate_risk_df["Total Facilities"].sum()
-        total_flood = climate_risk_df["Flood Risk"].sum()
-        total_heat = climate_risk_df["Heat Risk"].sum()
-        total_veg = climate_risk_df["Vegetation Stress"].sum()
-        total_combined = climate_risk_df["Multi-Hazard Exposure"].sum()
+        total_facilities = exposure_df["Total Facilities"].sum()
+        total_at_risk = exposure_df["In Flood Zone"].sum()
 
-        # KPI Cards
-        st.markdown("**Hazard Exposure Summary**")
-
-        kpi_cols = st.columns(5)
+        kpi1, kpi2, kpi3 = st.columns(3)
 
         kpi_card(
-            kpi_cols[0],
-            "Total Facilities",
+            kpi1,
+            "Facilities Selected",
             f"{total_facilities:,}"
         )
 
         kpi_card(
-            kpi_cols[1],
-            "Flood Risk",
-            f"{total_flood:,}",
+            kpi2,
+            "In Flood Zone",
+            f"{total_at_risk:,}",
             "down_good"
         )
 
         kpi_card(
-            kpi_cols[2],
-            "Heat Stress",
-            f"{total_heat:,}",
+            kpi3,
+            "% At Risk",
+            f"{(100 * total_at_risk / total_facilities):.1f}%"
+            if total_facilities > 0 else "0.0%",
             "down_good"
         )
 
-        kpi_card(
-            kpi_cols[3],
-            "Vegetation Loss",
-            f"{total_veg:,}",
-            "down_good"
+        fig_exposure = px.bar(
+            exposure_df.sort_values(
+                "In Flood Zone",
+                ascending=False
+            ),
+            x="Service Type",
+            y="In Flood Zone",
+            color="% At Risk",
+            color_continuous_scale="Reds",
+            title="Facilities in 100-yr Flood Zone, by Service Type"
         )
 
-        kpi_card(
-            kpi_cols[4],
-            "Multi-Hazard Risk",
-            f"{total_combined:,}",
-            "down_good"
+        fig_exposure.update_layout(
+            xaxis_title="",
+            yaxis_title="Facilities in Flood Zone"
         )
 
-        # Quick reference tooltips
-        st.markdown(
-            """
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 10px; margin-top: 8px; font-size: 0.75rem; color: #666;">
-                <div style="text-align: center;"><strong>All Selected</strong></div>
-                <div style="text-align: center;"><strong>In Flood Zone</strong><br><span style="font-size: 0.7rem;">(>50cm depth)</span></div>
-                <div style="text-align: center;"><strong>Top Heat Areas</strong><br><span style="font-size: 0.7rem;">(Highest LST)</span></div>
-                <div style="text-align: center;"><strong>Low Vegetation</strong><br><span style="font-size: 0.7rem;">(Lowest NDVI)</span></div>
-                <div style="text-align: center;"><strong>2+ Hazards</strong><br><span style="font-size: 0.7rem;">(Combined Risk)</span></div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        st.divider()
-
-        # Visualization tabs
-        vis_tab1, vis_tab2, vis_tab3 = st.tabs([
-            "Hazard Breakdown",
-            "Service Type Comparison",
-            "Detailed Table"
-        ])
-
-        with vis_tab1:
-            # Stacked bar chart showing all three hazards
-            hazard_summary = pd.DataFrame({
-                "Hazard": ["Flood Risk", "Heat Stress", "Vegetation Loss", "Multi-Hazard"],
-                "Count": [total_flood, total_heat, total_veg, total_combined]
-            })
-
-            fig_hazards = px.bar(
-                hazard_summary,
-                x="Hazard",
-                y="Count",
-                color="Hazard",
-                color_discrete_map={
-                    "Flood Risk": "#1E40AF",
-                    "Heat Stress": "#DC2626",
-                    "Vegetation Loss": "#16A34A",
-                    "Multi-Hazard": "#9333EA"
-                },
-                title="Climate Risk Exposure by Hazard Type"
+        with st.container(border=True, key="qcd-chart-53"):
+            st.plotly_chart(
+                fig_exposure,
+                width="stretch"
             )
 
-            fig_hazards.update_layout(
-                xaxis_title="",
-                yaxis_title="Number of Facilities",
-                showlegend=False
+        with st.container(border=True, key="qcd-chart-54"):
+            st.dataframe(
+                exposure_df,
+                width="stretch"
             )
-
-            with st.container(border=True, key="qcd-chart-53"):
-                st.plotly_chart(
-                    fig_hazards,
-                    width="stretch"
-                )
-
-        with vis_tab2:
-            # Service type comparison
-            fig_service = px.bar(
-                climate_risk_df.sort_values("Multi-Hazard Exposure", ascending=False),
-                x="Service Type",
-                y=["Flood Risk", "Heat Risk", "Vegetation Stress"],
-                title="Climate Risk Exposure by Service Type",
-                barmode="group",
-                color_discrete_map={
-                    "Flood Risk": "#1E40AF",
-                    "Heat Risk": "#DC2626",
-                    "Vegetation Stress": "#16A34A"
-                }
-            )
-
-            fig_service.update_layout(
-                xaxis_title="",
-                yaxis_title="Number of Facilities",
-                hovermode="x unified"
-            )
-
-            with st.container(border=True, key="qcd-chart-55"):
-                st.plotly_chart(
-                    fig_service,
-                    width="stretch"
-                )
-
-        with vis_tab3:
-            # Detailed data table
-            with st.container(border=True, key="qcd-chart-56"):
-                st.dataframe(
-                    climate_risk_df,
-                    width="stretch"
-                )
 
 
 elif page == "Accessibility Analysis":
@@ -7514,63 +7342,157 @@ elif page == "Accessibility Analysis":
         st.divider()
 
         # ==================================================
-        # CHARTS
+        # METHODOLOGY BOX
+        # ==================================================
+
+        with st.expander("📋 How is Accessibility Measured?"):
+            st.markdown("""
+            **Accessibility Analysis** measures how well care services are distributed
+            across Quezon City by comparing facility availability to population needs.
+
+            **Key Metrics:**
+            - **Facilities per Population**: The number of care facilities per 1,000 people
+              in a selected care category (e.g., childcare, elder care)
+            - **Accessibility Index**: A normalized score (0–100) showing each district's
+              relative access to ALL care services. Higher scores = better access; lower
+              scores = underserved districts
+            - **Care Demand per Facility**: Average population burden on each facility —
+              higher values indicate facilities are serving larger populations
+
+            **How to Use This:**
+            - **Priority Districts** (table below) show where investment is most needed —
+              districts with the lowest accessibility index and highest demand per facility
+            - **Spatial patterns** on the map highlight geographic gaps where residents
+              may travel longer distances or face barriers to access
+            - **Policy action**: Target new facility placement in districts marked as
+              priorities, or explore existing facilities' service capacity in well-served areas
+            """)
+
+        st.divider()
+
+        # ==================================================
+        # CHARTS (STACKED VERTICAL LAYOUT)
         # ==================================================
 
         # Format district names for consistency across all pages
         access_chart = access.copy()
         access_chart["District"] = format_district(access_chart["District"])
 
-        left, right = st.columns(2)
+        # ──────────────────────────────────────────────────
+        # CHART 1: FACILITY RATIO BY DISTRICT
+        # ──────────────────────────────────────────────────
 
-        with left:
+        st.subheader(f"{selected_ratio_label} by District")
 
-            fig = px.bar(
-                access_chart.sort_values(
-                    selected_ratio_label,
-                    ascending=False
-                ),
-                x="District",
-                y=selected_ratio_label,
-                color=selected_ratio_label,
-                # Reversed ("_r") so a lower ratio (fewer
-                # facilities per capita = more underserved) gets
-                # the darker shade, matching the "darker =
-                # underserved" convention used on the rest of
-                # this page rather than "darker = better served".
-                color_continuous_scale="Purples_r",
-                title=f"{selected_ratio_label} by District"
+        fig1_data = access_chart.sort_values(
+            selected_ratio_label,
+            ascending=False
+        )
+
+        fig = px.bar(
+            fig1_data,
+            x="District",
+            y=selected_ratio_label,
+            color=selected_ratio_label,
+            color_continuous_scale="Purples_r",
+            title=None,
+            labels={selected_ratio_label: selected_ratio_label}
+        )
+
+        # Add value labels on top of bars
+        fig.update_traces(
+            textposition="outside",
+            texttemplate="<b>%{y:.1f}</b>",
+            hovertemplate="<b>%{x}</b><br>" + selected_ratio_label + ": %{y:.2f}<extra></extra>"
+        )
+
+        # Improve bar styling and spacing
+        fig.update_layout(
+            xaxis_title="District",
+            yaxis_title=selected_ratio_label,
+            showlegend=False,
+            height=400,
+            margin=dict(t=40, b=60, l=60, r=40),
+            bargap=0.25,  # Space between bars (smaller = wider bars)
+            plot_bgcolor="rgba(100, 80, 140, 0.25)",  # Darker purple background for visibility in dark mode
+            paper_bgcolor="white"
+        )
+
+        fig.update_xaxes(
+            showgrid=False,
+            tickangle=-45
+        )
+
+        fig.update_yaxes(
+            showgrid=True,
+            gridwidth=1,
+            gridcolor="rgba(200, 200, 200, 0.2)"
+        )
+
+        with st.container(border=True, key="qcd-chart-56"):
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                height=400
             )
 
-            with st.container(border=True, key="qcd-chart-56"):
-                st.plotly_chart(
-                    fig,
-                    width="stretch"
-                )
+        # ──────────────────────────────────────────────────
+        # CHART 2: OVERALL ACCESSIBILITY INDEX
+        # ──────────────────────────────────────────────────
 
-        with right:
+        st.subheader("Overall Accessibility Index by District")
 
-            fig = px.bar(
-                access_chart.sort_values(
-                    "Accessibility Index",
-                    ascending=False
-                ),
-                x="District",
-                y="Accessibility Index",
-                color="Accessibility Index",
-                # Reversed for the same reason as the chart on
-                # the left — a lower Accessibility Index means
-                # more underserved, so it should read darker, not
-                # lighter.
-                color_continuous_scale="Purples_r",
-                title="Overall Accessibility Index by District"
+        fig2_data = access_chart.sort_values(
+            "Accessibility Index",
+            ascending=False
+        )
+
+        fig = px.bar(
+            fig2_data,
+            x="District",
+            y="Accessibility Index",
+            color="Accessibility Index",
+            color_continuous_scale="Purples_r",
+            title=None,
+            labels={"Accessibility Index": "Accessibility Index (0-100)"}
+        )
+
+        # Add value labels on top of bars
+        fig.update_traces(
+            textposition="outside",
+            texttemplate="<b>%{y:.1f}</b>",
+            hovertemplate="<b>%{x}</b><br>Accessibility Index: %{y:.2f}<extra></extra>"
+        )
+
+        # Improve bar styling and spacing
+        fig.update_layout(
+            xaxis_title="District",
+            yaxis_title="Accessibility Index (0-100)",
+            showlegend=False,
+            height=400,
+            margin=dict(t=40, b=60, l=60, r=40),
+            bargap=0.25,  # Space between bars (smaller = wider bars)
+            plot_bgcolor="rgba(100, 80, 140, 0.25)",  # Darker purple background for visibility in dark mode
+            paper_bgcolor="white"
+        )
+
+        fig.update_xaxes(
+            showgrid=False,
+            tickangle=-45
+        )
+
+        fig.update_yaxes(
+            showgrid=True,
+            gridwidth=1,
+            gridcolor="rgba(200, 200, 200, 0.2)"
+        )
+
+        with st.container(border=True, key="qcd-chart-57"):
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                height=400
             )
-
-            with st.container(border=True, key="qcd-chart-57"):
-                st.plotly_chart(
-                    fig,
-                    width="stretch"
-                )
 
         st.divider()
 
@@ -7604,50 +7526,6 @@ elif page == "Accessibility Analysis":
         with st.container(border=True, key="qcd-chart-58"):
             st.plotly_chart(
                 fig,
-                width="stretch"
-            )
-
-        st.divider()
-
-        # ==================================================
-        # PRIORITY DISTRICTS
-        # ==================================================
-
-        st.subheader(
-            "Priority Districts for Future Investment"
-        )
-
-        st.caption(
-            f"Ranked by lowest {selected_ratio_label}, then by "
-            "lowest overall Accessibility Index."
-        )
-
-        priority = (
-            access.sort_values(
-                [
-                    selected_ratio_label,
-                    "Accessibility Index"
-                ],
-                ascending=[
-                    True,
-                    True
-                ]
-            )
-            .head(5)
-        )
-
-        with st.container(border=True, key="qcd-chart-59"):
-            st.dataframe(
-                priority[
-                    [
-                        "District",
-                        selected_ratio_label,
-                        "Facilities",
-                        "Total",
-                        "Accessibility Index",
-                        "Care Demand per Facility"
-                    ]
-                ],
                 width="stretch"
             )
 
@@ -8139,6 +8017,192 @@ elif page == "Accessibility Analysis":
                 ],
                 width="stretch"
             )
+
+        st.divider()
+
+        # ==================================================
+        # DEMAND ANALYSIS BY VULNERABLE GROUPS
+        # ==================================================
+
+        st.subheader(
+            "Accessibility for Vulnerable Groups"
+        )
+
+        st.markdown("""
+        Care needs are concentrated among specific populations:
+        children (0-5 years), older persons (60+ years), and persons with
+        disabilities (PWDs). These indicators break down facility-to-population
+        ratios for each group, showing whether care accessibility gaps are
+        concentrated in childcare/schools, elder care, PWD-serving services, or
+        distributed across multiple groups.
+        """)
+
+        # Calculate PWD-related metrics if data is available
+        pwd_health_ratio = None
+        pwd_ltc_ratio = None
+        pwd_no_health = 0
+        pwd_no_ltc = 0
+
+        if "pwd_registered" in barangay_access.columns:
+            barangay_access["PWD per Health Center"] = np.where(
+                barangay_access["Health centers"] != 0,
+                barangay_access["pwd_registered"] / barangay_access["Health centers"],
+                np.nan
+            )
+            barangay_access["PWD per LTC Facility"] = np.where(
+                barangay_access["Long-term care and rehabilitation services"] != 0,
+                barangay_access["pwd_registered"] / barangay_access["Long-term care and rehabilitation services"],
+                np.nan
+            )
+            pwd_health_ratio = barangay_access["PWD per Health Center"].median()
+            pwd_ltc_ratio = barangay_access["PWD per LTC Facility"].median()
+            pwd_no_health = int((barangay_access["Health centers"] == 0).sum())
+            pwd_no_ltc = int((barangay_access["Long-term care and rehabilitation services"] == 0).sum())
+
+        # KPI Cards
+        kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
+
+        with kpi_col1:
+            kpi_card(
+                st,
+                "Median Children per Facility",
+                f"{barangay_access['Children per Facility'].median():,.0f}",
+                "down_good"
+            )
+
+        with kpi_col2:
+            kpi_card(
+                st,
+                "Median Elderly per Facility",
+                f"{barangay_access['Elderly per Facility'].median():,.0f}",
+                "down_good"
+            )
+
+        with kpi_col3:
+            kpi_card(
+                st,
+                "Barangays with No Child-Serving Facility",
+                int((barangay_access["Child-Serving Facilities"] == 0).sum()),
+                "down_good"
+            )
+
+        with kpi_col4:
+            kpi_card(
+                st,
+                "Barangays with No Elderly-Serving Facility",
+                int((barangay_access["Elderly-Serving Facilities"] == 0).sum()),
+                "down_good"
+            )
+
+        # Charts for Children and Elderly
+        cpf_left, cpf_right = st.columns(2)
+
+        with cpf_left:
+
+            top_children = (
+                barangay_access
+                .dropna(subset=["Children per Facility"])
+                .sort_values("Children per Facility", ascending=False)
+                .head(15)
+            )
+
+            fig = px.bar(
+                top_children,
+                x="Children per Facility",
+                y="Barangay",
+                orientation="h",
+                color="Children per Facility",
+                color_continuous_scale="Purples",
+                title="Highest Children per Facility (0-5 yrs)"
+            )
+
+            fig.update_layout(height=450)
+
+            with st.container(border=True, key="qcd-chart-73"):
+                st.plotly_chart(
+                    fig,
+                    width="stretch"
+                )
+
+        with cpf_right:
+
+            top_elderly = (
+                barangay_access
+                .dropna(subset=["Elderly per Facility"])
+                .sort_values("Elderly per Facility", ascending=False)
+                .head(15)
+            )
+
+            fig = px.bar(
+                top_elderly,
+                x="Elderly per Facility",
+                y="Barangay",
+                orientation="h",
+                color="Elderly per Facility",
+                color_continuous_scale="Purples",
+                title="Highest Senior Citizens per Facility (60+ yrs)"
+            )
+
+            fig.update_layout(height=450)
+
+            with st.container(border=True, key="qcd-chart-74"):
+                st.plotly_chart(
+                    fig,
+                    width="stretch"
+                )
+
+        # Data table with all vulnerable group metrics
+        vulnerable_cols = [
+            "Barangay",
+            "District",
+            "Total",
+            "age_0_5",
+            "Child-Serving Facilities",
+            "Children per Facility",
+            "age_60plus",
+            "Elderly-Serving Facilities",
+            "Elderly per Facility"
+        ]
+
+        if "pwd_registered" in barangay_access.columns:
+            vulnerable_cols.extend([
+                "pwd_registered",
+                "PWD per Health Center",
+                "PWD per LTC Facility"
+            ])
+
+        table_data = barangay_access[vulnerable_cols].rename(
+            columns={
+                "age_0_5": "Children (0-5)",
+                "age_60plus": "Older Persons (60+)",
+                "pwd_registered": "Persons with Disabilities",
+                "Child-Serving Facilities": "Child Facilities",
+                "Elderly-Serving Facilities": "Elderly Facilities"
+            }
+        ).sort_values("Children per Facility", ascending=False)
+
+        st.subheader("Detailed Accessibility by Vulnerable Groups")
+
+        with st.container(border=True, key="qcd-chart-75"):
+            st.dataframe(
+                table_data,
+                width="stretch"
+            )
+
+        st.markdown("""
+        <div class="qcd-insight">
+            <div class="qcd-insight-label">💡 How to Use This Data</div>
+            <div class="qcd-insight-body">
+                <strong>Children & Elderly per Facility</strong> show the average facility capacity burden.
+                High numbers indicate facilities are stretched thin serving large populations. Compare
+                across barangays to identify where childcare/schools vs. elder care vs. PWD services need expansion.
+                <br><br>
+                <strong>Persons with Disabilities (PWDs)</strong> require both health services (Health Centers) and
+                long-term care facilities. Barangays with high PWD populations but few dedicated facilities
+                should prioritize accessibility improvements and service coordination.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         st.divider()
 
@@ -8999,6 +9063,124 @@ elif page == "Care Planning & Investment Priorities":
     st.divider()
 
     # ==================================================
+    # PRIORITY DISTRICTS FOR FUTURE INVESTMENT
+    # ==================================================
+
+    st.subheader(
+        "Priority Districts for Future Investment"
+    )
+
+    st.caption(
+        "Ranked by highest priority score. Lower Accessibility Index and "
+        "higher Care Demand per Facility indicate districts requiring investment."
+    )
+
+    # Aggregate barangay data to district level for priority analysis
+    district_priority = (
+        barangay_access
+        .groupby("District")
+        .agg({
+            "Total": "sum",
+            "Facilities": "sum",
+            "Care Demand": "sum",
+            "Service Diversity": "mean",
+            "Priority Score": "mean",
+            "Care Demand per Facility": "mean"
+        })
+        .reset_index()
+        .round(2)
+    )
+
+    # Add Accessibility Index calculation (facilities per 10k population)
+    district_priority["Facilities per 10k Population"] = (
+        district_priority["Facilities"] /
+        district_priority["Total"] * 10000
+    ).round(2)
+
+    # Compute Accessibility Index (0-100)
+    min_facilities = district_priority["Facilities per 10k Population"].min()
+    max_facilities = district_priority["Facilities per 10k Population"].max()
+
+    if max_facilities > min_facilities:
+        district_priority["Accessibility Index"] = (
+            (district_priority["Facilities per 10k Population"] - min_facilities) /
+            (max_facilities - min_facilities) * 100
+        ).round(2)
+    else:
+        district_priority["Accessibility Index"] = 50
+
+    # Sort by Priority Score descending
+    district_priority = district_priority.sort_values(
+        "Priority Score",
+        ascending=False
+    )
+
+    # Get top 5 districts
+    top_priority_districts = district_priority.head(5).copy()
+    top_priority_districts["District"] = top_priority_districts["District"].astype(str)
+
+    # Rename columns for display
+    display_cols = top_priority_districts.rename(columns={
+        "District": "District",
+        "Total": "Population",
+        "Facilities": "Total Facilities",
+        "Care Demand": "Care Demand (0-5 & 60+)",
+        "Service Diversity": "Avg. Service Types",
+        "Priority Score": "Priority Score (0-100)",
+        "Accessibility Index": "Accessibility Index (0-100)",
+        "Care Demand per Facility": "Avg. Population per Facility"
+    })
+
+    with st.container(border=True, key="qcd-chart-66b"):
+        st.dataframe(
+            display_cols[
+                [
+                    "District",
+                    "Population",
+                    "Total Facilities",
+                    "Care Demand (0-5 & 60+)",
+                    "Accessibility Index (0-100)",
+                    "Priority Score (0-100)",
+                    "Avg. Population per Facility"
+                ]
+            ],
+            column_config={
+                "District": st.column_config.TextColumn("District", width="small"),
+                "Population": st.column_config.NumberColumn("Population", width="medium", format="%,d"),
+                "Total Facilities": st.column_config.NumberColumn("Total Facilities", width="small", format="%d"),
+                "Care Demand (0-5 & 60+)": st.column_config.NumberColumn("Care Demand (0-5 & 60+)", width="medium", format="%,d"),
+                "Accessibility Index (0-100)": st.column_config.NumberColumn("Accessibility Index (0-100)", width="medium", format="%.1f"),
+                "Priority Score (0-100)": st.column_config.NumberColumn("Priority Score (0-100)", width="medium", format="%.1f"),
+                "Avg. Population per Facility": st.column_config.NumberColumn("Avg. Population per Facility", width="medium", format="%.0f")
+            },
+            hide_index=True,
+            width="stretch"
+        )
+
+    # Add actionable guidance text
+    st.markdown("""
+    <div class="qcd-insight">
+        <div class="qcd-insight-label">💡 Policy Guidance for District Investment</div>
+        <div class="qcd-insight-body">
+            <strong>Districts at the top of this list require immediate attention</strong> — they
+            have high care demand relative to available facilities and lower accessibility. Consider:
+            <ul style="margin-top: 8px; margin-bottom: 0;">
+                <li><strong>New facility placement:</strong> Prioritize construction or renovation of care
+                    facilities in high-priority districts</li>
+                <li><strong>Service expansion:</strong> Explore whether existing nearby facilities can
+                    expand service hours or reach to underserved areas</li>
+                <li><strong>Community-based care:</strong> Support training and licensing of in-home or
+                    community-based care providers as an interim solution</li>
+                <li><strong>Infrastructure partnerships:</strong> Collaborate with schools, health centers,
+                    and NGOs to co-locate or share care services</li>
+            </ul>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.divider()
+
+    # ==================================================
     # TOP 25 PRIORITY BARANGAYS
     # ==================================================
 
@@ -9049,11 +9231,11 @@ elif page == "Care Planning & Investment Priorities":
     st.divider()
 
     # ==================================================
-    # CARE DESERTS
+    # BARANGAYS WITH NO FACILITIES
     # ==================================================
 
     st.subheader(
-        "Care Desert Barangays"
+        "Barangays with No Facilities"
     )
 
     care_deserts = (
@@ -9067,15 +9249,14 @@ elif page == "Care Planning & Investment Priorities":
     )
 
     st.markdown("""
-    Barangays classified as care deserts currently have
-    no registered care facilities in the inventory.
-    These areas may require additional assessment to
-    identify service gaps and potential investment needs.
+    These barangays currently have no registered care facilities
+    in the inventory. They represent critical gaps in service coverage
+    and should be prioritized for facility placement and service development.
     """)
 
     kpi_card(
         st,
-        "Care Desert Barangays",
+        "Barangays with No Facilities",
         len(care_deserts),
         "down_good"
     )
@@ -9097,50 +9278,70 @@ elif page == "Care Planning & Investment Priorities":
     st.divider()
 
     # ==================================================
-    # PRIORITY DRIVERS
+    # PRIORITY SCORE COMPOSITION
     # ==================================================
 
     st.subheader(
-        "What Drives Priority Scores?"
+        "Priority Score Methodology"
     )
 
-    driver_col1, driver_col2 = st.columns(2)
+    st.markdown("""
+    The Priority Score (0–100) combines four key factors that measure a
+    barangay's need for care investment:
 
-    with driver_col1:
+    - **Care Demand (35%)**: Population aged 0–5 and 60+ years — those who most
+      need care services
+    - **Total Population (35%)**: Larger populations amplify the impact of facility
+      gaps and increase investment potential
+    - **Facility Availability (20%)**: Barangays with fewer facilities relative to need
+      rank higher, indicating acute service gaps
+    - **Service Diversity (10%)**: Barangays with multiple types of care services
+      indicate more developed care ecosystems and may signal barriers to entry
 
-        fig = px.scatter(
-            barangay_access,
-            x="Care Demand",
-            y="Priority Score",
-            hover_name="Barangay",
-            title="Care Demand vs Priority Score",
-            color="Priority Score",
-            color_continuous_scale=QCD_SEQUENTIAL
+    **Higher Priority Scores = Greater need for investment and intervention.**
+    """)
+
+    st.divider()
+
+    # ==================================================
+    # CARE DEMAND ANALYSIS (Primary Driver)
+    # ==================================================
+
+    st.subheader(
+        "Care Demand Trends"
+    )
+
+    fig = px.scatter(
+        barangay_access,
+        x="Care Demand",
+        y="Priority Score",
+        hover_name="Barangay",
+        hover_data={"District": True, "Total": True},
+        title="Care Demand vs Priority Score",
+        color="Priority Score",
+        size="Total",
+        color_continuous_scale=QCD_SEQUENTIAL,
+        labels={"Care Demand": "Care Demand (0-5 & 60+)", "Priority Score": "Priority Score (0-100)"}
+    )
+
+    fig.update_layout(height=500)
+
+    with st.container(border=True, key="qcd-chart-70"):
+        st.plotly_chart(
+            fig,
+            width="stretch"
         )
 
-        with st.container(border=True, key="qcd-chart-70"):
-            st.plotly_chart(
-                fig,
-                width="stretch"
-            )
-
-    with driver_col2:
-
-        fig = px.scatter(
-            barangay_access,
-            x="Facilities",
-            y="Priority Score",
-            hover_name="Barangay",
-            title="Facilities vs Priority Score",
-            color="Priority Score",
-            color_continuous_scale=QCD_SEQUENTIAL
-        )
-
-        with st.container(border=True, key="qcd-chart-71"):
-            st.plotly_chart(
-                fig,
-                width="stretch"
-            )
+    st.markdown("""
+    <div class="qcd-insight">
+        <div class="qcd-insight-label">💡 Insight</div>
+        <div class="qcd-insight-body">
+            Care demand (population aged 0–5 and 60+) is the strongest driver of
+            priority scores. Barangays with high care demand and limited facilities
+            emerge as top priorities for investment.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.divider()
 
@@ -9178,144 +9379,6 @@ elif page == "Care Planning & Investment Priorities":
     with st.container(border=True, key="qcd-chart-72"):
         st.plotly_chart(
             fig,
-            width="stretch"
-        )
-
-    st.divider()
-
-    # ==================================================
-    # CHILDREN / ELDERLY PER FACILITY
-    # ==================================================
-
-    st.subheader(
-        "Children & Elderly Demand per Facility"
-    )
-
-    st.markdown("""
-    "Care Demand" above combines young children and
-    older persons into a single figure. The indicators
-    below separate the two groups, dividing each
-    population by the number of facilities that
-    specifically serve it (Childcare + Schools for
-    children; Older Persons Care + Long-Term Care for
-    the elderly). This shows whether a barangay's gap
-    is concentrated in childcare/school capacity,
-    elder care capacity, or both.
-    """)
-
-    cpf_col1, cpf_col2, cpf_col3, cpf_col4 = st.columns(4)
-
-    with cpf_col1:
-
-        kpi_card(
-            st,
-            "Median Children per Facility",
-            f"{barangay_access['Children per Facility'].median():,.0f}",
-            "down_good"
-        )
-
-    with cpf_col2:
-
-        kpi_card(
-            st,
-            "Median Elderly per Facility",
-            f"{barangay_access['Elderly per Facility'].median():,.0f}",
-            "down_good"
-        )
-
-    with cpf_col3:
-
-        kpi_card(
-            st,
-            "Barangays with No Child-Serving Facility",
-            int((barangay_access["Child-Serving Facilities"] == 0).sum()),
-            "down_good"
-        )
-
-    with cpf_col4:
-
-        kpi_card(
-            st,
-            "Barangays with No Elderly-Serving Facility",
-            int((barangay_access["Elderly-Serving Facilities"] == 0).sum()),
-            "down_good"
-        )
-
-    cpf_left, cpf_right = st.columns(2)
-
-    with cpf_left:
-
-        top_children = (
-            barangay_access
-            .dropna(subset=["Children per Facility"])
-            .sort_values("Children per Facility", ascending=False)
-            .head(15)
-        )
-
-        fig = px.bar(
-            top_children,
-            x="Children per Facility",
-            y="Barangay",
-            orientation="h",
-            color="Children per Facility",
-            color_continuous_scale="Purples",
-            title="Highest Children per Facility (0-5 yrs)"
-        )
-
-        fig.update_layout(height=550)
-
-        with st.container(border=True, key="qcd-chart-73"):
-            st.plotly_chart(
-                fig,
-                width="stretch"
-            )
-
-    with cpf_right:
-
-        top_elderly = (
-            barangay_access
-            .dropna(subset=["Elderly per Facility"])
-            .sort_values("Elderly per Facility", ascending=False)
-            .head(15)
-        )
-
-        fig = px.bar(
-            top_elderly,
-            x="Elderly per Facility",
-            y="Barangay",
-            orientation="h",
-            color="Elderly per Facility",
-            color_continuous_scale="Purples",
-            title="Highest Senior Citizens per Facility (60+ yrs)"
-        )
-
-        fig.update_layout(height=550)
-
-        with st.container(border=True, key="qcd-chart-74"):
-            st.plotly_chart(
-                fig,
-                width="stretch"
-            )
-
-    with st.container(border=True, key="qcd-chart-75"):
-        st.dataframe(
-            barangay_access[
-                [
-                    "Barangay",
-                    "District",
-                    "age_0_5",
-                    "Child-Serving Facilities",
-                    "Children per Facility",
-                    "age_60plus",
-                    "Elderly-Serving Facilities",
-                    "Elderly per Facility"
-                ]
-            ].rename(
-                columns={
-                    "age_0_5": "Children (0-5)",
-                    "age_60plus": "Older Persons (60+)"
-                }
-            ).sort_values("Children per Facility", ascending=False),
             width="stretch"
         )
 
@@ -9360,31 +9423,49 @@ elif page == "Barangay Clusters":
     )
 
     st.markdown("""
-    This page groups barangays into clusters that share
-    similar demographic, accessibility, and socio-economic
-    profiles — adapted from the project's clustering
-    methodology (K-means on standardized indicators).
-    Clustering helps surface neighborhoods that face
-    comparable pressures (e.g. dense and young vs. sparse
-    and older, well-served vs. underserved, or higher vs.
-    lower deprivation) so that interventions can be
-    tailored by *type* of barangay rather than one at a
-    time.
+    ## Why Cluster Barangays?
 
-    **Features used:**
-    - **Demographic** — population density, share of
-      children (0–17), share of older persons (60+), sex
-      ratio (males per 100 females)
-    - **Accessibility** — facilities of any kind per 10,000
-      residents, plus the mix of facility types present
-      locally (share that are Childcare, Health centers,
-      Long-Term Care & Rehabilitation, or Schools — the
-      four types common enough across barangays to carry
-      real signal)
-    - **Socio-economic** — disability prevalence rate, food
-      insecurity prevalence, housing inadequacy index
-      (all from the 2024 CBMS), and registered migrant
-      workers per 1,000 residents
+    Quezon City's 142 barangays face vastly different care challenges. Rather than
+    building interventions for each barangay individually, clustering groups similar
+    neighborhoods so you can **design tailored solutions by type**.
+
+    For example:
+    - **High-density, young neighborhoods** need more schools and childcare but may have
+      fewer elder care facilities
+    - **Sparse, aging neighborhoods** need elder care and health services within reach
+    - **Well-served neighborhoods** can focus on quality improvement
+    - **Underserved neighborhoods** need basic facility placement
+
+    This page identifies these patterns automatically using K-means clustering on
+    demographic, accessibility, and socio-economic data.
+
+    ---
+
+    ## What Defines Each Cluster?
+
+    Barangays are grouped on:
+
+    - **Demographic Profile** — population density, proportion of children (0–17),
+      proportion of older persons (60+), and sex ratio (males per 100 females)
+    - **Care Accessibility** — total facilities per 10,000 residents, and the
+      mix of facility types (Childcare, Health centers, Long-Term Care & Rehabilitation,
+      Schools — the four most common types)
+    - **Socio-Economic Vulnerability** — disability prevalence rate, food insecurity,
+      housing inadequacy (all from 2024 CBMS), and registered migrant workers
+      per 1,000 residents
+
+    ---
+
+    ## How to Use Cluster Analysis
+
+    1. **Understand your neighborhood type** — Find your barangay's cluster to see
+       what challenges are common in similar areas
+    2. **Learn from peers** — Use cluster characteristics to identify neighboring
+       barangays with comparable needs (easier to coordinate shared services)
+    3. **Share solutions** — If one barangay in a cluster succeeds with an intervention,
+       it's likely to work in others in the same cluster
+    4. **Allocate resources strategically** — Prioritize facility types and services
+       based on cluster profiles
     """)
 
     # ==================================================
@@ -9920,6 +10001,46 @@ elif page == "Climate, Hazard and Population Analysis":
     ])
 
     with tab1:
+
+        st.markdown("""
+        ## Climate Vulnerability Index
+
+        The **Climate Vulnerability Index (0–100)** identifies barangays where vulnerable
+        populations face the highest combined climate hazard exposure.
+
+        ### How It's Calculated
+
+        The index is a simple average of two equally weighted components:
+
+        1. **Flood Exposure (50%)**
+           — Percentage of each barangay's area at risk of inundation (≥50cm) in a flood event.
+           Derived from the flood inundation raster: higher % = more of the barangay's land area is at risk.
+
+        2. **Population Concentration (50%)**
+           — Concentration of your selected vulnerable group in each barangay (e.g., elderly, PWDs,
+           young children, food-insecure households). Rates are normalized to 0–100 so flood and
+           population are equally weighted.
+
+        **Higher Index = Higher Priority**: A barangay scores high because it has high flood exposure,
+        high concentration of the vulnerable group, or both.
+
+        ### How This Differs from Socio-Economic Factors
+
+        - **Socio-Economic Factors** (disability rate, food insecurity, housing inadequacy) describe
+          the *baseline vulnerability* of a population — conditions that already limit their capacity
+          to prepare, respond, and recover from any shock (climate or otherwise).
+
+        - **Climate Vulnerability Index** captures *climate-specific exposure* — areas where these
+          vulnerable groups are also in the direct path of climate hazards (flood). A neighborhood
+          with high food insecurity but low flood exposure is economically disadvantaged but
+          not necessarily climate-threatened. A neighborhood with high elderly population and
+          high flood exposure faces dual risk: age-related difficulty evacuating + flood water.
+
+        **Together**: Socio-economic factors tell you *who is vulnerable*; the Climate Vulnerability
+        Index tells you *who is vulnerable AND exposed to climate hazards*.
+        """)
+
+        st.markdown("### Choose a Vulnerable Group")
 
         # --------------------------------------------------
         # SELECTABLE VULNERABLE GROUPS
@@ -10586,7 +10707,7 @@ elif page == "Climate, Hazard and Population Analysis":
                 "binary": False
             },
             "Flood Inundation (100-yr)": {
-                "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
+                "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
                 "colormap": "Blues",
                 "binary": True
             }
@@ -11069,7 +11190,7 @@ elif page == "Climate, Hazard and Population Analysis":
             )
         },
         "Flood Inundation (100-yr)": {
-            "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
+            "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
             "colormap": "Blues",
             "binary": True,
             "unit": "flooded / not flooded",
