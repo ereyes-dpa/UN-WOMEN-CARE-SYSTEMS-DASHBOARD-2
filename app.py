@@ -1310,10 +1310,10 @@ if st.sidebar.button(
     st.rerun()
 
 if st.sidebar.button(
-    "Services and Hazard Explorer",
+    "Climate & Hazard Layers",
     width='stretch'
 ):
-    st.session_state.page = "Services and Hazard Explorer"
+    st.session_state.page = "Climate & Hazard Layers"
     st.session_state.climate_tab = 1
     st.rerun()
 
