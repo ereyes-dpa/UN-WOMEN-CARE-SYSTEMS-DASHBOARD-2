@@ -378,11 +378,12 @@ st.divider()
     childcare_centers,
     schools,
     health_centers,
-    older_person_care, 
+    older_person_care,
     long_term_care,
     action_offices,
-    migration_centers
-) = load_data()
+    migration_centers,
+    bus_stops
+) = load_data()  # Updated to load bus_stops from care_v4.csv
 
 geo, bounds = load_geo()
 
@@ -616,9 +617,10 @@ if "page" not in st.session_state:
 def build_explorer_map(
     selected_layers,
     selected_district,
-    selected_climate_layers,
+    selected_climate_layers=None,
     flood_risk_only=False,
-    show_risk_rings=True
+    show_risk_rings=True,
+    show_demand_layer=False
 ):
     """
     Builds the full Care Services Explorer folium map and
@@ -694,7 +696,7 @@ def build_explorer_map(
 
         "Schools": {
             "df": schools,
-            "color": "#055B52",
+            "color": "#4472C4",
             "symbol": "■",
             "source": "School",
             "name_col": "Name",
@@ -763,6 +765,18 @@ def build_explorer_map(
             "lat_col": "latitude",
             "lon_col": "longitude"
         },
+
+        "Bus Stops": {
+            "df": bus_stops,
+            "color": "#F97316",
+            "symbol": "⊙",
+            "source": "Bus Stop",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
     }
 
     climate_overlay_layers = {
@@ -777,7 +791,7 @@ def build_explorer_map(
             "binary": False
         },
         "Flood Inundation (100-yr)": {
-            "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+            "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
             "colormap": "Blues",
             "binary": True
         }
@@ -1126,27 +1140,14 @@ if st.session_state.page == "Schools":
         key="school_sector"
     )
 
-    if selected_school_sector == "Public":
-
-        category_options = [
-            "All",
-            "Public School"
-        ]
-
-    elif selected_school_sector == "Private":
-
-        category_options = [
-            "All",
-            "Private School"
-        ]
-
-    else:
-
-        category_options = [
-            "All",
-            "Public School",
-            "Private School"
-        ]
+    # School category options (school types)
+    category_options = [
+        "All",
+        "Preschool",
+        "Elementary school",
+        "High school",
+        "Senior high school"
+    ]
 
     selected_school_category = st.sidebar.radio(
         "School Category",
@@ -1346,10 +1347,16 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#055B52;font-size:22px;">■</span>
-        <b>Public School</b><br>
-        <span style="color:#A6CFC1;font-size:22px;">■</span>
-        <b>Private School</b>
+        <span style="color:#2E5090;font-size:22px;">■</span>
+        <b>Preschool</b><br>
+        <span style="color:#4472C4;font-size:22px;">■</span>
+        <b>Elementary school</b><br>
+        <span style="color:#6B8FD4;font-size:22px;">■</span>
+        <b>Junior high school</b><br>
+        <span style="color:#8FA8E0;font-size:22px;">■</span>
+        <b>Senior high school</b><br>
+        <span style="color:#B5CBEE;font-size:22px;">■</span>
+        <b>High school</b>
         """,
         unsafe_allow_html=True
     )
@@ -3747,58 +3754,38 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
     # --------------------------------------------------
     # SCHOOL KPIs
     # --------------------------------------------------
+
+    # Row 1: Provider Type (Public/Private) and District Distribution
     col1, col2 = st.columns(2)
 
     with col1:
 
-        # Defensive filter: schools is already scoped to
-        # major_division == "Schools" upstream (see load_data()
-        # in functions.py), so every row here should carry a
-        # "Public School" / "Private School" Category value. If
-        # a stray row with an unrelated Category slips through
-        # (e.g. mislabeled in the source CSV), drop it here
-        # rather than let it show up as a phantom slice with an
-        # unrelated color in this chart.
-        valid_school_categories = (
-            schools["Category"]
-            .astype(str)
-            .str.contains(
-                "PUBLIC SCHOOL|PRIVATE SCHOOL",
-                case=False,
-                na=False
-            )
-        )
-
-        category_counts = (
-            schools.loc[valid_school_categories, "Category"]
+        # Provider Type Distribution (using Sector column)
+        provider_counts = (
+            schools["Sector"]
             .value_counts()
             .reset_index()
         )
 
-        category_counts.columns = [
-            "Category",
+        provider_counts.columns = [
+            "Provider",
             "Schools"
         ]
 
-        school_colors = [
-            school_color(cat)
-            for cat in category_counts["Category"]
+        # Color map for provider types
+        provider_colors = [
+            "#2E5090" if "Public" in prov else "#B5CBEE"
+            for prov in provider_counts["Provider"]
         ]
 
         fig = px.pie(
-            category_counts,
-            names="Category",
+            provider_counts,
+            names="Provider",
             values="Schools",
-            title="School Distribution",
-            color_discrete_sequence=school_colors
+            title="School Distribution by Provider Type",
+            color_discrete_sequence=provider_colors
         )
 
-        # Pull percentage labels outside the slices and hide
-        # labels for any near-zero slice. With only two real
-        # categories (Public/Private School) this mostly just
-        # keeps spacing clean, but it also guards against label
-        # crowding if a future data refresh reintroduces a tiny
-        # third slice.
         fig.update_traces(
             textposition="outside",
             textinfo="percent+label",
@@ -3819,6 +3806,7 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
 
     with col2:
 
+        # District Distribution
         district_counts = (
             schools
             .groupby("District")
@@ -3840,11 +3828,91 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
             x="District",
             y="Schools",
             text_auto=True,
-            title="School Capacity Disparities by District",
+            title="School Distribution by District",
             color_discrete_sequence=["#7F47ED"]
         )
 
         with st.container(border=True, key="qcd-chart-19"):
+            st.plotly_chart(
+                fig,
+                width='stretch'
+            )
+
+    # Row 2: School Categories and Barangay Distribution
+    col3, col4 = st.columns(2)
+
+    with col3:
+
+        # School Categories Distribution (Preschool, Elementary, etc.)
+        category_counts = (
+            schools["Category"]
+            .value_counts()
+            .reset_index()
+        )
+
+        category_counts.columns = [
+            "Category",
+            "Schools"
+        ]
+
+        school_colors = [
+            school_color(cat)
+            for cat in category_counts["Category"]
+        ]
+
+        fig = px.pie(
+            category_counts,
+            names="Category",
+            values="Schools",
+            title="School Distribution by Type",
+            color_discrete_sequence=school_colors
+        )
+
+        fig.update_traces(
+            textposition="outside",
+            textinfo="percent+label",
+            texttemplate="%{label}: %{percent:.0%}"
+        )
+
+        fig.update_layout(
+            showlegend=True,
+            uniformtext_minsize=12,
+            uniformtext_mode="hide"
+        )
+
+        with st.container(border=True, key="qcd-school-categories-chart"):
+            st.plotly_chart(
+                fig,
+                width='stretch'
+            )
+
+    with col4:
+
+        # Barangay Distribution (top 15 by count)
+        barangay_counts = (
+            schools
+            .groupby("barangay")
+            .size()
+            .reset_index(name="Schools")
+            .sort_values(
+                "Schools",
+                ascending=False
+            )
+            .head(15)
+        )
+
+        fig = px.bar(
+            barangay_counts,
+            x="barangay",
+            y="Schools",
+            text_auto=True,
+            title="Top 15 Barangays by School Count",
+            color_discrete_sequence=["#4472C4"]
+        )
+
+        fig.update_xaxes(tickangle=-45)
+
+        with st.container(border=True, key="qcd-school-barangay-chart"):
             st.plotly_chart(
                 fig,
                 width='stretch'
@@ -6621,7 +6689,6 @@ elif page == "Migration Resource Center":
     # --------------------------------------------------
 
     mig = migration_centers.copy()
-
     if selected_district != "All":
 
         district_number = int(
@@ -6936,7 +7003,7 @@ elif page == "Care Services Explorer":
         """
         Explore childcare centers, schools, health facilities,
         older persons facilities, rehabilitation centers,
-        migration resource centers, and Quezon City
+        migration resource centers, bus stops, and Quezon City
         Action Offices on a single map, optionally overlaid
         with land-surface temperature, vegetation, or flood
         exposure layers.
@@ -6965,7 +7032,7 @@ elif page == "Care Services Explorer":
 
         "Schools": {
             "df": schools,
-            "color": "#055B52",
+            "color": "#4472C4",
             "symbol": "■",
             "source": "School",
             "name_col": "Name",
@@ -7034,6 +7101,18 @@ elif page == "Care Services Explorer":
             "lat_col": "latitude",
             "lon_col": "longitude"
         },
+
+        "Bus Stops": {
+            "df": bus_stops,
+            "color": "#F97316",
+            "symbol": "⊙",
+            "source": "Bus Stop",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
     }
 
     # --------------------------------------------------
@@ -7042,11 +7121,19 @@ elif page == "Care Services Explorer":
 
     st.markdown("### Service Categories")
 
-    cols = st.columns(7)
+    # Phase 1 Optimization: Handle 8 service categories with 2 rows of 4 columns
+    cols = st.columns(4)
 
     for i, (layer_name, layer) in enumerate(service_layers.items()):
 
-        cols[i].markdown(
+        # Switch to next row after 4 items
+        if i == 4:
+            cols = st.columns(4)
+            col_idx = 0
+        else:
+            col_idx = i % 4
+
+        cols[col_idx].markdown(
             f"""
             <span style="
                 color:{layer['color']};
@@ -7079,7 +7166,7 @@ elif page == "Care Services Explorer":
             "binary": False
         },
         "Flood Inundation (100-yr)": {
-            "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+            "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
             "colormap": "Blues",
             "binary": True
         }
@@ -7128,23 +7215,19 @@ elif page == "Care Services Explorer":
             selected_district_label
         ]
 
-    selected_climate_layers = st.multiselect(
-        "Climate & Hazard Layers (optional)",
-        list(climate_overlay_layers.keys()),
-        default=[],
+    show_demand_layer = st.checkbox(
+        "Show Population Density Layer",
+        value=False,
         help=(
-            "Overlay land-surface temperature, vegetation, or "
-            "flood extent under the service markers above. See "
-            "the Climate, Hazard and Population Analysis page "
-            "for a closer look at each layer individually."
+            "Overlay population density on the map to visualize demand for care services. "
+            "Darker areas indicate higher population density and higher demand for facilities."
         )
     )
 
     st.caption(
         """
-        Facilities whose location falls inside the 100-year flood inundation footprint (>30cm depth).
-        Select service layers and district below to see current exposure.
-        **Preliminary data pending QCDRRMO-validated hazard information.**
+        **Supply × Demand Analysis:** Compare care service locations (markers) with population
+        density to identify areas with high demand but limited supply.
         """
     )
 
@@ -7227,46 +7310,9 @@ elif page == "Care Services Explorer":
     map_html, climate_legend_info = build_explorer_map(
         tuple(selected_layers),
         selected_district,
-        tuple(selected_climate_layers),
-        False,
-        show_risk_rings=False
+        selected_climate_layers=(),
+        show_demand_layer=show_demand_layer
     )
-
-    # --------------------------------------------------
-    # CLIMATE LAYER LEGEND(S)
-    # (folium's rendered HTML is opaque to Streamlit, so any
-    # continuous-scale climate layer overlaid above gets its
-    # color-scale legend rendered here instead, at the top of the
-    # map. Binary layers like Flood Inundation aren't included
-    # here, they're a flooded/not-flooded mask, not a scale.)
-    # --------------------------------------------------
-
-    if climate_legend_info:
-
-        legend_cols = st.columns(len(climate_legend_info))
-
-        legend_units = {
-            "Land-Surface Temperature": "°C",
-            "Vegetation (NDVI)": ""
-        }
-
-        for col, (layer_name, (layer_vmin, layer_vmax)) in zip(
-            legend_cols,
-            climate_legend_info.items()
-        ):
-
-            with col:
-
-                st.markdown(
-                    render_colormap_legend_html(
-                        climate_overlay_layers[layer_name]["colormap"],
-                        layer_vmin,
-                        layer_vmax,
-                        unit=legend_units.get(layer_name, ""),
-                        label=layer_name
-                    ),
-                    unsafe_allow_html=True
-                )
 
     st.iframe(
         map_html,
@@ -11516,7 +11562,7 @@ elif page == "Services and Hazard Explorer":
                 "binary": False
             },
             "Flood Inundation (100-yr)": {
-                "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+                "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
                 "colormap": "Blues",
                 "binary": True
             }
@@ -11587,7 +11633,7 @@ elif page == "Services and Hazard Explorer":
             help=(
                 "Filters the map to facilities whose location falls "
                 "inside the 100-year flood inundation footprint "
-                "(>30cm depth). Flood-risk status for each facility "
+                "(>50cm depth). Flood-risk status for each facility "
                 "is still noted in its popup; for a visual flood-risk "
                 "map with ringed markers, see the main Care Services "
                 "Explorer page."
@@ -11667,7 +11713,7 @@ elif page == "Services and Hazard Explorer":
     st.caption(
             """
             Facilities whose location falls inside the 100-year
-            flood inundation footprint (>30cm depth), among the
+            flood inundation footprint (50cm depth), among the
             service layers and district currently selected above.
             """
     )
@@ -11970,7 +12016,7 @@ elif page == "Services and Hazard Explorer":
             "legend_label": "Land-Surface Temperature (°C)",
             "description": (
                 "7-year summer average land-surface temperature, "
-                "derived from Landsat thermal imagery (~30m "
+                "derived from Landsat thermal imagery (~50m "
                 "resolution). Higher values indicate stronger "
                 "urban heat, typically dense, paved, low-vegetation "
                 "areas. Color scale is clipped to the 2nd-98th "
@@ -11995,14 +12041,14 @@ elif page == "Services and Hazard Explorer":
             )
         },
         "Flood Inundation (100-yr)": {
-            "path": "processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+            "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
             "colormap": "Blues",
             "binary": True,
             "unit": "flooded / not flooded",
-            "legend_label": "Flood depth > 30cm (100-year rain event)",
+            "legend_label": "Flood depth > 50cm (100-year rain event)",
             "description": (
                 "Binary flood extent (~10m resolution) showing "
-                "areas expected to see more than 30cm of inundation "
+                "areas expected to see more than 50cm of inundation "
                 "depth in a 100-year rainfall event. This is a mask, "
                 "not a depth map, for full depth classes (0.2-0.5m, "
                 "0.5-1.5m, 1.5-3m, >3m), see the static reference map "
