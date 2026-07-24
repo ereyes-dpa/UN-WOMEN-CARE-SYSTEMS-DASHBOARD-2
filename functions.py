@@ -254,6 +254,11 @@ ACCESSIBILITY_RATIO_INDICATORS = {
         "facility_col": "Long-term care and rehabilitation services",
         "pop_col": "pwd_registered",
         "ratio_col": "ratio_pwd"
+    },
+    "All Care Facilities per 1,000 PWDs": {
+        "facility_col": "Total",
+        "pop_col": "pwd_registered",
+        "ratio_col": "ratio_pwd_all"
     }
 }
 
@@ -1384,7 +1389,7 @@ def sample_raster_at_points(path, lats, lons):
 
 def flag_facilities_at_risk(
     df,
-    raster_path="processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
+    raster_path="processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
     lat_col="latitude",
     lon_col="longitude",
     out_col="flood_risk"
