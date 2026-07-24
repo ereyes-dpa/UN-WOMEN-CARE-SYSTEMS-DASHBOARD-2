@@ -1448,7 +1448,7 @@ def sample_raster_at_points(path, lats, lons):
 @st.cache_data(show_spinner=False)
 def flag_facilities_at_risk(
     df,
-    raster_path="processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+    raster_path="processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
     lat_col="latitude",
     lon_col="longitude",
     out_col="flood_risk"
@@ -1458,7 +1458,7 @@ def flag_facilities_at_risk(
     a facility dataframe marking which rows sit inside the given
     hazard raster's "at risk" footprint.
 
-    Built around the flood layer (binary: 1 = >30cm inundation
+    Built around the flood layer (binary: 1 = 50cm inundation
     in a 100-yr event, see climate_layers config on the Climate
     & Hazard Exposure page) since that's the only *binary*
     raster — a clean yes/no per facility. The continuous layers
@@ -1502,7 +1502,7 @@ def flag_facilities_at_risk(
 
 @st.cache_data(show_spinner=False)
 def compute_barangay_flood_exposure(
-    raster_path="processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
+    raster_path="processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
     barangay_path="processed/qc_barangays.geojson",
     name_col="barangay_name"
 ):
@@ -1510,7 +1510,7 @@ def compute_barangay_flood_exposure(
     Demand-side, *land-area* counterpart to flag_facilities_at_risk
     above: for every barangay polygon, computes what share of its
     land area falls inside the binary flood-inundation mask
-    (>30cm depth, 100-yr event).
+    (>50cm depth, 100-yr event).
 
     Returns a DataFrame with one row per barangay:
         [name_col, "flood_area_pct", "barangay_area_km2",
