@@ -11394,14 +11394,12 @@ elif page == "Climate & Hazard Layers":
     )
 
     st.caption(
-            """
-            Same map and flood-exposure filtering as the Care
-            Services Explorer page, shown here alongside the
-            population vulnerability view so supply (facilities)
-            and demand (at-risk population) can be compared
-            side by side without leaving this page.
-            """
-        )
+        """
+        Explore climate and hazard layers for Quezon City one at
+        a time: land-surface temperature, vegetation cover, and
+        100-year flood inundation. Select a layer below.
+        """
+    )
 
     with st.expander("Recommended Policy Actions: Facility-Level Flood Risk Mitigation", expanded=False):
 
@@ -11428,15 +11426,6 @@ elif page == "Climate & Hazard Layers":
                that also improve accessibility for underserved barangays.
             """)
 
-    st.subheader("Climate & Hazard Layers")
-
-    st.caption(
-        """
-        Explore climate and hazard layers for Quezon City one at
-        a time: land-surface temperature, vegetation cover, and
-        100-year flood inundation. Select a layer below.
-        """
-    )
 
     # --------------------------------------------------
     # CITY-WIDE FLOOD RISK CONTEXT (WorldPop)
