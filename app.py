@@ -4,10 +4,12 @@ import plotly.express as px
 import folium
 from streamlit_folium import st_folium
 import numpy as np
+import math
 from functions import *
 import pydeck as pdk
 from pydeck.types import String
 import numpy as np
+import math
 import json
 
 # PRIVATE VERSION
@@ -46,7 +48,7 @@ h1, h2, h3, h4 {
 /* --------------------------------------------------
    HOMEPAGE COMPONENTS
    (extends the existing purple/Montserrat system rather
-   than introducing a second palette — soft purple-tinted
+   than introducing a second palette, soft purple-tinted
    neutrals for card surfaces, the same #7F47ED/#4C1D95
    used everywhere else for accents and headings.)
    -------------------------------------------------- */
@@ -156,7 +158,7 @@ h1, h2, h3, h4 {
     margin-bottom: 14px;
 }
 
-/* Reusable "takeaway" box for under a chart — states the
+/* Reusable "takeaway" box for under a chart, states the
    one-sentence insight in plain language, the way the PBIX
    reference dashboard does. Not yet applied to any page;
    ready to drop under a chart with:
@@ -189,8 +191,7 @@ h1, h2, h3, h4 {
 
 /* --------------------------------------------------
    KPI CARDS
-   (replaces bare st.metric with a boxed, elevated card —
-   purple gradient surface, white text — matching the
+   (replaces bare st.metric with a boxed, elevated card,    purple gradient surface, white text, matching the
    dashboard's hero banner treatment. Used via the
    kpi_card() helper in functions.py rather than
    st.metric directly, so the optional polarity arrow can
@@ -245,7 +246,7 @@ h1, h2, h3, h4 {
 /* --------------------------------------------------
    CHART / TABLE CARDS
    (every chart/table container is created with
-   st.container(border=True, key="qcd-chart-...") — the
+   st.container(border=True, key="qcd-chart-..."), the
    key prefix lets this single selector catch all of them
    via Streamlit's auto-generated .st-key-<key> class,
    without also restyling tabs, expanders, or other
@@ -257,7 +258,7 @@ h1, h2, h3, h4 {
    needing to flip every label to white. Note: st.dataframe
    renders its grid in its own internal component with a
    transparent cell background by design (a Streamlit
-   limitation, not a CSS bug here) — this tint colors the
+   limitation, not a CSS bug here), this tint colors the
    panel and padding around a table, but individual table
    cells may still show through as white/default underneath.
    Plotly charts render as inline SVG, so they pick up this
@@ -291,7 +292,7 @@ qc_logo   = get_base64("assets/qc_logo.png")
 # up relative to the banners until the three read as
 # comparably "heavy" on the page. All three sit in one
 # shared flex row so they share a single vertical-center
-# alignment — no per-logo nudging needed.
+# alignment, no per-logo nudging needed.
 LOGO_ROW_HEIGHT = 80
 
 FCDO_HEIGHT = 56
@@ -408,9 +409,130 @@ domestic_workers_barangay, domestic_workers_district = (
 )
 
 # --------------------------------------------------
+# BARANGAY AND DISTRICT DATAFRAMES (for KPIs and charts)
+# --------------------------------------------------
+
+barangay_map = gpd.read_file(
+        "processed/qc_barangays.geojson"
+    )
+
+district_map = gpd.read_file(
+        "processed/qc_districts.geojson"
+    )
+# Normalize join keys
+barangay_map["barangay_name"] = (
+    barangay_map["barangay_name"]
+    .astype(str)
+    .str.strip()
+    .str.upper()
+)
+
+population_age["Barangay"] = (
+    population_age["Barangay"]
+    .astype(str)
+    .str.strip()
+    .str.upper()
+)
+
+population_sex["Barangay"] = (
+    population_sex["Barangay"]
+    .astype(str)
+    .str.strip()
+    .str.upper()
+)
+
+barangay_df = barangay_map.merge(
+    population_age,
+    left_on="barangay_name",
+    right_on="Barangay",
+    how="left"
+)
+
+barangay_df = barangay_df.merge(
+    population_sex[
+        [
+            "Barangay",
+            "Male",
+            "Female"
+        ]
+    ],
+    on="Barangay",
+    how="left"
+)
+
+age_group_definition = {
+    "children_0_17": [
+        "0-5 (Early Childhood)",
+        "6-17 (School Age Children)"
+    ],
+    "working_age_18_59": [
+        "18-59 (Working Age Adult)"
+    ],
+    "elderly_60_plus": [
+        "60+ (Elderly)"
+    ]
+}
+
+barangay_df["children_0_17"] = barangay_df[
+    age_group_definition["children_0_17"]
+].sum(axis=1)
+
+barangay_df["working_age"] = barangay_df[
+    age_group_definition["working_age_18_59"]
+].sum(axis=1)
+
+barangay_df["elderly"] = barangay_df[
+    age_group_definition["elderly_60_plus"]
+].sum(axis=1)
+
+# District population
+district_pop = (
+    population_age[
+        [
+            "District",
+            "0-5 (Early Childhood)",
+            "6-17 (School Age Children)",
+            "18-59 (Working Age Adult)",
+            "60+ (Elderly)",
+            "Total"
+        ]
+    ]
+    .groupby("District")
+    .sum()
+    .reset_index()
+    .rename(
+        columns={
+            "0-5 (Early Childhood)":
+                "Early Childhood (0-5)",
+            "6-17 (School Age Children)":
+                "School Age (6-17)",
+            "18-59 (Working Age Adult)":
+                "Working Age (18-59)",
+            "60+ (Elderly)":
+                "Older Persons (60+)"
+        }
+    )
+)
+
+district_pop = district_pop.merge(
+    population_sex[
+        [
+            "District",
+            "Male",
+            "Female"
+        ]
+    ]
+    .groupby("District")
+    .sum()
+    .reset_index(),
+    on="District",
+    how="left"
+)
+
+# --------------------------------------------------
 # SUPPLY-SIDE CLIMATE EXPOSURE
 # (flags each facility as inside/outside the 100-yr flood
-# inundation footprint — see flag_facilities_at_risk in
+# inundation footprint, see flag_facilities_at_risk in
 # functions.py. Computed once here, for every service type,
 # so both the Care Services Explorer page and any future
 # page can reuse the same flood_risk column without
@@ -504,7 +626,7 @@ def build_explorer_map(
 
     Cached on (selected_layers, selected_district,
     selected_climate_layers, flood_risk_only, show_risk_rings)
-    only — these are the only things that actually change what's
+    only, these are the only things that actually change what's
     drawn. Streamlit reruns this whole script on every widget
     interaction, which would otherwise rebuild the map (re-encode
     every raster overlay to PNG, rebuild every marker) from
@@ -514,11 +636,10 @@ def build_explorer_map(
     arguments returns the previously-built HTML immediately
     instead of reconstructing and re-serializing the whole map.
 
-    flood_risk_only — when True, only facilities flagged by
+    flood_risk_only, when True, only facilities flagged by
     flag_facilities_at_risk (i.e. df["flood_risk"] == True) are
     drawn as markers. This is the supply-side exposure filter:
-    "which facilities sit inside the 100-yr flood footprint?" —
-    computed once for every facility type up top (see
+    "which facilities sit inside the 100-yr flood footprint?",     computed once for every facility type up top (see
     flag_facilities_at_risk calls near DATA LOADING), not
     recomputed here. Only offered as a UI control on the Care
     Services Explorer tab inside Climate, Hazard and Population
@@ -526,15 +647,15 @@ def build_explorer_map(
     False, since that page is meant to stay a plain facility map
     with no flood-risk framing.
 
-    show_risk_rings — when True (used by the Care Services
+    show_risk_rings, when True (used by the Care Services
     Explorer tab inside Climate, Hazard and Population
     Analysis), flood-exposed
     facilities get an extra red ring around their marker and a
     "⚠ flood risk" tag on the tooltip, so they stand out even
     with flood_risk_only off and the climate overlay off. When
     False (used by the main Care Services Explorer page), markers
-    render with their normal symbol/color only — no ring, no
-    tooltip tag — since that page is meant to read as a plain
+    render with their normal symbol/color only, no ring, no
+    tooltip tag, since that page is meant to read as a plain
     facility map, with flood-risk framing left to the
     Vulnerability Index tab next to the duplicated map. The
     flood-risk note inside each marker's popup is unaffected
@@ -542,14 +663,14 @@ def build_explorer_map(
 
     html is the rendered map (via m._repr_html_()) rather than
     the live folium.Map object, so the cached value is a plain,
-    easily hashable/picklable string — st_folium can render a
+    easily hashable/picklable string, st_folium can render a
     Map object directly, but caching the HTML avoids any
     ambiguity about whether a cached Map object's internal state
     could be accidentally mutated by a caller between cache hits.
 
     climate_legend_info is a dict of
     {layer_name: (vmin, vmax)} for every selected *non-binary*
-    climate layer (Land-Surface Temperature, NDVI) — used by the
+    climate layer (Land-Surface Temperature, NDVI), used by the
     caller to render a color-scale legend outside this function,
     since folium's rendered HTML is opaque to Streamlit and can't
     host a native st widget itself. Binary layers (Flood
@@ -1144,7 +1265,7 @@ if st.sidebar.button(
 # TOOLS
 # --------------------------------------------------
 
-st.sidebar.subheader("Additional Tools")
+st.sidebar.subheader("Analysis Tools")
 
 if st.sidebar.button(
     "Care Services Explorer",
@@ -1175,17 +1296,19 @@ if st.sidebar.button(
     st.rerun()
 
 if st.sidebar.button(
-    "Climate, Hazard and Population Analysis",
-    width='stretch'
-):
-    st.session_state.page = "Climate, Hazard and Population Analysis"
-    st.rerun()
-
-if st.sidebar.button(
     "Zoning Map",
     width='stretch'
 ):
     st.session_state.page = "Zoning Map"
+    st.rerun()
+
+st.sidebar.subheader("Climate & Hazard")
+
+if st.sidebar.button(
+    "Climate, Hazard and Population Analysis",
+    width='stretch'
+):
+    st.session_state.page = "Climate, Hazard and Population Analysis"
     st.rerun()
 
 # --------------------------------------------------
@@ -1306,7 +1429,6 @@ if page == "Care Services Explorer":
 # --------------------------------------------------
 # PAGES
 # --------------------------------------------------
-
 if page == "Home":
 
     # =====================================================
@@ -1322,8 +1444,8 @@ if page == "Home":
                 <h2>Quezon Caring City Dashboard</h2>
                 <p>
                     Central reference for Quezon City's care-service
-                    network — population, facilities, accessibility,
-                    and climate exposure — to support planning,
+                    network, population, facilities, accessibility,
+                    and climate exposure, to support planning,
                     resource allocation, and program design.
                 </p>
             </div>
@@ -1339,6 +1461,38 @@ if page == "Home":
         """,
         unsafe_allow_html=True
     )
+
+    # =====================================================
+    # QUICK STATS (KPI CARDS)
+    # =====================================================
+
+    total_barangays = len(barangay_df)
+    total_districts = len(district_pop)
+
+    k1, k2, k3 = st.columns(3)
+
+    kpi_card(
+        k1,
+        "Total Population",
+        f"{citywide_population:,.0f}",
+        caption="residents citywide"
+    )
+
+    kpi_card(
+        k2,
+        "Total Barangays",
+        f"{total_barangays -1 :,}",
+        caption="administrative divisions"
+    )
+
+    kpi_card(
+        k3,
+        "Total Districts",
+        f"{total_districts}",
+        caption="geographic areas"
+    )
+
+    st.divider()
 
     # =====================================================
     # HOW TO NAVIGATE  /  WHAT'S INSIDE
@@ -1357,7 +1511,7 @@ if page == "Home":
             (
                 "Explore",
                 "Use the sidebar to move between care-service "
-                "maps, analysis tools, and climate pages."
+                "maps, analysis tools, and climate & hazard pages."
             ),
             (
                 "Filter",
@@ -1372,11 +1526,13 @@ if page == "Home":
             )
         ]
 
-        for step_title, step_body in nav_steps:
+        for idx, (step_title, step_body) in enumerate(nav_steps):
+
+            min_height = "120px"
 
             st.markdown(
                 f"""
-                <div class="qcd-card">
+                <div class="qcd-card" style="border: 1px solid #e0e0e0; border-radius: 8px; min-height: {min_height}; padding: 16px;">
                     <div class="qcd-card-title">{step_title}</div>
                     <p class="qcd-card-body">{step_body}</p>
                 </div>
@@ -1408,19 +1564,20 @@ if page == "Home":
             ),
             (
                 "#B91C1C",
-                "Climate & Vulnerability",
-                "Climate, Hazard and Population Analysis — which "
+                "Climate & Hazard",
+                "Climate, Hazard and Population Analysis, which "
                 "facilities and population groups are most at "
                 "risk from flooding and heat, and where."
             )
         ]
 
-        for accent_color, group_title, group_body in content_groups:
+        for idx, (accent_color, group_title, group_body) in enumerate(content_groups):
+
+            min_height = "120px"
 
             st.markdown(
                 f"""
-                <div class="qcd-card-accent"
-                     style="border-left-color:{accent_color};">
+                <div class="qcd-card-accent" style="border: 1px solid #e0e0e0; border-left: 4px solid {accent_color}; border-radius: 8px; min-height: {min_height}; padding: 16px;">
                     <div class="qcd-card-title">{group_title}</div>
                     <p class="qcd-card-body">{group_body}</p>
                 </div>
@@ -1442,11 +1599,11 @@ elif page == "Population Overview":
     """)
 
     # =====================================================
-    # AGE GROUP DEFINITION — ⚠️ PENDING CONFIRMATION WITH MARIAN
+    # AGE GROUP DEFINITION, ⚠️ PENDING CONFIRMATION WITH MARIAN
     # (same definition documented in Notebook 2, Section 2.1.0)
     # Source data arrives pre-aggregated into these four bands,
     # so a different elderly/children cutoff (e.g. 65+ instead
-    # of 60+) cannot be derived from what we have — it would
+    # of 60+) cannot be derived from what we have, it would
     # require re-tabulating from a more granular source.
     # =====================================================
 
@@ -1512,7 +1669,7 @@ elif page == "Population Overview":
 
     total_population = population_sex["Total"].sum()
     total_male = population_sex["Male"].sum()
-    total_female = population_sex["Female"].sum()
+    total_female = int(math.ceil(population_sex["Female"].sum()))
 
     early_childhood = population_age[
         age_group_definition["children_0_17"][0]
@@ -1560,50 +1717,68 @@ elif page == "Population Overview":
         * 100
     )
 
-    top1, top2 = st.columns(2)
-
+    # Total Population - Primary Metric
+    top1, _ = st.columns([1, 1])
     kpi_card(
         top1,
-        "Population",
-        f"{total_population:,.0f}"
+        "Total Population",
+        f"{total_population:,.0f}",
+        caption="residents citywide"
     )
 
-    kpi_card(
-        top2,
-        "Sex Ratio (M/F)",
-        f"{sex_ratio_overall:.1f}"
-    )
+    st.divider()
 
+    # Sex Ratio and Age Ranges - Secondary Metrics
     st.markdown(
-        '<div class="qcd-section-label">Age Ranges — % of Total Population</div>',
+        '<div class="qcd-section-label">Demographic Breakdown</div>',
         unsafe_allow_html=True
     )
 
-    c1, c2, c3, c4 = st.columns(4)
+    sec1, sec2_col = st.columns([1, 1.8])
 
-    kpi_card(
-        c1,
-        "0-5",
-        f"{early_childhood_pct:.1f}%"
-    )
+    with sec1:
+        st.markdown(
+            f"""
+            <div style="background: #F7F5FC; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+                <div style="font-family: 'Montserrat', sans-serif; font-size: 0.85rem; font-weight: 600; color: #7F47ED; margin-bottom: 8px;">Sex Ratio (M/F)</div>
+                <div style="font-size: 1.8rem; font-weight: 700; color: #7F47ED;">{sex_ratio_overall:.1f}</div>
+                <div style="font-size: 0.78rem; color: #888; margin-top: 4px;">males per 100 females</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-    kpi_card(
-        c2,
-        "6-17",
-        f"{school_age_pct:.1f}%"
-    )
+    with sec2_col:
+        st.markdown(
+            '<div class="qcd-section-label" style="margin-bottom: 12px;">Age Ranges, % of Total Population</div>',
+            unsafe_allow_html=True
+        )
 
-    kpi_card(
-        c3,
-        "18-59",
-        f"{working_age_pct:.1f}%"
-    )
+        c1, c2, c3, c4 = st.columns(4)
 
-    kpi_card(
-        c4,
-        "60+",
-        f"{elderly_pct:.1f}%"
-    )
+        kpi_card(
+            c1,
+            "0-5",
+            f"{early_childhood_pct:.1f}%"
+        )
+
+        kpi_card(
+            c2,
+            "6-17",
+            f"{school_age_pct:.1f}%"
+        )
+
+        kpi_card(
+            c3,
+            "18-59",
+            f"{working_age_pct:.1f}%"
+        )
+
+        kpi_card(
+            c4,
+            "60+",
+            f"{elderly_pct:.1f}%"
+        )
 
     st.divider()
 
@@ -1637,7 +1812,7 @@ elif page == "Population Overview":
         # which can return title-case names (e.g. "Greater
         # Lagro") rather than the geojson's raw casing. The two
         # currently happen to agree by coincidence, but relying
-        # on that isn't safe — explicitly uppercase both sides,
+        # on that isn't safe, explicitly uppercase both sides,
         # same convention used on the other pages.
         barangay_map["barangay_name"] = (
             barangay_map["barangay_name"]
@@ -1682,7 +1857,7 @@ elif page == "Population Overview":
         # ---------------------------------------------------
         # DERIVED INDICATORS
         # (children/working-age/elderly grouping driven by
-        # age_group_definition above — update there, not here,
+        # age_group_definition above, update there, not here,
         # once confirmed with Marian)
         # ---------------------------------------------------
 
@@ -1736,7 +1911,7 @@ elif page == "Population Overview":
         )
 
         # ---------------------------------------------------
-        # MAP — only the indicators that are genuinely useful
+        # MAP, only the indicators that are genuinely useful
         # to visualize spatially (dropped care_demand_index
         # and sex_ratio from the MAP since they read better
         # as ranked bar charts below)
@@ -1785,14 +1960,14 @@ elif page == "Population Overview":
             "Female Population":
                 "Number of female residents recorded in each barangay.",
             "Children Population (0-17)":
-                "Combined count of residents aged 0–5 and 6–17 — "
+                "Combined count of residents aged 0–5 and 6–17, "
                 "the population segment most dependent on schools, "
                 "childcare, and pediatric health services.",
             "Working Age Population":
                 "Residents aged 18–59, the segment that typically "
                 "supports the local economy and tax base.",
             "Older Persons Population":
-                "Residents aged 60 and above — a key group for "
+                "Residents aged 60 and above, a key group for "
                 "senior care planning and health services.",
             "Children Share (%)":
                 "Percentage of the barangay's population aged 0–17. "
@@ -1812,7 +1987,7 @@ elif page == "Population Overview":
 
         # ---------------------------------------------------
         # CHOROPLETH FILL COLORS (continuous, Purples ramp,
-        # clipped to 5th-95th percentile — same clipping the
+        # clipped to 5th-95th percentile, same clipping the
         # Plotly version used via update_coloraxes)
         # ---------------------------------------------------
 
@@ -1828,7 +2003,7 @@ elif page == "Population Overview":
         )
 
         # ---------------------------------------------------
-        # VIEW STATE — locked to the same zoom range as the
+        # VIEW STATE, locked to the same zoom range as the
         # other maps in this dashboard, so users can't zoom
         # out past the city boundary
         # ---------------------------------------------------
@@ -1885,8 +2060,7 @@ elif page == "Population Overview":
 
             # pydeck has no built-in colorbar (unlike Plotly's
             # automatic color_continuous_scale legend), so the
-            # fill color here would otherwise be unexplained —
-            # render_colormap_legend_html builds the same kind of
+            # fill color here would otherwise be unexplained,             # render_colormap_legend_html builds the same kind of
             # gradient-bar legend already used for the climate
             # raster layers elsewhere in this app, reusing the
             # same vmin/vmax (5th-95th percentile clip) that was
@@ -1912,10 +2086,17 @@ elif page == "Population Overview":
         st.divider()
 
         # ---------------------------------------------------
-        # TOP / BOTTOM BARANGAYS — POPULATION DENSITY
+        # TOP / BOTTOM BARANGAYS, POPULATION DENSITY
         # ---------------------------------------------------
 
         st.subheader("Population Density by Barangay")
+
+        st.caption(
+            "Population density (people per square kilometer) varies dramatically across barangays. "
+            "The highest-density areas (urban cores) may have 20,000+ people/km², while "
+            "lowest-density areas (peripheral) may have under 1,000 people/km². "
+            "Note: X-axis scales differ to show meaningful variation in each range."
+        )
 
         col_den1, col_den2 = st.columns(2)
 
@@ -1939,7 +2120,7 @@ elif page == "Population Overview":
                 x="population_density",
                 y="Barangay",
                 orientation="h",
-                title="Top 10 — Highest Density (people/km²)",
+                title="Top 10, Highest Density (people/km²)",
                 color_discrete_sequence=["#7F47ED"]
             )
             fig_top_den.update_layout(
@@ -1956,7 +2137,7 @@ elif page == "Population Overview":
                 x="population_density",
                 y="Barangay",
                 orientation="h",
-                title="Top 10 — Lowest Density (people/km²)",
+                title="Top 10, Lowest Density (people/km²)",
                 color_discrete_sequence=["#80AA31"]
             )
             fig_bottom_den.update_layout(
@@ -2053,7 +2234,7 @@ elif page == "Population Overview":
         )
 
         # ---------------------------------------------------
-        # DISTRICT MAP — kept to the indicators that matter
+        # DISTRICT MAP, kept to the indicators that matter
         # most for resource planning (dropped raw M/F split
         # from the map; that's better shown as the pyramid
         # and ratio chart below)
@@ -2100,7 +2281,7 @@ elif page == "Population Overview":
                 "Residents aged 18–59, the segment that typically "
                 "supports the local economy and tax base.",
             "Older Persons (60+)":
-                "Residents aged 60 and above — a key group for "
+                "Residents aged 60 and above, a key group for "
                 "senior care planning and health services."
         }
 
@@ -2110,7 +2291,7 @@ elif page == "Population Overview":
 
         # ---------------------------------------------------
         # CHOROPLETH FILL COLORS (continuous, Purples ramp,
-        # full min/max range — this map had no percentile
+        # full min/max range, this map had no percentile
         # clipping in the Plotly version, so none is added
         # here either)
         # ---------------------------------------------------
@@ -2127,7 +2308,7 @@ elif page == "Population Overview":
         )
 
         # ---------------------------------------------------
-        # VIEW STATE — locked to the same zoom range as the
+        # VIEW STATE, locked to the same zoom range as the
         # other maps in this dashboard, so users can't zoom
         # out past the city boundary
         # ---------------------------------------------------
@@ -2175,6 +2356,16 @@ elif page == "Population Overview":
         )
 
         with st.container(border=True, key="qcd-chart-5"):
+            st.markdown(
+                render_colormap_legend_html(
+                    colormap="Purples",
+                    vmin=district_vmin,
+                    vmax=district_vmax,
+                    unit="residents",
+                    label=f"{district_indicator} by District (darker = higher)"
+                ),
+                unsafe_allow_html=True
+            )
             st.pydeck_chart(
                 deck,
                 height=650,
@@ -2204,7 +2395,7 @@ elif page == "Population Overview":
             x="District",
             y="Population",
             color="Age Group",
-            title="Population Structure by District",
+            title="Population Disparities Across Districts",
             barmode="stack",
             color_discrete_sequence=QCD_CATEGORICAL
         )
@@ -2223,7 +2414,7 @@ elif page == "Population Overview":
         # POPULATION PYRAMID (City-wide, Male vs Female)
         # ---------------------------------------------------
 
-        st.subheader("Population Pyramid — Male vs Female")
+        st.subheader("Population Pyramid, Male vs Female")
 
         fig_pyramid = go.Figure()
 
@@ -2249,7 +2440,7 @@ elif page == "Population Overview":
 
         fig_pyramid.update_layout(
             barmode="overlay",
-            title="Citywide Population by Sex",
+            title="Nearly Balanced Gender Distribution",
             xaxis=dict(
                 tickvals=[-total_male, 0, total_female],
                 ticktext=[
@@ -2283,7 +2474,7 @@ elif page == "Population Overview":
                 ratio_data,
                 x="District",
                 y="Sex Ratio",
-                title="Sex Ratio (M/F ×100) by District",
+                title="District-Level Gender Composition Variations",
                 color_discrete_sequence=["#7F47ED"]
             )
             fig_ratio.add_hline(
@@ -2834,7 +3025,7 @@ if page == "Childcare Centers":
     with st.expander("How is Zoning Compatibility calculated?"):
         st.markdown("""
 **Zoning Compatibility** is determined by matching each facility's barangay
-to its **dominant zone type** — the most common land-use classification in
+to its **dominant zone type**, the most common land-use classification in
 that barangay based on polygon count from QC's Zoning Administration Unit
 (excluding roads, water bodies, and unclassified zones).
 
@@ -2843,13 +3034,13 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
 | Symbol | Meaning | Zone types |
 |--------|---------|------------|
 | ✓ | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
-| ✗ | Likely restricted | Industrial zones (I-1, I-2) — social care facilities typically require rezoning or a special use permit in these areas |
+| ✗ | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
 | ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
 
 **Important caveats:**
 - This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
   A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows ✗.
-- Zoning rules are simplified — actual permitting depends on the specific use classification and
+- Zoning rules are simplified, actual permitting depends on the specific use classification and
   any variances or conditional use permits already granted.
 - To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
         """)
@@ -2892,7 +3083,7 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
             category_counts,
             x="Category",
             y="Facilities",
-            title="Facilities by Category",
+            title="Childcare Facilities Across Service Types",
             color_discrete_sequence=["#7F47ED"]
         )
 
@@ -2924,7 +3115,7 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
             district_counts,
             x="District",
             y="Facilities",
-            title="Facilities by District",
+            title="Childcare Infrastructure Gaps by District",
             color_discrete_sequence=["#7F47ED"]
         )
 
@@ -3392,7 +3583,7 @@ elif page == "Schools":
     with st.expander("How is Zoning Compatibility calculated?"):
         st.markdown("""
 **Zoning Compatibility** is determined by matching each facility's barangay
-to its **dominant zone type** — the most common land-use classification in
+to its **dominant zone type**, the most common land-use classification in
 that barangay based on polygon count from QC's Zoning Administration Unit
 (excluding roads, water bodies, and unclassified zones).
 
@@ -3401,13 +3592,13 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
 | Symbol | Meaning | Zone types |
 |--------|---------|------------|
 | ✓ | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
-| ✗ | Likely restricted | Industrial zones (I-1, I-2) — social care facilities typically require rezoning or a special use permit in these areas |
+| ✗ | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
 | ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
 
 **Important caveats:**
 - This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
   A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows ✗.
-- Zoning rules are simplified — actual permitting depends on the specific use classification and
+- Zoning rules are simplified, actual permitting depends on the specific use classification and
   any variances or conditional use permits already granted.
 - To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
         """)
@@ -3521,7 +3712,7 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
             x="District",
             y="Schools",
             text_auto=True,
-            title="Schools by District",
+            title="School Capacity Disparities by District",
             color_discrete_sequence=["#7F47ED"]
         )
 
@@ -3642,7 +3833,7 @@ elif page == "Health Centers Map":
 
     # The district column in this CSV has inconsistent spacing
     # between "District" and the number (e.g. "District  2" with
-    # two spaces vs. "District 1" with one) — collapse it once
+    # two spaces vs. "District 1" with one), collapse it once
     # here, right after loading, so every chart/table built from
     # health_capacity downstream (Health Centers by District,
     # Doctors vs Health Centers, Health Coverage by District)
@@ -4019,7 +4210,7 @@ elif page == "Health Centers Map":
         district_capacity_chart,
         x="district",
         y="health_centers",
-        title="Health Centers by District",
+        title="Health Infrastructure Gaps by District",
         text_auto=True,
         color_discrete_sequence=["#7F47ED"]
     )
@@ -4072,7 +4263,7 @@ elif page == "Health Centers Map":
 
     # health_capacity["health_centers"] only counts facilities
     # tagged specifically as a "Health Center" in that lookup
-    # CSV — it doesn't reflect the full range of health-related
+    # CSV, it doesn't reflect the full range of health-related
     # facility types (Super Health Centers, pharmacies, national/
     # LGU hospitals, milk banks, etc.) that actually show up on
     # this page's map and in the Category breakdown below.
@@ -4570,7 +4761,7 @@ elif page == "Older Persons Center Map":
             sex_df,
             names="Sex",
             values="Population",
-            title="Senior Citizens by Sex",
+            title="Senior Population Gender Distribution",
             color_discrete_sequence=QCD_CATEGORICAL
         )
 
@@ -4755,7 +4946,7 @@ elif page == "Older Persons Center Map":
         facility_mix,
         names="Facility Type",
         values="Count",
-        title="Older Persons Care Facility Types",
+        title="Diverse Senior Care Options",
         color_discrete_sequence=QCD_CATEGORICAL
     )
 
@@ -5154,7 +5345,7 @@ elif page == "Long-Term Care & Rehabilitation":
     with st.expander("How is Zoning Compatibility calculated?"):
         st.markdown("""
 **Zoning Compatibility** is determined by matching each facility's barangay
-to its **dominant zone type** — the most common land-use classification in
+to its **dominant zone type**, the most common land-use classification in
 that barangay based on polygon count from QC's Zoning Administration Unit
 (excluding roads, water bodies, and unclassified zones).
 
@@ -5163,13 +5354,13 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
 | Symbol | Meaning | Zone types |
 |--------|---------|------------|
 | ✓ | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
-| ✗ | Likely restricted | Industrial zones (I-1, I-2) — social care facilities typically require rezoning or a special use permit in these areas |
+| ✗ | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
 | ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
 
 **Important caveats:**
 - This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
   A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows ✗.
-- Zoning rules are simplified — actual permitting depends on the specific use classification and
+- Zoning rules are simplified, actual permitting depends on the specific use classification and
   any variances or conditional use permits already granted.
 - To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
         """)
@@ -5423,7 +5614,7 @@ elif page == "Persons with Disabilities":
 
     total_pwd = demographics["pwd_registered"].sum()
 
-    total_male = pwd_by_type["male"].sum()
+    total_male = int(math.ceil(pwd_by_type["male"].sum()))
     total_female = pwd_by_type["female"].sum()
 
     disability_types = pwd_by_type["Type of Disability"].nunique()
@@ -5590,7 +5781,7 @@ elif page == "Persons with Disabilities":
     # --------------------------------------------------
     # SENIORS WITH DISABILITY
     # (replaces the previous PWD registration trend charts
-    # — no year-by-year registration history is available
+    #, no year-by-year registration history is available
     # in the current data, so this section instead surfaces
     # the senior-citizen disability context that demand_city
     # _context.csv carries: the two diverging city-level
@@ -5606,7 +5797,7 @@ elif page == "Persons with Disabilities":
         "OSCA and PDAO use different registration bases, so "
         "their counts of seniors also registered as PWD do "
         "not match. Both figures are shown rather than "
-        "reconciled into one number. City-level only — no "
+        "reconciled into one number. City-level only, no "
         "barangay or district breakdown is available for "
         "this indicator."
     )
@@ -6116,7 +6307,7 @@ elif page == "Action Offices":
     with st.expander("How is Zoning Compatibility calculated?"):
         st.markdown("""
 **Zoning Compatibility** is determined by matching each facility's barangay
-to its **dominant zone type** — the most common land-use classification in
+to its **dominant zone type**, the most common land-use classification in
 that barangay based on polygon count from QC's Zoning Administration Unit
 (excluding roads, water bodies, and unclassified zones).
 
@@ -6125,13 +6316,13 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
 | Symbol | Meaning | Zone types |
 |--------|---------|------------|
 | ✓ | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
-| ✗ | Likely restricted | Industrial zones (I-1, I-2) — social care facilities typically require rezoning or a special use permit in these areas |
+| ✗ | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
 | ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
 
 **Important caveats:**
 - This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
   A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows ✗.
-- Zoning rules are simplified — actual permitting depends on the specific use classification and
+- Zoning rules are simplified, actual permitting depends on the specific use classification and
   any variances or conditional use permits already granted.
 - To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
         """)
@@ -6509,7 +6700,7 @@ elif page == "Care Services Explorer":
         Explore childcare centers, schools, health facilities,
         older persons facilities, rehabilitation centers,
         migration resource centers, and Quezon City
-        Action Offices on a single map — optionally overlaid
+        Action Offices on a single map, optionally overlaid
         with land-surface temperature, vegetation, or flood
         exposure layers.
         """
@@ -6734,7 +6925,7 @@ elif page == "Care Services Explorer":
     # continuous-scale climate layer overlaid above gets its
     # color-scale legend rendered here instead, just below the
     # map. Binary layers like Flood Inundation aren't included
-    # here — they're a flooded/not-flooded mask, not a scale.)
+    # here, they're a flooded/not-flooded mask, not a scale.)
     # --------------------------------------------------
 
     if climate_legend_info:
@@ -6770,11 +6961,11 @@ elif page == "Care Services Explorer":
     # SUPPLY-SIDE FLOOD EXPOSURE SUMMARY
     # (counts, across the *currently selected* service layers
     # and district, how many facilities sit inside the 100-yr
-    # flood footprint — see flag_facilities_at_risk in
+    # flood footprint, see flag_facilities_at_risk in
     # functions.py. The map above no longer offers an at-risk-
-    # only filter or red rings on this page — see the Care
+    # only filter or red rings on this page, see the Care
     # Services Explorer tab inside Climate, Hazard and
-    # Population Analysis for that view — but this summary
+    # Population Analysis for that view, but this summary
     # stays here since it's a useful count regardless of how
     # the map is displayed.)
     # --------------------------------------------------
@@ -6926,7 +7117,7 @@ elif page == "Accessibility Analysis":
 
     # ==================================================
     # FACILITY-PER-1,000 RATIO INDICATORS
-    # (shared with the Accessibility Map page — see
+    # (shared with the Accessibility Map page, see
     # ACCESSIBILITY_RATIO_INDICATORS in functions.py)
     # ==================================================
 
@@ -6977,8 +7168,7 @@ elif page == "Accessibility Analysis":
         )
 
         # ==================================================
-        # SELECTED RATIO (recomputed at district level —
-        # per-1,000 ratios don't average correctly across
+        # SELECTED RATIO (recomputed at district level,         # per-1,000 ratios don't average correctly across
         # barangays of different sizes, so this is computed
         # fresh from the district totals rather than averaging
         # the barangay-level ratio_* column)
@@ -7138,11 +7328,11 @@ elif page == "Accessibility Analysis":
         )
 
         # ==================================================
-        # MAP — driven by the selected facility-specific ratio
+        # MAP, driven by the selected facility-specific ratio
         # ==================================================
 
         st.subheader(
-            f"District Map — {selected_ratio_label}"
+            f"District Map, {selected_ratio_label}"
         )
 
         st.caption(
@@ -7218,8 +7408,7 @@ elif page == "Accessibility Analysis":
 
         district_labels = district_geo.copy()
 
-        # Reproject to a metric CRS before computing centroids —
-        # centroids computed directly on geographic (lat/lon)
+        # Reproject to a metric CRS before computing centroids,         # centroids computed directly on geographic (lat/lon)
         # coordinates can be skewed for irregular polygons, since
         # degrees of longitude aren't constant-width distances.
         # Same EPSG:32651 (UTM Zone 51N) convention used for the
@@ -7333,6 +7522,16 @@ elif page == "Accessibility Analysis":
         )
 
         with st.container(border=True, key="qcd-chart-55"):
+            st.markdown(
+                render_colormap_legend_html(
+                    colormap="Purples",
+                    vmin=ratio_min,
+                    vmax=ratio_max,
+                    unit="per 10,000 population",
+                    label=f"{selected_ratio_label} by District (darker = higher)"
+                ),
+                unsafe_allow_html=True
+            )
             st.pydeck_chart(
                 deck,
                 height=700,
@@ -7356,12 +7555,10 @@ elif page == "Accessibility Analysis":
             - **Accessibility Index**: A normalized score (0–100) showing each district's
               relative access to ALL care services. Higher scores = better access; lower
               scores = underserved districts
-            - **Care Demand per Facility**: Average population burden on each facility —
-              higher values indicate facilities are serving larger populations
+            - **Care Demand per Facility**: Average population burden on each facility,               higher values indicate facilities are serving larger populations
 
             **How to Use This:**
-            - **Priority Districts** (table below) show where investment is most needed —
-              districts with the lowest accessibility index and highest demand per facility
+            - **Priority Districts** (table below) show where investment is most needed,               districts with the lowest accessibility index and highest demand per facility
             - **Spatial patterns** on the map highlight geographic gaps where residents
               may travel longer distances or face barriers to access
             - **Policy action**: Target new facility placement in districts marked as
@@ -7508,10 +7705,10 @@ elif page == "Accessibility Analysis":
             text="District",
             color=selected_ratio_label,
             # Reversed for the same "darker = underserved"
-            # convention used on the rest of this page — a lower
+            # convention used on the rest of this page, a lower
             # ratio should read darker, not lighter.
             color_continuous_scale="Purples_r",
-            title=f"Relevant Population vs Facilities — {selected_ratio_label}"
+            title=f"Relevant Population vs Facilities, {selected_ratio_label}"
         )
 
         fig.update_layout(
@@ -7558,12 +7755,11 @@ elif page == "Accessibility Analysis":
     with tab2:
 
         st.subheader(
-            f"Barangay-Level Accessibility — {selected_ratio_label}"
+            f"Barangay-Level Accessibility, {selected_ratio_label}"
         )
 
         # ==================================================
-        # BARANGAY DATA (from demographics.csv directly —
-        # facility counts, population, and pre-computed
+        # BARANGAY DATA (from demographics.csv directly,         # facility counts, population, and pre-computed
         # ratio_* columns are all already at barangay level)
         # ==================================================
 
@@ -7645,6 +7841,36 @@ elif page == "Accessibility Analysis":
         )
 
         # ==================================================
+        # CHILDREN / ELDERLY SERVING FACILITIES
+        # ==================================================
+        barangay_access["Child-Serving Facilities"] = (
+            barangay_access["Childcare"]
+            +
+            barangay_access["Schools"]
+        )
+
+        barangay_access["Elderly-Serving Facilities"] = (
+            barangay_access["Older persons care"]
+            +
+            barangay_access["Long-term care and rehabilitation services"]
+        )
+
+        # Calculate Children and Elderly per Facility ratios
+        barangay_access["Children per Facility"] = np.where(
+            barangay_access["Child-Serving Facilities"] != 0,
+            barangay_access["age_0_5"]
+            / barangay_access["Child-Serving Facilities"],
+            np.nan
+        )
+
+        barangay_access["Elderly per Facility"] = np.where(
+            barangay_access["Elderly-Serving Facilities"] != 0,
+            barangay_access["age_60plus"]
+            / barangay_access["Elderly-Serving Facilities"],
+            np.nan
+        )
+
+        # ==================================================
         # KPI CARDS
         # ==================================================
 
@@ -7693,7 +7919,7 @@ elif page == "Accessibility Analysis":
         st.divider()
 
         # ==================================================
-        # BARANGAY MAP — driven by the selected ratio
+        # BARANGAY MAP, driven by the selected ratio
         # ==================================================
 
         barangay_geo = gpd.read_file(
@@ -7731,7 +7957,7 @@ elif page == "Accessibility Analysis":
         )
 
         st.subheader(
-            f"Barangay Map — {selected_ratio_label}"
+            f"Barangay Map, {selected_ratio_label}"
         )
 
         st.caption(
@@ -7859,6 +8085,16 @@ elif page == "Accessibility Analysis":
         )
 
         with st.container(border=True, key="qcd-chart-61"):
+            st.markdown(
+                render_colormap_legend_html(
+                    colormap="Purples",
+                    vmin=ratio_min,
+                    vmax=ratio_max,
+                    unit="per 10,000 population",
+                    label=f"{selected_ratio_label} by Barangay (darker = higher)"
+                ),
+                unsafe_allow_html=True
+            )
             st.pydeck_chart(
                 deck,
                 height=750,
@@ -7872,7 +8108,7 @@ elif page == "Accessibility Analysis":
         # ==================================================
 
         # ── Zero-facility barangays callout ──
-        # (the bar chart was removed — barangays with zero
+        # (the bar chart was removed, barangays with zero
         # facilities dominate the "most underserved" list and
         # produce invisible bars; the Priority Barangays table
         # below already shows the full ranked breakdown with
@@ -7891,7 +8127,7 @@ elif page == "Accessibility Analysis":
                         len(_zero),
                         help=(
                             f"Barangays where {selected_ratio_label} "
-                            "is zero — no registered facilities of "
+                            "is zero, no registered facilities of "
                             "this type were found. These represent "
                             "the most acute gaps and should be "
                             "prioritised for new facility placement."
@@ -7921,7 +8157,7 @@ elif page == "Accessibility Analysis":
             hover_name="Barangay",
             color="Accessibility Index",
             # Reversed for the same "darker = underserved"
-            # convention used on the rest of this page — a lower
+            # convention used on the rest of this page, a lower
             # Accessibility Index should read darker, not lighter.
             color_continuous_scale="Purples_r",
             title="Population vs Facilities (All Types)"
@@ -7948,7 +8184,7 @@ elif page == "Accessibility Analysis":
             "highest population (areas where the gap affects "
             "the most people). The **Dominant Zone** column shows "
             "the most common land-use designation in each barangay "
-            "from QC's zoning data — a low ratio in a dense R-3 "
+            "from QC's zoning data, a low ratio in a dense R-3 "
             "residential barangay signals a genuine care facility "
             "shortage, while the same ratio in an industrial or "
             "utility zone may reflect land-use constraints rather "
@@ -8056,8 +8292,8 @@ elif page == "Accessibility Analysis":
             )
             pwd_health_ratio = barangay_access["PWD per Health Center"].median()
             pwd_ltc_ratio = barangay_access["PWD per LTC Facility"].median()
-            pwd_no_health = int((barangay_access["Health centers"] == 0).sum())
-            pwd_no_ltc = int((barangay_access["Long-term care and rehabilitation services"] == 0).sum())
+            pwd_no_health = int(math.ceil((barangay_access["Health centers"] == 0).sum()))
+            pwd_no_ltc = int(math.ceil((barangay_access["Long-term care and rehabilitation services"] == 0).sum()))
 
         # KPI Cards
         kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
@@ -8082,7 +8318,7 @@ elif page == "Accessibility Analysis":
             kpi_card(
                 st,
                 "Barangays with No Child-Serving Facility",
-                int((barangay_access["Child-Serving Facilities"] == 0).sum()),
+                int(math.ceil((barangay_access["Child-Serving Facilities"] == 0).sum())),
                 "down_good"
             )
 
@@ -8090,7 +8326,7 @@ elif page == "Accessibility Analysis":
             kpi_card(
                 st,
                 "Barangays with No Elderly-Serving Facility",
-                int((barangay_access["Elderly-Serving Facilities"] == 0).sum()),
+                int(math.ceil((barangay_access["Elderly-Serving Facilities"] == 0).sum())),
                 "down_good"
             )
 
@@ -8235,7 +8471,7 @@ elif page == "Accessibility Analysis":
 
         st.markdown("""
         Contextual socio-economic indicators at the barangay
-        level — household composition, food insecurity, and
+        level, household composition, food insecurity, and
         housing conditions (2024 CBMS), plus sex ratio and the
         share of working-age women.
         """)
@@ -8246,7 +8482,7 @@ elif page == "Accessibility Analysis":
             "per household, food insecurity, housing inadequacy) "
             "come from the 2024 Community-Based Monitoring System, "
             "which covers roughly 71% of Quezon City's census "
-            "population — not a full count. They should be read "
+            "population, not a full count. They should be read "
             "as indicative of conditions in responding households, "
             "not as exact citywide totals."
         )
@@ -8259,7 +8495,7 @@ elif page == "Accessibility Analysis":
         # (domestic_workers_barangay, from
         # load_domestic_workers() in functions.py) rather than
         # demographics.csv, so they're merged in here, once,
-        # before the indicator dict below — everything
+        # before the indicator dict below, everything
         # downstream (KPIs, map, top-15 table) just sees three
         # more plain numeric columns and treats them exactly
         # like every other socio-economic indicator.
@@ -8310,7 +8546,7 @@ elif page == "Accessibility Analysis":
                     "Total population, by barangay (2024 "
                     "census). Standalone population "
                     "distribution map, separate from the "
-                    "per-1,000 domestic worker rates above — "
+                    "per-1,000 domestic worker rates above, "
                     "for seeing raw population scale on its "
                     "own, in the same map/table format as "
                     "every other indicator here."
@@ -8326,7 +8562,7 @@ elif page == "Accessibility Analysis":
                 "col": "share_women_18_59_pct",
                 "description": (
                     "Women aged 18–59 as a share of total "
-                    "population — a proxy for female labor "
+                    "population, a proxy for female labor "
                     "available for paid work and unpaid care."
                 )
             },
@@ -8511,7 +8747,7 @@ elif page == "Accessibility Analysis":
         # ---------------------------------------------------
 
         st.subheader(
-            f"Barangay Map — {selected_socio_label}"
+            f"Barangay Map, {selected_socio_label}"
         )
 
         socio_vmin = socio_map[selected_socio_col].quantile(0.05)
@@ -8576,8 +8812,7 @@ elif page == "Accessibility Analysis":
                 width="stretch"
             )
 
-            # Same gap as the Barangay/District Analysis maps —
-            # pydeck draws the fill color but never explains it.
+            # Same gap as the Barangay/District Analysis maps,             # pydeck draws the fill color but never explains it.
             # Unit is derived from the column name itself rather
             # than a separate hand-maintained lookup, since these
             # columns follow a consistent naming convention
@@ -8635,7 +8870,7 @@ elif page == "Care Planning & Investment Priorities":
 
 
     # ==================================================
-    # BARANGAY DATA (from demographics.csv — facility
+    # BARANGAY DATA (from demographics.csv, facility
     # counts by type, age/sex population, and PWD/senior
     # registrations are all already at barangay level, so
     # no merge against care_v3.csv or population_age is
@@ -8655,10 +8890,10 @@ elif page == "Care Planning & Investment Priorities":
 
     # ==================================================
     # SERVICE DIVERSITY
-    # (count of distinct facility types present — Childcare,
+    # (count of distinct facility types present, Childcare,
     # Health centers, Long-term care and rehabilitation
     # services, Older persons care, Action Offices, Schools,
-    # Trainings — mirrors the old major_division.nunique()
+    # Trainings, mirrors the old major_division.nunique()
     # from care_v3.csv, since these are the same seven
     # categories)
     # ==================================================
@@ -8707,44 +8942,6 @@ elif page == "Care Planning & Investment Priorities":
     )
 
     # ==================================================
-    # CHILDREN / ELDERLY PER FACILITY
-    # (split out from the combined "Care Demand" figure —
-    # useful to see whether a barangay's gap is specifically
-    # in childcare/school capacity or in elder care capacity.
-    # Computed directly from demographics.csv's per-type
-    # facility columns rather than via
-    # compute_population_per_facility(), which needed a
-    # major_division column from care_v3.csv that no longer
-    # backs this page.)
-    # ==================================================
-
-    barangay_access["Child-Serving Facilities"] = (
-        barangay_access["Childcare"]
-        +
-        barangay_access["Schools"]
-    )
-
-    barangay_access["Elderly-Serving Facilities"] = (
-        barangay_access["Older persons care"]
-        +
-        barangay_access["Long-term care and rehabilitation services"]
-    )
-
-    barangay_access["Children per Facility"] = np.where(
-        barangay_access["Child-Serving Facilities"] != 0,
-        barangay_access["age_0_5"]
-        / barangay_access["Child-Serving Facilities"],
-        np.nan
-    )
-
-    barangay_access["Elderly per Facility"] = np.where(
-        barangay_access["Elderly-Serving Facilities"] != 0,
-        barangay_access["age_60plus"]
-        / barangay_access["Elderly-Serving Facilities"],
-        np.nan
-    )
-
-    # ==================================================
     # RANKS
     # ==================================================
 
@@ -8786,7 +8983,7 @@ elif page == "Care Planning & Investment Priorities":
     # Facilities/Diversity puts the smallest value, e.g. 0
     # facilities, at rank 1). Summing those raw ranks directly
     # would mean LOWER totals (rank 1 across the board) score
-    # LOWEST after the /max*100 step below — the opposite of
+    # LOWEST after the /max*100 step below, the opposite of
     # "higher score = higher priority." Inverting each rank
     # first (n_barangays + 1 - rank) makes "worst off" contribute
     # the most, so the final score correctly increases with need.
@@ -8880,7 +9077,7 @@ elif page == "Care Planning & Investment Priorities":
         "processed/qc_barangays.geojson"
     )
 
-    # Normalize join keys defensively — both sides must
+    # Normalize join keys defensively, both sides must
     # match exactly on the merge key, regardless of how
     # they were cleaned upstream.
     barangay_geo["barangay_name"] = (
@@ -8972,7 +9169,7 @@ elif page == "Care Planning & Investment Priorities":
 
     # "Barangay" comes from the right side of the left-merge above,
     # so it's NaN for any polygon with no matching row in
-    # barangay_access (e.g. Damar, Reservoir — barangays with no
+    # barangay_access (e.g. Damar, Reservoir, barangays with no
     # care_v3 records at all). "barangay_name" comes from the
     # geometry itself and is always populated, so use it as the
     # display name whenever "Barangay" is missing.
@@ -9162,7 +9359,7 @@ elif page == "Care Planning & Investment Priorities":
     <div class="qcd-insight">
         <div class="qcd-insight-label">💡 Policy Guidance for District Investment</div>
         <div class="qcd-insight-body">
-            <strong>Districts at the top of this list require immediate attention</strong> — they
+            <strong>Districts at the top of this list require immediate attention</strong>, they
             have high care demand relative to available facilities and lower accessibility. Consider:
             <ul style="margin-top: 8px; margin-bottom: 0;">
                 <li><strong>New facility placement:</strong> Prioritize construction or renovation of care
@@ -9289,7 +9486,7 @@ elif page == "Care Planning & Investment Priorities":
     The Priority Score (0–100) combines four key factors that measure a
     barangay's need for care investment:
 
-    - **Care Demand (35%)**: Population aged 0–5 and 60+ years — those who most
+    - **Care Demand (35%)**: Population aged 0–5 and 60+ years, those who most
       need care services
     - **Total Population (35%)**: Larger populations amplify the impact of facility
       gaps and increase investment potential
@@ -9445,12 +9642,12 @@ elif page == "Barangay Clusters":
 
     Barangays are grouped on:
 
-    - **Demographic Profile** — population density, proportion of children (0–17),
+    - **Demographic Profile**, population density, proportion of children (0–17),
       proportion of older persons (60+), and sex ratio (males per 100 females)
-    - **Care Accessibility** — total facilities per 10,000 residents, and the
+    - **Care Accessibility**, total facilities per 10,000 residents, and the
       mix of facility types (Childcare, Health centers, Long-Term Care & Rehabilitation,
-      Schools — the four most common types)
-    - **Socio-Economic Vulnerability** — disability prevalence rate, food insecurity,
+      Schools, the four most common types)
+    - **Socio-Economic Vulnerability**, disability prevalence rate, food insecurity,
       housing inadequacy (all from 2024 CBMS), and registered migrant workers
       per 1,000 residents
 
@@ -9458,13 +9655,13 @@ elif page == "Barangay Clusters":
 
     ## How to Use Cluster Analysis
 
-    1. **Understand your neighborhood type** — Find your barangay's cluster to see
+    1. **Understand your neighborhood type**, Find your barangay's cluster to see
        what challenges are common in similar areas
-    2. **Learn from peers** — Use cluster characteristics to identify neighboring
+    2. **Learn from peers**, Use cluster characteristics to identify neighboring
        barangays with comparable needs (easier to coordinate shared services)
-    3. **Share solutions** — If one barangay in a cluster succeeds with an intervention,
+    3. **Share solutions**, If one barangay in a cluster succeeds with an intervention,
        it's likely to work in others in the same cluster
-    4. **Allocate resources strategically** — Prioritize facility types and services
+    4. **Allocate resources strategically**, Prioritize facility types and services
        based on cluster profiles
     """)
 
@@ -9634,7 +9831,7 @@ elif page == "Barangay Clusters":
     kpi_card(
         k1,
         "Barangays Clustered",
-        int(clustered["barangay_name"].notna().sum())
+        int(clustered["barangay_name"].nunique())
     )
 
     kpi_card(
@@ -9770,7 +9967,7 @@ elif page == "Barangay Clusters":
     Each radar chart shows the average standardized value
     of each feature within a cluster (0 is the citywide
     average; positive values are above average, negative
-    values are below average) — the same "wind rose"
+    values are below average), the same "wind rose"
     profiling used in the clustering notebook to interpret
     what makes each cluster distinct.
     """)
@@ -9985,7 +10182,7 @@ elif page == "Climate, Hazard and Population Analysis":
         where. The Vulnerability Index tab below combines
         barangay-level flood exposure with one vulnerable
         population group you choose, into a single Climate
-        Vulnerability Index — the demand-side counterpart to
+        Vulnerability Index, the demand-side counterpart to
         the facility-level flood flagging on the Care Services
         Explorer tab. Further down this page, city-wide
         flood-risk figures by population group and the
@@ -10013,11 +10210,11 @@ elif page == "Climate, Hazard and Population Analysis":
         The index is a simple average of two equally weighted components:
 
         1. **Flood Exposure (50%)**
-           — Percentage of each barangay's area at risk of inundation (≥50cm) in a flood event.
+          , Percentage of each barangay's area at risk of inundation (≥50cm) in a flood event.
            Derived from the flood inundation raster: higher % = more of the barangay's land area is at risk.
 
         2. **Population Concentration (50%)**
-           — Concentration of your selected vulnerable group in each barangay (e.g., elderly, PWDs,
+          , Concentration of your selected vulnerable group in each barangay (e.g., elderly, PWDs,
            young children, food-insecure households). Rates are normalized to 0–100 so flood and
            population are equally weighted.
 
@@ -10027,10 +10224,10 @@ elif page == "Climate, Hazard and Population Analysis":
         ### How This Differs from Socio-Economic Factors
 
         - **Socio-Economic Factors** (disability rate, food insecurity, housing inadequacy) describe
-          the *baseline vulnerability* of a population — conditions that already limit their capacity
+          the *baseline vulnerability* of a population, conditions that already limit their capacity
           to prepare, respond, and recover from any shock (climate or otherwise).
 
-        - **Climate Vulnerability Index** captures *climate-specific exposure* — areas where these
+        - **Climate Vulnerability Index** captures *climate-specific exposure*, areas where these
           vulnerable groups are also in the direct path of climate hazards (flood). A neighborhood
           with high food insecurity but low flood exposure is economically disadvantaged but
           not necessarily climate-threatened. A neighborhood with high elderly population and
@@ -10046,7 +10243,7 @@ elif page == "Climate, Hazard and Population Analysis":
         # SELECTABLE VULNERABLE GROUPS
         # (each entry maps a dropdown label to a real column in
         # demographics.csv. "rate_col" is what actually goes into
-        # the index — already a rate/share, not a raw count, so
+        # the index, already a rate/share, not a raw count, so
         # combining groups doesn't just reward populous barangays.
         # Raw-count columns (e.g. age_60plus, age_0_5) are
         # deliberately not offered directly for this reason; where
@@ -10112,7 +10309,7 @@ elif page == "Climate, Hazard and Population Analysis":
                 "The index is an equal-weighted average of flood "
                 "exposure and this one group, so a high score has "
                 "one clear explanation: high flood exposure, a "
-                "high concentration of this group, or both — "
+                "high concentration of this group, or both, "
                 "rather than several groups blended into a single "
                 "number you'd have to unpack."
             )
@@ -10154,7 +10351,7 @@ elif page == "Climate, Hazard and Population Analysis":
 
             # --------------------------------------------------
             # ESTIMATED POPULATION EXPOSED
-            # (area% x pop_census — uniform-density assumption;
+            # (area% x pop_census, uniform-density assumption;
             # see compute_barangay_flood_exposure's docstring.
             # Repeated as a visible caption below, not just here
             # in code, since it reads like a precise headcount
@@ -10191,7 +10388,7 @@ elif page == "Climate, Hazard and Population Analysis":
             # --------------------------------------------------
             # VULNERABILITY INDEX
             # (flood area% rescaled 0-100, averaged with the one
-            # selected group's rate — also rescaled 0-100 — so
+            # selected group's rate, also rescaled 0-100, so
             # both components contribute equally regardless of
             # their raw units, and the index updates live as the
             # group selection changes above. Simple, transparent
@@ -10199,7 +10396,7 @@ elif page == "Climate, Hazard and Population Analysis":
             # PCA-based index of many), so a high score always has
             # one clear explanation: "this barangay scores high
             # because of high flood exposure, a high concentration
-            # of the selected group, or both" — not a blended
+            # of the selected group, or both", not a blended
             # number that needs unpacking to interpret.)
             # --------------------------------------------------
 
@@ -10249,7 +10446,7 @@ elif page == "Climate, Hazard and Population Analysis":
             st.caption(
                 "⚠ \"Estimated population exposed\" assumes each "
                 "barangay's population is spread evenly across "
-                "its land area — a planning estimate, not a "
+                "its land area, a planning estimate, not a "
                 "measured headcount. The Vulnerability Index is "
                 "an equal-weighted average of flood exposure and "
                 f"\"{selected_group}\", each rescaled 0-100; it is "
@@ -10445,15 +10642,21 @@ elif page == "Climate, Hazard and Population Analysis":
             )
 
             with st.container(border=True, key="qcd-chart-80"):
+                st.markdown(
+                    render_colormap_legend_html(
+                        colormap="YlOrRd",
+                        vmin=metric_min,
+                        vmax=metric_max,
+                        unit="index",
+                        label="Climate Vulnerability Index (darker = higher risk)"
+                    ),
+                    unsafe_allow_html=True
+                )
                 st.pydeck_chart(
                     vuln_deck,
                     height=700,
                     width="stretch"
                 )
-
-            st.caption(
-                "Darker red = higher Climate Vulnerability Index."
-            )
 
             st.divider()
 
@@ -10475,7 +10678,7 @@ elif page == "Climate, Hazard and Population Analysis":
                 orientation="h",
                 color="vulnerability_index",
                 color_continuous_scale="Reds",
-                title="Top 15 Barangays — Climate Vulnerability Index"
+                title="Top 15 Barangays, Climate Vulnerability Index"
             )
 
             fig_vuln.update_layout(
@@ -10810,7 +11013,7 @@ elif page == "Climate, Hazard and Population Analysis":
         # continuous-scale climate layer overlaid above gets its
         # color-scale legend rendered here instead, just below the
         # map. Binary layers like Flood Inundation aren't included
-        # here — they're a flooded/not-flooded mask, not a scale.)
+        # here, they're a flooded/not-flooded mask, not a scale.)
         # --------------------------------------------------
 
         if climate_legend_info:
@@ -10846,7 +11049,7 @@ elif page == "Climate, Hazard and Population Analysis":
         # SUPPLY-SIDE FLOOD EXPOSURE SUMMARY
         # (counts, across the *currently selected* service layers
         # and district, how many facilities sit inside the 100-yr
-        # flood footprint — see flag_facilities_at_risk in
+        # flood footprint, see flag_facilities_at_risk in
         # functions.py. Independent of flood_risk_only: shown
         # whether or not the map is currently filtered to at-risk
         # facilities only, so the counts are visible even when
@@ -10972,7 +11175,7 @@ elif page == "Climate, Hazard and Population Analysis":
     # =====================================================
     # CLIMATE & HAZARD LAYERS
     # (moved here from the former standalone "Climate &
-    # Hazard Exposure" page — merged in since both pages
+    # Hazard Exposure" page, merged in since both pages
     # covered overlapping ground: flood exposure and which
     # population groups/areas are most affected. This
     # section is the city-wide / raster-layer view; the
@@ -10999,7 +11202,7 @@ elif page == "Climate, Hazard and Population Analysis":
     )
 
     st.warning(
-        "**Preliminary — pending verification.** These "
+        "**Preliminary, pending verification.** These "
         "flood-risk estimates are still being reviewed "
         "and have not yet been confirmed."
     )
@@ -11009,10 +11212,10 @@ elif page == "Climate, Hazard and Population Analysis":
     analysis estimating what share of each population group lives inside the
     high flood-risk zone shown in the "Flood Inundation
     (100-yr)" layer below. Groups covered: total population,
-    by sex, children (0-4), and elderly (60+) — each also
+    by sex, children (0-4), and elderly (60+), each also
     split by sex.
 
-    **This is city-wide only — there is no barangay or
+    **This is city-wide only, there is no barangay or
     district breakdown for these specific figures.** They
     can't be added to the barangay/district maps elsewhere
     in this dashboard, or to the Care Planning Priority
@@ -11021,17 +11224,16 @@ elif page == "Climate, Hazard and Population Analysis":
     Priorities for what that would require).
 
     Every population group shows almost exactly the same
-    ~25% flood-risk share — including children (0-4), added
+    ~25% flood-risk share, including children (0-4), added
     in the most recent update to this dataset. This isn't a
-    coincidence in the data — WorldPop's age/sex breakdowns
+    coincidence in the data, WorldPop's age/sex breakdowns
     are built by applying the same demographic ratios across
     the population grid, so each subgroup inherits nearly the
     same spatial distribution as the total population, and
     therefore nearly the same exposure rate.
     """)
 
-    # Official indicator names from indicators_codebook.csv —
-    # the "(2020, constrained)" qualifier refers to WorldPop's
+    # Official indicator names from indicators_codebook.csv,     # the "(2020, constrained)" qualifier refers to WorldPop's
     # constrained population product (population restricted to
     # known built-up areas) for the total/female/male rows;
     # the elderly rows don't carry that qualifier in the
@@ -11167,7 +11369,7 @@ elif page == "Climate, Hazard and Population Analysis":
                 "7-year summer average land-surface temperature, "
                 "derived from Landsat thermal imagery (~30m "
                 "resolution). Higher values indicate stronger "
-                "urban heat — typically dense, paved, low-vegetation "
+                "urban heat, typically dense, paved, low-vegetation "
                 "areas. Color scale is clipped to the 2nd-98th "
                 "percentile to avoid a handful of extreme pixels "
                 "flattening the rest of the map."
@@ -11199,7 +11401,7 @@ elif page == "Climate, Hazard and Population Analysis":
                 "Binary flood extent (~10m resolution) showing "
                 "areas expected to see more than 30cm of inundation "
                 "depth in a 100-year rainfall event. This is a mask, "
-                "not a depth map — for full depth classes (0.2-0.5m, "
+                "not a depth map, for full depth classes (0.2-0.5m, "
                 "0.5-1.5m, 1.5-3m, >3m), see the static reference map "
                 "below."
             )
@@ -11273,8 +11475,7 @@ elif page == "Climate, Hazard and Population Analysis":
 
         # png_data_uri already comes back pre-quoted (a string
         # containing literal quote characters), and bounds_corners
-        # is already the 4-corner format BitmapLayer expects —
-        # see raster_to_bitmap_layer's docstring in functions.py.
+        # is already the 4-corner format BitmapLayer expects,         # see raster_to_bitmap_layer's docstring in functions.py.
         bitmap_layer = pdk.Layer(
             "BitmapLayer",
             image=png_data_uri,
@@ -11292,6 +11493,16 @@ elif page == "Climate, Hazard and Population Analysis":
         )
 
         with st.container(border=True, key="qcd-chart-87"):
+            st.markdown(
+                render_colormap_legend_html(
+                    colormap=active_layer["colormap"],
+                    vmin=vmin,
+                    vmax=vmax,
+                    unit=active_layer["unit"],
+                    label=active_layer["legend_label"]
+                ),
+                unsafe_allow_html=True
+            )
             st.pydeck_chart(
                 deck,
                 height=700,
@@ -11301,7 +11512,7 @@ elif page == "Climate, Hazard and Population Analysis":
         if active_layer["binary"]:
 
             st.caption(
-                f"Legend: {active_layer['legend_label']} — "
+                f"Legend: {active_layer['legend_label']}, "
                 "shaded areas indicate flooding, unshaded areas "
                 "do not."
             )
@@ -11375,7 +11586,7 @@ elif page == "Zoning Map":
     st.caption(
         "Land-use zone polygons for all Quezon City barangays, "
         "sourced from the QC Zoning Administration Unit public "
-        "viewer (zaulb.quezoncity.gov.ph). Visualization only — "
+        "viewer (zaulb.quezoncity.gov.ph). Visualization only, "
         "private/restricted zone records are excluded by the source."
     )
 
@@ -11520,7 +11731,7 @@ elif page == "Zoning Map":
 
         # ── Cached data loader ──
         # (runs once on first load, then stays in memory across all
-        # interactions — the main source of slowness was re-running
+        # interactions, the main source of slowness was re-running
         # gpd.read_file on every selectbox change. Simplification
         # tolerance of 0.00005 degrees (~5m) is invisible at city
         # zoom levels but cuts vertex count significantly, speeding
@@ -11626,7 +11837,7 @@ elif page == "Zoning Map":
             with st.container(border=True):
                 st.metric("Zone types", gdf_filtered["zone_type"].nunique())
 
-        # ── Legend above map — explicit dark text for dark-mode readability ──
+        # ── Legend above map, explicit dark text for dark-mode readability ──
         legend_items = "".join([
             f'<div style="display:flex;align-items:center;gap:6px;">'
             f'<span style="display:inline-block;width:14px;height:14px;'
@@ -11744,7 +11955,7 @@ elif page == "Zoning Map":
             "Each barangay is coloured by its most common "
             "land-use zone type (by polygon count, excluding "
             "ROAD, WATER, and unclassified zones). Useful for "
-            "interpreting accessibility gaps — barangays with "
+            "interpreting accessibility gaps, barangays with "
             "few care facilities in R-3/R-2-A residential zones "
             "represent genuine unmet demand, while gaps in "
             "industrial or utility zones may reflect land-use "
@@ -11806,7 +12017,7 @@ elif page == "Zoning Map":
 
             # Build colour palette from ZONE_COLORS (already defined
             # above for the polygon viewer), falling back to grey for
-            # any zone name in the data not in the palette — handles
+            # any zone name in the data not in the palette, handles
             # minor naming differences between the scraper output and
             # the hardcoded legend keys.
             _CHORO_COLORS = {
@@ -11873,7 +12084,7 @@ elif page == "Zoning Map":
                 "**Note:** Unknown = no polygon data in source "
                 "(e.g. Reservoir). Where two zone types tie on "
                 "polygon count, the first alphabetically is used "
-                "— only Mangga and West Kamias are affected."
+                ",  only Mangga and West Kamias are affected."
             )
             with st.container(border=True):
                 st.dataframe(
@@ -11897,7 +12108,7 @@ elif page == "Zoning Map":
             "Barangays where land use indicates genuine care demand "
             "(residential zones) but facility coverage is low. "
             "These are the most actionable locations for new facility "
-            "siting — residential zoning means both that residents "
+            "siting, residential zoning means both that residents "
             "need services and that planning permission is likely "
             "obtainable. Sort by any column to prioritise by "
             "population size, facility type, or accessibility ratio."
@@ -11960,12 +12171,12 @@ elif page == "Zoning Map":
         # If all values are 0 (e.g. no Older Persons Care
         # facilities in any residential barangay), the slider
         # min==max==0 which crashes Streamlit. Show a plain
-        # number_input fallback instead — also more useful since
+        # number_input fallback instead, also more useful since
         # a slider with range 0–0 conveys nothing.
         if _gap_max_val <= 0:
             st.info(
                 f"All residential barangays have zero "
-                f"{_gap_facility} facilities — no ratio range "
+                f"{_gap_facility} facilities, no ratio range "
                 "to filter. All barangays are shown below."
             )
             _gap_threshold = 0.0
@@ -11979,7 +12190,7 @@ elif page == "Zoning Map":
                 key="gap_threshold_slider",
                 help=(
                     "Barangays with a ratio below this value are "
-                    "shown — lower = more underserved relative to "
+                    "shown, lower = more underserved relative to "
                     "their residential zone population."
                 )
             )
@@ -12006,13 +12217,13 @@ elif page == "Zoning Map":
             with st.container(border=True):
                 st.metric(
                     "Total population in gap barangays",
-                    f"{int(_gap_filtered['Population'].sum()):,}"
+                    f"{int(math.ceil(_gap_filtered['Population'].sum())):,}"
                 )
         with _g3:
             with st.container(border=True):
                 st.metric(
                     "Zero-facility barangays",
-                    int((_gap_filtered[f"{_gap_facility} per 1,000"] == 0).sum())
+                    int(math.ceil((_gap_filtered[f"{_gap_facility} per 1,000"] == 0).sum()))
                 )
 
         if _gap_filtered.empty:
@@ -12030,7 +12241,7 @@ elif page == "Zoning Map":
             if _nz_gap.empty:
                 st.info(
                     "All residential barangays below the threshold "
-                    "have zero facilities — see the table below."
+                    "have zero facilities, see the table below."
                 )
             else:
                 _fig_gap = _px3.bar(
@@ -12095,7 +12306,7 @@ elif page == "Zoning Map":
             st.subheader("Barangays with Zero Facilities")
             st.caption(
                 f"{len(_zero_table)} residential barangays have no "
-                f"{_gap_facility} facilities at all — these represent "
+                f"{_gap_facility} facilities at all, these represent "
                 "the most critical gaps and should be prioritised "
                 "for new facility siting. Sorted by population "
                 "to surface highest-impact locations first."
@@ -12192,7 +12403,7 @@ elif page == "Zoning Map":
             _cross.set_index("Zone")[_heat_cols],
             text_auto=True,
             color_continuous_scale="Purples",
-            title="Facility Count by Zone Type",
+            title="Care Facilities Distributed Across Zone Types",
             aspect="auto",
         )
         _fig_heat.update_layout(
