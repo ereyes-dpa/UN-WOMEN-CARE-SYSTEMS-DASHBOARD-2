@@ -5,8 +5,18 @@ import folium
 import numpy as np
 from functions import *
 import pydeck as pdk
+import geopandas as gpd
 
 # PUBLIC VERSION
+
+# --------------------------------------------------
+# PAGE CONFIG
+# --------------------------------------------------
+
+st.set_page_config(
+    page_title="Quezon Caring City Dashboard",
+    layout="wide"
+)
 
 # --------------------------------------------------
 # PAGE CONFIG
@@ -41,10 +51,10 @@ h1, h2, h3, h4 {
 
 /* --------------------------------------------------
    HOMEPAGE COMPONENTS
-   (same tokens as the private dashboard's Home page —
-   soft purple-tinted neutrals for card surfaces, the
-   same #7F47ED/#4C1D95 used everywhere else for accents
-   and headings, so both versions share one visual system.)
+   (extends the existing purple/Montserrat system rather
+   than introducing a second palette, soft purple-tinted
+   neutrals for card surfaces, the same #7F47ED/#4C1D95
+   used everywhere else for accents and headings.)
    -------------------------------------------------- */
 
 .qcd-hero {
@@ -97,7 +107,7 @@ h1, h2, h3, h4 {
 }
 
 .qcd-card {
-    background: #F7F5FC;
+    background: #EEEDFE;
     border: 1px solid #E4DEF7;
     border-radius: 10px;
     padding: 16px 18px;
@@ -106,7 +116,7 @@ h1, h2, h3, h4 {
 
 .qcd-card-accent {
     border-left: 4px solid #7F47ED;
-    background: #F7F5FC;
+    background: #EEEDFE;
     border-top: 1px solid #E4DEF7;
     border-right: 1px solid #E4DEF7;
     border-bottom: 1px solid #E4DEF7;
@@ -115,17 +125,27 @@ h1, h2, h3, h4 {
     margin-bottom: 10px;
 }
 
+.qcd-eyebrow {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #7F47ED;
+    margin-bottom: 4px;
+}
+
 .qcd-card-title {
     font-family: 'Montserrat', sans-serif;
     font-weight: 600;
     font-size: 0.98rem;
-    color: #2B2A33;
+    color: #1a1a1a;
     margin-bottom: 2px;
 }
 
 .qcd-card-body {
     font-size: 0.86rem;
-    color: #5B5868;
+    color: #1a1a1a;
     line-height: 1.45;
     margin: 0;
 }
@@ -140,6 +160,91 @@ h1, h2, h3, h4 {
     border-bottom: 2px solid #E4DEF7;
     padding-bottom: 6px;
     margin-bottom: 14px;
+}
+
+/* Reusable "takeaway" box for under a chart, states the
+   one-sentence insight in plain language, the way the PBIX
+   reference dashboard does. Not yet applied to any page;
+   ready to drop under a chart with:
+   st.markdown('<div class="qcd-insight"><div class="qcd-insight-label">Insight</div>...</div>', unsafe_allow_html=True) */
+
+.qcd-insight {
+    background: #EEEDFE;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 8px;
+    margin-bottom: 10px;
+}
+
+.qcd-insight-label {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #4C1D95;
+    margin-bottom: 3px;
+}
+
+.qcd-insight-body {
+    font-size: 0.88rem;
+    color: #1a1a1a;
+    line-height: 1.45;
+    margin: 0;
+}
+
+/* --------------------------------------------------
+   KPI CARDS
+   (replaces bare st.metric with a boxed, elevated card,    purple gradient surface, white text, matching the
+   dashboard's hero banner treatment. Used via the
+   kpi_card() helper in functions.py rather than
+   st.metric directly, so the optional polarity arrow can
+   be drawn next to the value.)
+   -------------------------------------------------- */
+
+.qcd-kpi-card {
+    background: linear-gradient(135deg, #4C1D95 0%, #7F47ED 100%);
+    border-radius: 12px;
+    padding: 16px 18px 14px 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 10px rgba(76, 29, 149, 0.18);
+    min-height: 88px;
+}
+
+.qcd-kpi-label {
+    font-family: 'Roboto', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #E4DEF7;
+    margin-bottom: 6px;
+    line-height: 1.3;
+}
+
+.qcd-kpi-value-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.qcd-kpi-value {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 1.6rem;
+    color: #FFFFFF;
+    line-height: 1.1;
+}
+
+.qcd-kpi-arrow {
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+.qcd-kpi-caption {
+    font-family: 'Roboto', sans-serif;
+    font-size: 0.74rem;
+    color: #E4DEF7;
+    margin-top: 4px;
+    line-height: 1.3;
 }
 
 </style>
@@ -244,13 +349,38 @@ st.divider()
     childcare_centers,
     schools,
     health_centers,
-    older_person_care, 
+    older_person_care,
     long_term_care,
     action_offices,
-    migration_centers
+    migration_centers,
+    bus_stops
 ) = load_data()
 
 geo, bounds = load_geo()
+
+# --------------------------------------------------
+# FLAG FACILITIES AT FLOOD RISK
+# --------------------------------------------------
+
+childcare_centers   = flag_facilities_at_risk(childcare_centers)
+schools             = flag_facilities_at_risk(schools)
+health_centers      = flag_facilities_at_risk(health_centers)
+older_person_care   = flag_facilities_at_risk(older_person_care)
+long_term_care      = flag_facilities_at_risk(long_term_care)
+action_offices      = flag_facilities_at_risk(action_offices)
+migration_centers   = flag_facilities_at_risk(migration_centers)
+
+# --------------------------------------------------
+# BARANGAY AND DISTRICT MAPS
+# --------------------------------------------------
+
+barangay_map = gpd.read_file(
+    "processed/qc_barangays.geojson"
+)
+
+district_map = gpd.read_file(
+    "processed/qc_districts.geojson"
+)
 
 # --------------------------------------------------
 # POPULATION DATA
@@ -260,7 +390,96 @@ geo, bounds = load_geo()
 # Population Overview, which isn't part of this version.)
 # --------------------------------------------------
 
-population_summary, _, _ = load_data_for_kpis()
+population_summary, population_sex, population_age = load_data_for_kpis()
+
+# --------------------------------------------------
+# BARANGAY AND DISTRICT DATAFRAMES (for KPIs and charts)
+# --------------------------------------------------
+
+# Normalize join keys
+barangay_map["barangay_name"] = (
+    barangay_map["barangay_name"]
+    .astype(str)
+    .str.strip()
+    .str.upper()
+)
+
+population_age["Barangay"] = (
+    population_age["Barangay"]
+    .astype(str)
+    .str.strip()
+    .str.upper()
+)
+
+population_sex["Barangay"] = (
+    population_sex["Barangay"]
+    .astype(str)
+    .str.strip()
+    .str.upper()
+)
+
+barangay_df = barangay_map.merge(
+    population_age,
+    left_on="barangay_name",
+    right_on="Barangay",
+    how="left"
+)
+
+barangay_df = barangay_df.merge(
+    population_sex[
+        [
+            "Barangay",
+            "Male",
+            "Female"
+        ]
+    ],
+    on="Barangay",
+    how="left"
+)
+
+# District population
+district_pop = (
+    population_age[
+        [
+            "District",
+            "0-5 (Early Childhood)",
+            "6-17 (School Age Children)",
+            "18-59 (Working Age Adult)",
+            "60+ (Elderly)",
+            "Total"
+        ]
+    ]
+    .groupby("District")
+    .sum()
+    .reset_index()
+    .rename(
+        columns={
+            "0-5 (Early Childhood)":
+                "Early Childhood (0-5)",
+            "6-17 (School Age Children)":
+                "School Age (6-17)",
+            "18-59 (Working Age Adult)":
+                "Working Age (18-59)",
+            "60+ (Elderly)":
+                "Older Persons (60+)"
+        }
+    )
+)
+
+district_pop = district_pop.merge(
+    population_sex[
+        [
+            "District",
+            "Male",
+            "Female"
+        ]
+    ]
+    .groupby("District")
+    .sum()
+    .reset_index(),
+    on="District",
+    how="left"
+)
 
 # --------------------------------------------------
 # QC CENTER
@@ -368,7 +587,7 @@ def build_explorer_map(
 
         "Schools": {
             "df": schools,
-            "color": "#055B52",
+            "color": "#4472C4",
             "symbol": "■",
             "source": "School",
             "name_col": "Name",
@@ -431,6 +650,18 @@ def build_explorer_map(
             "color": "#C4B5FD",
             "symbol": "✦",
             "source": "Migration Resource Center",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
+
+        "Bus Stops": {
+            "df": bus_stops,
+            "color": "#F97316",
+            "symbol": "⊙",
+            "source": "Bus Stop",
             "name_col": "Name",
             "district_col": "District",
             "address_col": "Address",
@@ -681,27 +912,14 @@ if st.session_state.page == "Schools":
         key="school_sector"
     )
 
-    if selected_school_sector == "Public":
-
-        category_options = [
-            "All",
-            "Public School"
-        ]
-
-    elif selected_school_sector == "Private":
-
-        category_options = [
-            "All",
-            "Private School"
-        ]
-
-    else:
-
-        category_options = [
-            "All",
-            "Public School",
-            "Private School"
-        ]
+    # School category options (school types)
+    category_options = [
+        "All",
+        "Preschool",
+        "Elementary school",
+        "High school",
+        "Senior high school"
+    ]
 
     selected_school_category = st.sidebar.radio(
         "School Category",
@@ -855,10 +1073,16 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#055B52;font-size:22px;">■</span>
-        <b>Public School</b><br>
-        <span style="color:#A6CFC1;font-size:22px;">■</span>
-        <b>Private School</b>
+        <span style="color:#2E5090;font-size:22px;">■</span>
+        <b>Preschool</b><br>
+        <span style="color:#4472C4;font-size:22px;">■</span>
+        <b>Elementary school</b><br>
+        <span style="color:#6B8FD4;font-size:22px;">■</span>
+        <b>Junior high school</b><br>
+        <span style="color:#8FA8E0;font-size:22px;">■</span>
+        <b>Senior high school</b><br>
+        <span style="color:#B5CBEE;font-size:22px;">■</span>
+        <b>High school</b>
         """,
         unsafe_allow_html=True
     )
@@ -979,6 +1203,38 @@ if page == "Home":
     )
 
     # =====================================================
+    # QUICK STATS (KPI CARDS)
+    # =====================================================
+
+    total_barangays = len(barangay_df)
+    total_districts = len(district_pop)
+
+    k1, k2, k3 = st.columns(3)
+
+    kpi_card(
+        k1,
+        "Total Population",
+        f"{citywide_population:,.0f}",
+        caption="residents citywide"
+    )
+
+    kpi_card(
+        k2,
+        "Total Barangays",
+        f"{total_barangays:,}",
+        caption="administrative divisions"
+    )
+
+    kpi_card(
+        k3,
+        "Total Districts",
+        f"{total_districts}",
+        caption="geographic areas"
+    )
+
+    st.divider()
+
+    # =====================================================
     # HOW TO NAVIGATE  /  WHAT'S INSIDE
     # =====================================================
 
@@ -1014,7 +1270,7 @@ if page == "Home":
 
             st.markdown(
                 f"""
-                <div class="qcd-card">
+                <div class="qcd-card" style="border: 1px solid #e0e0e0; border-radius: 8px;">
                     <div class="qcd-card-title">{step_title}</div>
                     <p class="qcd-card-body">{step_body}</p>
                 </div>
@@ -1031,8 +1287,7 @@ if page == "Home":
 
         st.markdown(
             """
-            <div class="qcd-card-accent"
-                 style="border-left-color:#055B52;">
+            <div class="qcd-card-accent" style="border: 1px solid #e0e0e0; border-left: 4px solid #055B52; border-radius: 8px;">
                 <div class="qcd-card-title">Care Services</div>
                 <p class="qcd-card-body">
                     Childcare centers, schools, health centers,
@@ -1048,8 +1303,7 @@ if page == "Home":
 
         st.markdown(
             """
-            <div class="qcd-card-accent"
-                 style="border-left-color:#7F47ED;">
+            <div class="qcd-card-accent" style="border: 1px solid #e0e0e0; border-left: 4px solid #7F47ED; border-radius: 8px;">
                 <div class="qcd-card-title">
                     Care Services Explorer
                 </div>
@@ -2466,8 +2720,7 @@ elif page == "Migration Resource Center":
 
     # --------------------------------------------------
     # MISSING COORDINATES
-    # --------------------------------------------------
-
+    # --------------------------------------------------    
     missing_locations = (
         mig["latitude"].isna() |
         mig["longitude"].isna()
@@ -2650,7 +2903,7 @@ elif page == "Care Services Explorer":
         """
         Explore childcare centers, schools, health facilities,
         older persons facilities, rehabilitation centers,
-        migration resource centers, and Quezon City
+        migration resource centers, bus stops, and Quezon City
         Action offices on a single map.
         """
     )
@@ -2675,7 +2928,7 @@ elif page == "Care Services Explorer":
 
         "Schools": {
             "df": schools,
-            "color": "#055B52",
+            "color": "#4472C4",
             "symbol": "■",
             "source": "School",
             "name_col": "Name",
@@ -2744,6 +2997,18 @@ elif page == "Care Services Explorer":
             "lat_col": "latitude",
             "lon_col": "longitude"
         },
+
+        "Bus Stops": {
+            "df": bus_stops,
+            "color": "#F97316",
+            "symbol": "⊙",
+            "source": "Bus Stop",
+            "name_col": "Name",
+            "district_col": "District",
+            "address_col": "Address",
+            "lat_col": "latitude",
+            "lon_col": "longitude"
+        },
     }
 
     # --------------------------------------------------
@@ -2752,11 +3017,19 @@ elif page == "Care Services Explorer":
 
     st.markdown("### Service Categories")
 
-    cols = st.columns(7)
+    # Phase 1 Optimization: Handle 8 service categories with 2 rows of 4 columns
+    cols = st.columns(4)
 
     for i, (layer_name, layer) in enumerate(service_layers.items()):
 
-        cols[i].markdown(
+        # Switch to next row after 4 items
+        if i == 4:
+            cols = st.columns(4)
+            col_idx = 0
+        else:
+            col_idx = i % 4
+
+        cols[col_idx].markdown(
             f"""
             <span style="
                 color:{layer['color']};
