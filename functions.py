@@ -714,7 +714,7 @@ def clean_dataframe(df) :
         
     return df
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_geo():
     gdf = gpd.read_file(
         "processed/qc_barangays.geojson",
@@ -725,7 +725,7 @@ def load_geo():
 
     return gdf.__geo_interface__, bounds
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_geo_explorer():
 
     gdf = gpd.read_file(
@@ -782,7 +782,7 @@ def get_boundary_geojson(geo_json):
         }
     )
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_data():
 
     care = pd.read_csv("processed/care_v3.csv")
@@ -875,7 +875,7 @@ def load_data():
         migration_centers
     )
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_data_for_kpis():
     """
     Loads the consolidated barangay-level demographics table
@@ -984,7 +984,7 @@ def load_data_for_kpis():
     )
 
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_demographics():
     """
     Loads the full consolidated barangay-level indicators table
@@ -1021,7 +1021,7 @@ def load_demographics():
     return demographics
 
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_climate_context():
     """
     Loads the city-wide (non-barangay) flood risk indicators
@@ -1041,7 +1041,7 @@ def load_climate_context():
     return climate
 
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_demand_context():
     """
     Loads the two city/district-level administrative context
@@ -1387,6 +1387,7 @@ def sample_raster_at_points(path, lats, lons):
     return sampled
 
 
+@st.cache_data(show_spinner=False)
 def flag_facilities_at_risk(
     df,
     raster_path="processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
@@ -1596,6 +1597,7 @@ def hex_to_rgb(hex_color):
 # group divided by the number of facilities serving
 # that age group — computed per group, not combined)
 # --------------------------------------------------
+@st.cache_data(show_spinner=False)
 def compute_population_per_facility(
     barangay_pop,
     care_clean,
@@ -1713,6 +1715,7 @@ def compute_population_per_facility(
 # set describing demographics + service mix, then
 # K-means to group barangays into comparable zones)
 # --------------------------------------------------
+@st.cache_data(show_spinner=False)
 def build_cluster_features(
     barangay_df,
     demographics,
@@ -1868,6 +1871,7 @@ def build_cluster_features(
 
 
 
+@st.cache_data(show_spinner=False)
 def run_barangay_clustering(
     df,
     feature_cols,
