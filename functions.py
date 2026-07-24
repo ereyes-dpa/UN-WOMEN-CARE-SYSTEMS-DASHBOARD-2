@@ -254,6 +254,11 @@ ACCESSIBILITY_RATIO_INDICATORS = {
         "facility_col": "Long-term care and rehabilitation services",
         "pop_col": "pwd_registered",
         "ratio_col": "ratio_pwd"
+    },
+    "All Care Facilities per 1,000 PWDs": {
+        "facility_col": "Total",
+        "pop_col": "pwd_registered",
+        "ratio_col": "ratio_pwd_all"
     }
 }
 
@@ -417,16 +422,41 @@ def childcare_color(category):
 # SCHOOLS FUNCTIONS
 # --------------------------------------------------
 def school_color(category):
+    """
+    Returns color for a school based on its category (school type).
+    Uses UN WOMEN Blue gradient from darkest (Preschool) to lightest (High school).
+    """
+    category = str(category).strip().lower()
 
-    category = str(category).upper()
+    if "preschool" in category:
+        return "#2E5090"  # darkest UN WOMEN blue
+    elif "elementary" in category:
+        return "#4472C4"  # UN WOMEN Blue (primary)
+    elif "junior high" in category or "junior high school" in category:
+        return "#6B8FD4"  # medium UN WOMEN blue
+    elif "senior high" in category or "senior high school" in category:
+        return "#8FA8E0"  # light UN WOMEN blue
+    elif "high school" in category:
+        return "#B5CBEE"  # lighter UN WOMEN blue
+    elif "special education" in category:
+        return "#D9E6F7"  # lightest UN WOMEN blue
 
-    if "PUBLIC SCHOOL" in category:
-        return "#055B52"   # green gradient — darkest
+    return "#4472C4"  # default to UN WOMEN Blue
 
-    elif "PRIVATE SCHOOL" in category:
-        return "#A6CFC1"   # green gradient — lightest (still visible on map)
 
-    return "#A6CFC1"
+def school_provider_type_color(provider_type):
+    """
+    Returns color for a school based on its provider type (Public/Private).
+    Used for alternative color mapping when needed.
+    """
+    provider_type = str(provider_type).strip().upper()
+
+    if "PUBLIC" in provider_type:
+        return "#2E5090"   # dark UN WOMEN blue for public
+    elif "PRIVATE" in provider_type:
+        return "#B5CBEE"   # light UN WOMEN blue for private
+
+    return "#4472C4"  # default UN WOMEN blue
 
 # --------------------------------------------------
 # OLDERS CARE FUCNTIONS
@@ -518,6 +548,18 @@ def ltc_hex(category):
     return ltc_color(category)
 
 # --------------------------------------------------
+# BUS STOPS FUNCTIONS (NEW - care_v6.csv)
+# --------------------------------------------------
+def bus_stops_color(category=None):
+    """
+    Color for Bus stops layer in Care Explorer.
+    Uses a distinct orange/transit color from the palette
+    to differentiate from care facilities.
+    """
+    return "#F97316"  # bright orange for transit/bus stops
+
+
+# --------------------------------------------------
 # ACTION OFFICES FUNCTIONS
 # --------------------------------------------------
 
@@ -546,12 +588,12 @@ def district_color(district):
 # --------------------------------------------------
 
 SCHOOL_TYPE_COLORS_MAP = {
-    "Preschool": "#1E40AF",                  # dark blue
-    "Elementary school": "#2563EB",          # bright blue
-    "Junior high school": "#3B82F6",         # medium blue
-    "Senior high school": "#60A5FA",         # light blue
-    "High school": "#93C5FD",                # lighter blue
-    "Special Education Program": "#DBEAFE"   # very light blue
+    "Preschool": "#2E5090",                          # darkest UN WOMEN blue
+    "Elementary school": "#4472C4",                  # UN WOMEN Blue (primary)
+    "Junior high school": "#6B8FD4",                 # medium UN WOMEN blue
+    "Senior high school": "#8FA8E0",                 # light UN WOMEN blue
+    "High school": "#B5CBEE",                        # lighter UN WOMEN blue
+    "Special Education Program": "#D9E6F7"          # lightest UN WOMEN blue
 }
 
 def school_type_color(school_type):
@@ -666,19 +708,32 @@ def clean_health_centers(df) :
     return df
 
 def clean_dataframe(df) :
-    df = df.rename(
-    columns={
-            "name_original": "Name",
-            "district": "District",
-            "address_clean": "Address",
-            "sub_division": "Sector",
-            "category": "Category"
-        }
-    )
+    # Phase 1 Optimization: Address fallback logic
+    # Use address_clean if available, fall back to address, then "Not available"
+    if "address_clean" in df.columns and "address" in df.columns:
+        df["Address"] = df["address_clean"].fillna(df["address"]).fillna("Not available")
+    elif "address_clean" in df.columns:
+        df["Address"] = df["address_clean"].fillna("Not available")
+    elif "address" in df.columns:
+        df["Address"] = df["address"].fillna("Not available")
+    else:
+        df["Address"] = "Not available"
+
+    # Rename other columns
+    rename_dict = {
+        "name_original": "Name",
+        "district": "District",
+        "sub_division": "Sector",
+        "category": "Category"
+    }
+
+    # Only rename columns that exist
+    rename_dict = {k: v for k, v in rename_dict.items() if k in df.columns}
+    df = df.rename(columns=rename_dict)
 
     # Category and Sector are still pandas `category` dtype here
     # — load_data() casts major_division/sub_division/category to
-    # `category` dtype on the full care_v3 dataframe *before*
+    # `category` dtype on the full care_v6 dataframe *before*
     # splitting it by major_division (see load_data() in this
     # file). A categorical column keeps every level that existed
     # in the unfiltered data even after rows are dropped, so any
@@ -706,10 +761,10 @@ def clean_dataframe(df) :
         pd.to_numeric(df["District"], errors="coerce")
         .astype("Int64")
     )
-        
+
     return df
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_geo():
     gdf = gpd.read_file(
         "processed/qc_barangays.geojson",
@@ -720,7 +775,7 @@ def load_geo():
 
     return gdf.__geo_interface__, bounds
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_geo_explorer():
 
     gdf = gpd.read_file(
@@ -777,10 +832,11 @@ def get_boundary_geojson(geo_json):
         }
     )
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_data():
 
-    care = pd.read_csv("processed/care_v3.csv")
+    # Updated to load care_v6.csv with latest facility data
+    care = pd.read_csv("processed/care_v6.csv")
 
     category_cols = [
         "major_division",
@@ -800,7 +856,7 @@ def load_data():
     care["close_hours"] = (
         care["close_hours"]
         .fillna("Not available")
-    )        
+    )
 
     # Clean coordinates
     care["latitude"] = pd.to_numeric(
@@ -844,7 +900,12 @@ def load_data():
     ].copy()
 
     migration_centers = care[
-        care["major_division"] == "Trainings"
+        care["major_division"] == "Migration Resource Centers"
+    ].copy()
+
+    # Phase 1 Optimization: New Bus stops category for Care Explorer
+    bus_stops = care[
+        care["major_division"] == "Bus stops"
     ].copy()
 
     # --------------------------------------------------
@@ -859,6 +920,7 @@ def load_data():
     action_offices            = clean_dataframe(action_offices)
     action_offices["Name"]    = "District " + action_offices["District"].astype(int).astype(str)
     migration_centers         = clean_dataframe(migration_centers)
+    bus_stops                 = clean_dataframe(bus_stops)
 
     return (
         childcare_centers,
@@ -867,10 +929,11 @@ def load_data():
         older_person_care,
         long_term_care,
         action_offices,
-        migration_centers
+        migration_centers,
+        bus_stops
     )
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_data_for_kpis():
     """
     Loads the consolidated barangay-level demographics table
@@ -979,7 +1042,7 @@ def load_data_for_kpis():
     )
 
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_demographics():
     """
     Loads the full consolidated barangay-level indicators table
@@ -1016,7 +1079,7 @@ def load_demographics():
     return demographics
 
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_climate_context():
     """
     Loads the city-wide (non-barangay) flood risk indicators
@@ -1036,7 +1099,7 @@ def load_climate_context():
     return climate
 
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_demand_context():
     """
     Loads the two city/district-level administrative context
@@ -1382,9 +1445,10 @@ def sample_raster_at_points(path, lats, lons):
     return sampled
 
 
+@st.cache_data(show_spinner=False)
 def flag_facilities_at_risk(
     df,
-    raster_path="processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
+    raster_path="processed/climate/flood_inundation_binary_gt30cm_EPSG3123.tif",
     lat_col="latitude",
     lon_col="longitude",
     out_col="flood_risk"
@@ -1591,6 +1655,7 @@ def hex_to_rgb(hex_color):
 # group divided by the number of facilities serving
 # that age group — computed per group, not combined)
 # --------------------------------------------------
+@st.cache_data(show_spinner=False)
 def compute_population_per_facility(
     barangay_pop,
     care_clean,
@@ -1708,8 +1773,9 @@ def compute_population_per_facility(
 # set describing demographics + service mix, then
 # K-means to group barangays into comparable zones)
 # --------------------------------------------------
+@st.cache_data(show_spinner=False)
 def build_cluster_features(
-    barangay_df,
+    _barangay_df,
     demographics,
     feature_cols=None
 ):
@@ -1823,7 +1889,7 @@ def build_cluster_features(
         + socioeconomic_cols
     ]
 
-    out = barangay_df.copy()
+    out = _barangay_df.copy()
 
     out["Barangay"] = (
         out["Barangay"]
@@ -1860,8 +1926,6 @@ def build_cluster_features(
     ]
 
     return out, feature_cols
-
-
 
 def run_barangay_clustering(
     df,
