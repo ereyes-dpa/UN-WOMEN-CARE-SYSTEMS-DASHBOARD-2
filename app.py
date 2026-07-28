@@ -655,7 +655,7 @@ def build_explorer_map(
     Explorer tab inside Climate, Hazard and Population
     Analysis), flood-exposed
     facilities get an extra red ring around their marker and a
-    "⚠ flood risk" tag on the tooltip, so they stand out even
+    " flood risk" tag on the tooltip, so they stand out even
     with flood_risk_only off and the climate overlay off. When
     False (used by the main Care Services Explorer page), markers
     render with their normal symbol/color only, no ring, no
@@ -687,7 +687,7 @@ def build_explorer_map(
         "Childcare Centers": {
             "df": childcare_centers,
             "color": "#4C1D95",
-            "symbol": "●",
+            "symbol": "",
             "source": "Childcare Center",
             "name_col": "Name",
             "district_col": "District",
@@ -699,7 +699,7 @@ def build_explorer_map(
         "Schools": {
             "df": schools,
             "color": "#4472C4",
-            "symbol": "■",
+            "symbol": "",
             "source": "School",
             "name_col": "Name",
             "district_col": "District",
@@ -711,7 +711,7 @@ def build_explorer_map(
         "Health Centers": {
             "df": health_centers,
             "color": "#4C1D95",
-            "symbol": "★",
+            "symbol": "",
             "source": "Health Facility",
             "name_col": "Name",
             "district_col": "District",
@@ -723,7 +723,7 @@ def build_explorer_map(
         "Older Persons Facilities": {
             "df": older_person_care,
             "color": "#055B52",
-            "symbol": "◆",
+            "symbol": "",
             "source": "Older Persons Facility",
             "name_col": "Name",
             "district_col": "District",
@@ -735,7 +735,7 @@ def build_explorer_map(
         "Long-Term Care & Rehabilitation": {
             "df": long_term_care,
             "color": "#4C1D95",
-            "symbol": "▲",
+            "symbol": "",
             "source": "Rehabilitation Facility",
             "name_col": "Name",
             "district_col": "District",
@@ -747,7 +747,7 @@ def build_explorer_map(
         "Action Offices": {
             "df": action_offices,
             "color": "#055B52",
-            "symbol": "⬢",
+            "symbol": "",
             "source": "Action Office",
             "name_col": "Name",
             "district_col": "District",
@@ -759,7 +759,7 @@ def build_explorer_map(
         "Migration Resource Centers": {
             "df": migration_centers,
             "color": "#C4B5FD",
-            "symbol": "✦",
+            "symbol": "",
             "source": "Migration Resource Center",
             "name_col": "Name",
             "district_col": "District",
@@ -1026,7 +1026,7 @@ def build_explorer_map(
                 popup_html += (
                     "<br><span style=\"color:#B91C1C;"
                     "font-weight:600;\">"
-                    "⚠ In 100-yr flood inundation zone"
+                    " In 100-yr flood inundation zone"
                     "</span>"
                 )
 
@@ -1106,7 +1106,7 @@ def build_explorer_map(
                 tooltip=str(
                     row_dict[layer["name_col"]]
                 ) + (
-                    " ⚠ flood risk"
+                    "  flood risk"
                     if is_flood_risk and show_risk_rings
                     else ""
                 ),
@@ -1396,13 +1396,13 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#4C1D95;font-size:22px;">●</span>
+        <span style="color:#4C1D95;font-size:22px;"></span>
         <b>Child Development Center</b><br>
-        <span style="color:#8869C9;font-size:22px;">●</span>
+        <span style="color:#8869C9;font-size:22px;"></span>
         <b>Child Learning Center</b><br>
-        <span style="color:#C4B5FD;font-size:22px;">●</span>
+        <span style="color:#C4B5FD;font-size:22px;"></span>
         <b>Day Care Center</b><br>
-        <span style="color:#E0D4FD;font-size:22px;">●</span>
+        <span style="color:#E0D4FD;font-size:22px;"></span>
         <b>Supervised Neighborhood Play</b>
         """,
         unsafe_allow_html=True
@@ -1413,15 +1413,15 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#2E5090;font-size:22px;">■</span>
+        <span style="color:#2E5090;font-size:22px;"></span>
         <b>Preschool</b><br>
-        <span style="color:#4472C4;font-size:22px;">■</span>
+        <span style="color:#4472C4;font-size:22px;"></span>
         <b>Elementary school</b><br>
-        <span style="color:#6B8FD4;font-size:22px;">■</span>
+        <span style="color:#6B8FD4;font-size:22px;"></span>
         <b>Junior high school</b><br>
-        <span style="color:#8FA8E0;font-size:22px;">■</span>
+        <span style="color:#8FA8E0;font-size:22px;"></span>
         <b>Senior high school</b><br>
-        <span style="color:#B5CBEE;font-size:22px;">■</span>
+        <span style="color:#B5CBEE;font-size:22px;"></span>
         <b>High school</b>
         """,
         unsafe_allow_html=True
@@ -1446,7 +1446,7 @@ if page == "Care Services Explorer":
             <span style="
                 color:{category_hex(cat)};
                 font-size:22px;
-            ">★</span>
+            "></span>
             <b>{cat}</b>
             """,
             unsafe_allow_html=True
@@ -1457,9 +1457,9 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#055B52;font-size:22px;">◆</span>
+        <span style="color:#055B52;font-size:22px;"></span>
         <b>Nursing Care Center</b><br>
-        <span style="color:#A6CFC1;font-size:22px;">◆</span>
+        <span style="color:#A6CFC1;font-size:22px;"></span>
         <b>Bahay Aruga</b>
         """,
         unsafe_allow_html=True
@@ -1475,7 +1475,7 @@ if page == "Care Services Explorer":
             <span style="
                 color:{ltc_color(cat)};
                 font-size:22px;
-            ">▲</span>
+            "></span>
             <b>{cat}</b>
             """,
             unsafe_allow_html=True
@@ -1487,7 +1487,7 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#055B52;font-size:22px;">⬢</span>
+        <span style="color:#055B52;font-size:22px;"></span>
         <b>District Offices</b>
         """,
         unsafe_allow_html=True
@@ -1498,7 +1498,7 @@ if page == "Care Services Explorer":
 
     st.sidebar.markdown(
         """
-        <span style="color:#C4B5FD;font-size:22px;">✦</span>
+        <span style="color:#C4B5FD;font-size:22px;"></span>
         <b>Migration Resource Center</b>
         """,
         unsafe_allow_html=True
@@ -1786,7 +1786,7 @@ elif page == "Population Overview":
     """)
 
     # =====================================================
-    # AGE GROUP DEFINITION, ⚠️ PENDING CONFIRMATION WITH MARIAN
+    # AGE GROUP DEFINITION,  PENDING CONFIRMATION WITH MARIAN
     # (same definition documented in Notebook 2, Section 2.1.0)
     # Source data arrives pre-aggregated into these four bands,
     # so a different elderly/children cutoff (e.g. 65+ instead
@@ -3185,61 +3185,61 @@ if page == "Childcare Centers":
     # --------------------------------------------------
 
 
-    # ── Zoning siting compatibility helper ──────────────────
+    #  Zoning siting compatibility helper 
     # (checks whether the dominant zone of each facility's
     # barangay is compatible with that facility type under QC's
-    # Comprehensive Zoning Ordinance. ✓ = compatible,
-    # ✗ = likely restricted, ? = unclear or non-applicable)
+    # Comprehensive Zoning Ordinance.  = compatible,
+    #  = likely restricted, ? = unclear or non-applicable)
     _ZONE_COMPAT = {
         "childcare": {
-            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "✓",
-            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "✓",
-            "R-1 LOW DENSITY RESIDENTIAL ZONE": "✓",
-            "C-1 MINOR COMMERCIAL ZONE": "✓",
-            "C-2 MAJOR COMMERCIAL ZONE": "✓",
-            "C-3 METROPOLITAN COMMERCIAL ZONE": "✓",
-            "INSTITUTIONAL": "✓",
-            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "✗",
-            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "✗",
+            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "",
+            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "",
+            "R-1 LOW DENSITY RESIDENTIAL ZONE": "",
+            "C-1 MINOR COMMERCIAL ZONE": "",
+            "C-2 MAJOR COMMERCIAL ZONE": "",
+            "C-3 METROPOLITAN COMMERCIAL ZONE": "",
+            "INSTITUTIONAL": "",
+            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "",
+            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "",
             "CEMETERY": "?", "UTILITY": "?",
             "ROAD": "?", "WATER": "?", "X": "?",
         },
         "school": {
-            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "✓",
-            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "✓",
-            "R-1 LOW DENSITY RESIDENTIAL ZONE": "✓",
-            "C-1 MINOR COMMERCIAL ZONE": "✓",
-            "C-2 MAJOR COMMERCIAL ZONE": "✓",
-            "C-3 METROPOLITAN COMMERCIAL ZONE": "✓",
-            "INSTITUTIONAL": "✓",
-            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "✗",
-            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "✗",
+            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "",
+            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "",
+            "R-1 LOW DENSITY RESIDENTIAL ZONE": "",
+            "C-1 MINOR COMMERCIAL ZONE": "",
+            "C-2 MAJOR COMMERCIAL ZONE": "",
+            "C-3 METROPOLITAN COMMERCIAL ZONE": "",
+            "INSTITUTIONAL": "",
+            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "",
+            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "",
             "CEMETERY": "?", "UTILITY": "?",
             "ROAD": "?", "WATER": "?", "X": "?",
         },
         "care": {
-            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "✓",
-            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "✓",
-            "R-1 LOW DENSITY RESIDENTIAL ZONE": "✓",
-            "C-1 MINOR COMMERCIAL ZONE": "✓",
-            "C-2 MAJOR COMMERCIAL ZONE": "✓",
-            "C-3 METROPOLITAN COMMERCIAL ZONE": "✓",
-            "INSTITUTIONAL": "✓",
-            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "✗",
-            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "✗",
+            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "",
+            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "",
+            "R-1 LOW DENSITY RESIDENTIAL ZONE": "",
+            "C-1 MINOR COMMERCIAL ZONE": "",
+            "C-2 MAJOR COMMERCIAL ZONE": "",
+            "C-3 METROPOLITAN COMMERCIAL ZONE": "",
+            "INSTITUTIONAL": "",
+            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "",
+            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "",
             "CEMETERY": "?", "UTILITY": "?",
             "ROAD": "?", "WATER": "?", "X": "?",
         },
         "office": {
-            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "✓",
-            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "✓",
-            "R-1 LOW DENSITY RESIDENTIAL ZONE": "✓",
-            "C-1 MINOR COMMERCIAL ZONE": "✓",
-            "C-2 MAJOR COMMERCIAL ZONE": "✓",
-            "C-3 METROPOLITAN COMMERCIAL ZONE": "✓",
-            "INSTITUTIONAL": "✓",
-            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "✓",
-            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "✓",
+            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "",
+            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "",
+            "R-1 LOW DENSITY RESIDENTIAL ZONE": "",
+            "C-1 MINOR COMMERCIAL ZONE": "",
+            "C-2 MAJOR COMMERCIAL ZONE": "",
+            "C-3 METROPOLITAN COMMERCIAL ZONE": "",
+            "INSTITUTIONAL": "",
+            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "",
+            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "",
             "CEMETERY": "?", "UTILITY": "?",
             "ROAD": "?", "WATER": "?", "X": "?",
         },
@@ -3280,7 +3280,7 @@ if page == "Childcare Centers":
         )
         return _ZONE_COMPAT.get(facility_type, {}).get(zone, "?")
 
-    # ── Zoning siting compatibility helper ──────────────────
+    #  Zoning siting compatibility helper 
     # (Compatibility is determined by the dominant zone type of
     # each facility's barangay from qc_zoning_summary.csv.
     # Rules are based on QC's Comprehensive Zoning Ordinance:
@@ -3341,15 +3341,15 @@ if page == "Childcare Centers":
 
     _ZONE_COMPAT = {
         t: {
-            **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
-            **{z: "✗" for z in _INDUSTRIAL},
+            **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
+            **{z: "" for z in _INDUSTRIAL},
             **{z: "?" for z in _UNCLEAR},
         }
         for t in ("childcare", "school", "care")
     }
     # Offices are compatible with industrial zones too
     _ZONE_COMPAT["office"] = {
-        **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
+        **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
         **{z: "?" for z in _UNCLEAR},
     }
 
@@ -3366,7 +3366,7 @@ if page == "Childcare Centers":
     st.caption(
         "**Zoning Compatibility** indicates whether the facility's "
         "barangay is zoned for this use under QC's Comprehensive "
-        "Zoning Ordinance: ✓ compatible, ✗ likely restricted, "
+        "Zoning Ordinance:  compatible,  likely restricted, "
         "? unclear or non-applicable land use."
     )
 
@@ -3381,13 +3381,13 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
 
 | Symbol | Meaning | Zone types |
 |--------|---------|------------|
-| ✓ | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
-| ✗ | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
+|  | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
+|  | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
 | ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
 
 **Important caveats:**
 - This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
-  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows ✗.
+  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows .
 - Zoning rules are simplified, actual permitting depends on the specific use classification and
   any variances or conditional use permits already granted.
 - To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
@@ -3838,7 +3838,7 @@ elif page == "Schools":
     # TABLE
     # --------------------------------------------------
 
-    # ── Zoning siting compatibility helper ──────────────────
+    #  Zoning siting compatibility helper 
     # (Compatibility is determined by the dominant zone type of
     # each facility's barangay from qc_zoning_summary.csv.
     # Rules are based on QC's Comprehensive Zoning Ordinance:
@@ -3899,15 +3899,15 @@ elif page == "Schools":
 
     _ZONE_COMPAT = {
         t: {
-            **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
-            **{z: "✗" for z in _INDUSTRIAL},
+            **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
+            **{z: "" for z in _INDUSTRIAL},
             **{z: "?" for z in _UNCLEAR},
         }
         for t in ("childcare", "school", "care")
     }
     # Offices are compatible with industrial zones too
     _ZONE_COMPAT["office"] = {
-        **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
+        **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
         **{z: "?" for z in _UNCLEAR},
     }
 
@@ -3924,7 +3924,7 @@ elif page == "Schools":
     st.caption(
         "**Zoning Compatibility** indicates whether each school's "
         "barangay permits educational use under QC's zoning "
-        "ordinance: ✓ compatible, ✗ likely restricted, ? unclear."
+        "ordinance:  compatible,  likely restricted, ? unclear."
     )
 
     with st.expander("How is Zoning Compatibility calculated?"):
@@ -3938,13 +3938,13 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
 
 | Symbol | Meaning | Zone types |
 |--------|---------|------------|
-| ✓ | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
-| ✗ | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
+|  | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
+|  | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
 | ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
 
 **Important caveats:**
 - This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
-  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows ✗.
+  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows .
 - Zoning rules are simplified, actual permitting depends on the specific use classification and
   any variances or conditional use permits already granted.
 - To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
@@ -6025,7 +6025,7 @@ elif page == "Long-Term Care & Rehabilitation":
     # TABLE
     # ----------------------------------
 
-    # ── Zoning siting compatibility helper ──────────────────
+    #  Zoning siting compatibility helper 
     # (Compatibility is determined by the dominant zone type of
     # each facility's barangay from qc_zoning_summary.csv.
     # Rules are based on QC's Comprehensive Zoning Ordinance:
@@ -6086,15 +6086,15 @@ elif page == "Long-Term Care & Rehabilitation":
 
     _ZONE_COMPAT = {
         t: {
-            **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
-            **{z: "✗" for z in _INDUSTRIAL},
+            **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
+            **{z: "" for z in _INDUSTRIAL},
             **{z: "?" for z in _UNCLEAR},
         }
         for t in ("childcare", "school", "care")
     }
     # Offices are compatible with industrial zones too
     _ZONE_COMPAT["office"] = {
-        **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
+        **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
         **{z: "?" for z in _UNCLEAR},
     }
 
@@ -6111,7 +6111,7 @@ elif page == "Long-Term Care & Rehabilitation":
     st.caption(
         "**Zoning Compatibility** indicates whether the facility's "
         "barangay is zoned for care use under QC's zoning ordinance: "
-        "✓ compatible, ✗ likely restricted, ? unclear."
+        " compatible,  likely restricted, ? unclear."
     )
 
     with st.expander("How is Zoning Compatibility calculated?"):
@@ -6125,13 +6125,13 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
 
 | Symbol | Meaning | Zone types |
 |--------|---------|------------|
-| ✓ | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
-| ✗ | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
+|  | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
+|  | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
 | ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
 
 **Important caveats:**
 - This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
-  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows ✗.
+  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows .
 - Zoning rules are simplified, actual permitting depends on the specific use classification and
   any variances or conditional use permits already granted.
 - To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
@@ -7046,7 +7046,7 @@ elif page == "Action Offices":
     # TABLE
     # ----------------------------------
 
-    # ── Zoning siting compatibility helper ──────────────────
+    #  Zoning siting compatibility helper 
     # (Compatibility is determined by the dominant zone type of
     # each facility's barangay from qc_zoning_summary.csv.
     # Rules are based on QC's Comprehensive Zoning Ordinance:
@@ -7107,15 +7107,15 @@ elif page == "Action Offices":
 
     _ZONE_COMPAT = {
         t: {
-            **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
-            **{z: "✗" for z in _INDUSTRIAL},
+            **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
+            **{z: "" for z in _INDUSTRIAL},
             **{z: "?" for z in _UNCLEAR},
         }
         for t in ("childcare", "school", "care")
     }
     # Offices are compatible with industrial zones too
     _ZONE_COMPAT["office"] = {
-        **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
+        **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
         **{z: "?" for z in _UNCLEAR},
     }
 
@@ -7133,7 +7133,7 @@ elif page == "Action Offices":
         "**Zoning Compatibility** indicates whether each office's "
         "barangay permits this use under QC's zoning ordinance. "
         "Action offices are generally compatible across most zone "
-        "types including industrial: ✓ compatible, ? unclear."
+        "types including industrial:  compatible, ? unclear."
     )
 
     with st.expander("How is Zoning Compatibility calculated?"):
@@ -7147,13 +7147,13 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
 
 | Symbol | Meaning | Zone types |
 |--------|---------|------------|
-| ✓ | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
-| ✗ | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
+|  | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
+|  | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
 | ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
 
 **Important caveats:**
 - This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
-  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows ✗.
+  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows .
 - Zoning rules are simplified, actual permitting depends on the specific use classification and
   any variances or conditional use permits already granted.
 - To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
@@ -7457,7 +7457,7 @@ elif page == "Migration Resource Center":
         if c in mig.columns
     ]
 
-    # ── Zoning siting compatibility helper ──────────────────
+    #  Zoning siting compatibility helper 
     # (Compatibility is determined by the dominant zone type of
     # each facility's barangay from qc_zoning_summary.csv.
     # Rules are based on QC's Comprehensive Zoning Ordinance:
@@ -7518,15 +7518,15 @@ elif page == "Migration Resource Center":
 
     _ZONE_COMPAT = {
         t: {
-            **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
-            **{z: "✗" for z in _INDUSTRIAL},
+            **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
+            **{z: "" for z in _INDUSTRIAL},
             **{z: "?" for z in _UNCLEAR},
         }
         for t in ("childcare", "school", "care")
     }
     # Offices are compatible with industrial zones too
     _ZONE_COMPAT["office"] = {
-        **{z: "✓" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
+        **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
         **{z: "?" for z in _UNCLEAR},
     }
 
@@ -7541,7 +7541,7 @@ elif page == "Migration Resource Center":
     st.caption(
         "**Zoning Compatibility** indicates whether each center's "
         "barangay permits social care use under QC's zoning ordinance: "
-        "✓ compatible, ✗ likely restricted, ? unclear."
+        " compatible,  likely restricted, ? unclear."
     )
 
     _mig_disp = mig[
@@ -7595,7 +7595,7 @@ elif page == "Care Services Explorer":
         "Childcare Centers": {
             "df": childcare_centers,
             "color": "#4C1D95",
-            "symbol": "●",
+            "symbol": "",
             "source": "Childcare Center",
             "name_col": "Name",
             "district_col": "District",
@@ -7607,7 +7607,7 @@ elif page == "Care Services Explorer":
         "Schools": {
             "df": schools,
             "color": "#4472C4",
-            "symbol": "■",
+            "symbol": "",
             "source": "School",
             "name_col": "Name",
             "district_col": "District",
@@ -7619,7 +7619,7 @@ elif page == "Care Services Explorer":
         "Health Centers": {
             "df": health_centers,
             "color": "#4C1D95",
-            "symbol": "★",
+            "symbol": "",
             "source": "Health Facility",
             "name_col": "Name",
             "district_col": "District",
@@ -7631,7 +7631,7 @@ elif page == "Care Services Explorer":
         "Older Persons Facilities": {
             "df": older_person_care,
             "color": "#055B52",
-            "symbol": "◆",
+            "symbol": "",
             "source": "Older Persons Facility",
             "name_col": "Name",
             "district_col": "District",
@@ -7643,7 +7643,7 @@ elif page == "Care Services Explorer":
         "Long-Term Care & Rehabilitation": {
             "df": long_term_care,
             "color": "#4C1D95",
-            "symbol": "▲",
+            "symbol": "",
             "source": "Rehabilitation Facility",
             "name_col": "Name",
             "district_col": "District",
@@ -7655,7 +7655,7 @@ elif page == "Care Services Explorer":
         "Action Offices": {
             "df": action_offices,
             "color": "#055B52",
-            "symbol": "⬢",
+            "symbol": "",
             "source": "Action Office",
             "name_col": "Name",
             "district_col": "District",
@@ -7667,7 +7667,7 @@ elif page == "Care Services Explorer":
         "Migration Resource Centers": {
             "df": migration_centers,
             "color": "#C4B5FD",
-            "symbol": "✦",
+            "symbol": "",
             "source": "Migration Resource Center",
             "name_col": "Name",
             "district_col": "District",
@@ -8480,9 +8480,9 @@ elif page == "Accessibility Analysis":
         access_chart = access.copy()
         access_chart["District"] = format_district(access_chart["District"])
 
-        # ──────────────────────────────────────────────────
+        # 
         # CHART 1: FACILITY RATIO BY DISTRICT
-        # ──────────────────────────────────────────────────
+        # 
 
         st.subheader(f"{selected_ratio_label} by District")
 
@@ -8550,9 +8550,9 @@ elif page == "Accessibility Analysis":
                 height=400
             )
 
-        # ──────────────────────────────────────────────────
+        # 
         # CHART 2: OVERALL ACCESSIBILITY INDEX
-        # ──────────────────────────────────────────────────
+        # 
 
         st.subheader("Districts at Risk of Multi-Service Coverage Gaps")
 
@@ -9067,7 +9067,7 @@ elif page == "Accessibility Analysis":
         # MOST UNDERSERVED BARANGAYS (by the selected ratio)
         # ==================================================
 
-        # ── Zero-facility barangays callout ──
+        #  Zero-facility barangays callout 
         # (the bar chart was removed, barangays with zero
         # facilities dominate the "most underserved" list and
         # produce invisible bars; the Priority Barangays table
@@ -9161,7 +9161,7 @@ elif page == "Accessibility Analysis":
             .head(25)
         )
 
-        # ── Enrich with dominant zone ──
+        #  Enrich with dominant zone 
         try:
             _zs_p = pd.read_csv(
                 "processed/zoning/qc_zoning_summary.csv"
@@ -9386,7 +9386,7 @@ elif page == "Accessibility Analysis":
 
         st.markdown("""
         <div class="qcd-insight">
-            <div class="qcd-insight-label">💡 How to Use This Data</div>
+            <div class="qcd-insight-label"> How to Use This Data</div>
             <div class="qcd-insight-body">
                 <strong>Children & Elderly per Facility</strong> show the average facility capacity burden.
                 High numbers indicate facilities are stretched thin serving large populations. Compare
@@ -9867,13 +9867,76 @@ elif page == "Care Planning & Investment Priorities":
     )
 
     # ==================================================
+    # LOAD AND MERGE PWD DATA
+    # ==================================================
+    # PWDs are in a separate CSV, need to merge them in
+    pwd_loaded = False
+
+    # Try multiple possible file paths
+    possible_paths = [
+        "processed/persons_with_disability_by_barangay.csv",
+    ]
+
+    for pwd_path in possible_paths:
+        try:
+            pwd_data = pd.read_csv(pwd_path)
+
+            # Clean PWD column: remove commas and convert to numeric
+            if "PWDs" in pwd_data.columns:
+                pwd_data["PWDs"] = (
+                    pwd_data["PWDs"]
+                    .astype(str)
+                    .str.replace(",", "")
+                    .apply(pd.to_numeric, errors="coerce")
+                    .fillna(0)
+                    .astype(int)
+                )
+
+                # Standardize barangay names: strip whitespace, uppercase for matching
+                pwd_data["Barangay_Clean"] = pwd_data["Barangay"].str.strip().str.upper()
+                barangay_access["Barangay_Clean"] = barangay_access["Barangay"].str.strip().str.upper()
+
+                # Merge PWD data with main dataframe using cleaned names
+                barangay_access = barangay_access.merge(
+                    pwd_data[["Barangay_Clean", "PWDs"]],
+                    on="Barangay_Clean",
+                    how="left"
+                )
+
+                # Fill any missing PWD values with 0
+                barangay_access["PWDs"] = barangay_access["PWDs"].fillna(0).astype(int)
+                barangay_access = barangay_access.drop("Barangay_Clean", axis=1)
+
+                pwd_loaded = True
+                break
+        except FileNotFoundError:
+            continue
+        except Exception as e:
+            continue
+
+    # If PWD data wasn't loaded from any path, set to 0
+    if not pwd_loaded:
+        barangay_access["PWDs"] = 0
+        st.error(
+            "WARNING: PWD data file not found. Checked paths: "
+            + ", ".join(possible_paths)
+            + ". Disability priority rankings will be incomplete."
+        )
+
+    # ==================================================
     # FACILITY TYPES - SEPARATED BY CARE DOMAIN
     # (This is the key fix: don't sum all facilities together)
     # ==================================================
 
     childcare_facility_cols = ["Childcare", "Schools"]
-    eldercare_facility_cols = ["Older persons care", "Long-term care and rehabilitation services", "Health centers"]
-    disability_facility_cols = ["Long-term care and rehabilitation services"]  # Closest proxy
+    # Eldercare facilities: Use ONLY "Older persons care" (elderly-specific)
+    # Exclude "Health centers" and "Long-term care" which serve multiple populations
+    eldercare_facility_cols = ["Older persons care"]
+    # NOTE: There are NO disability-specific facilities in the available data.
+    # Setting to empty list means all barangays have 0 disability facilities.
+    # This is CORRECT - disability services gap is universal and unmeasured.
+    # Disability priority ranking will be based 100% on PWD demand after facility weighting.
+    disability_facility_cols = []
 
     barangay_access["Childcare_Facilities"] = (
         barangay_access[childcare_facility_cols].sum(axis=1)
@@ -9883,9 +9946,8 @@ elif page == "Care Planning & Investment Priorities":
         barangay_access[eldercare_facility_cols].sum(axis=1)
     )
 
-    barangay_access["Disability_Facilities"] = (
-        barangay_access[disability_facility_cols].sum(axis=1)
-    )
+    # Disability facilities: All zeros (no disability-specific facilities exist)
+    barangay_access["Disability_Facilities"] = 0
 
     # Keep total facilities for display
     barangay_access["Facilities"] = barangay_access["Total_Facilities"]
@@ -9921,9 +9983,11 @@ elif page == "Care Planning & Investment Priorities":
         barangay_access["age_60plus"]
     )
 
-    barangay_access["Disability_Demand"] = (
-        barangay_access.get("pwd_registered", 0)
-    )
+    # Disability Demand: Use PWDs column (loaded and merged above)
+    if "PWDs" in barangay_access.columns:
+        barangay_access["Disability_Demand"] = barangay_access["PWDs"]
+    else:
+        barangay_access["Disability_Demand"] = 0
 
     # Combined metrics (for backward compatibility)
     barangay_access["Care Demand"] = (
@@ -10066,34 +10130,10 @@ elif page == "Care Planning & Investment Priorities":
     barangay_access = (
         barangay_access
         .sort_values(
-            "Priority Score",
-            ascending=False
+            ["Priority Score", "Total"],
+            ascending=[False, False]
         )
     )
-
-    # ==================================================
-    # KEY FINDINGS ALERT
-    # ==================================================
-    # Identify critical gaps matching research findings
-
-    critical_eldercare_gap = barangay_access[
-        (barangay_access["Eldercare_Facilities"] == 0) &
-        (barangay_access["Eldercare_Demand"] > 5000)
-    ].sort_values("Eldercare_Demand", ascending=False)
-
-    critical_disability_gap = barangay_access[
-        (barangay_access["Disability_Facilities"] == 0) &
-        (barangay_access["Disability_Demand"] > 3000)
-    ].sort_values("Disability_Demand", ascending=False)
-
-    if len(critical_eldercare_gap) > 0:
-        st.warning(
-            f"### ⚠️ CRITICAL ELDERCARE GAPS\n\n"
-            f"**{len(critical_eldercare_gap)} barangay(s)** have NO eldercare facilities "
-            f"but serve **{int(critical_eldercare_gap['Eldercare_Demand'].sum()):,}** residents aged 60+:\n\n"
-            f"**{', '.join(critical_eldercare_gap['Barangay'].head(3).tolist())}**\n\n"
-            f"These barangays match the research report's priority investment recommendations."
-        )
 
     # ==================================================
     # KPI CARDS
@@ -10142,10 +10182,10 @@ elif page == "Care Planning & Investment Priorities":
     st.divider()
 
     tab1, tab2, tab3, tab4 = st.tabs([
-        "Overall Priority",
-        "Childcare Priority",
-        "Eldercare Priority",
-        "Disability Care Priority"
+        " Overall Priority",
+        " Childcare Priority",
+        " Eldercare Priority",
+        " Disability Care Priority"
     ])
 
     # ============================================
@@ -10227,7 +10267,7 @@ elif page == "Care Planning & Investment Priorities":
     with tab3:
         st.subheader("Investment Priority: Eldercare")
         st.caption(
-            "⭐ **Barangays with highest elderly (60+) population and lowest eldercare facilities.** "
+            " **Barangays with highest elderly (60+) population and lowest eldercare facilities.** "
             "This matches the research report priority findings."
         )
 
@@ -10264,7 +10304,7 @@ elif page == "Care Planning & Investment Priorities":
     with tab4:
         st.subheader("Investment Priority: Disability Care Services")
         st.caption(
-            "⭐ **Barangays with highest PWD (registered) population and lowest disability services.** "
+            " **Barangays with highest PWD (registered) population and lowest disability services.** "
             "This matches the research report priority findings."
         )
 
@@ -10298,7 +10338,7 @@ elif page == "Care Planning & Investment Priorities":
 
     st.divider()
 
-    with st.expander("📊 Methodology: How Priority Scores Work", expanded=False):
+    with st.expander(" Methodology: How Priority Scores Work", expanded=False):
         st.markdown("""
         ### Three Separate Priority Metrics
 
@@ -10323,14 +10363,14 @@ elif page == "Care Planning & Investment Priorities":
         ### Why This Works Better
 
         **Old Method (All Facilities Combined):**
-        - Commonwealth: 35+ childcare facilities + large elderly population = "Medium Priority" ❌
+        - Commonwealth: 35+ childcare facilities + large elderly population = "Medium Priority" 
         - Problem: Childcare supply masks the elderly care shortage
 
         **New Method (Domain-Specific):**
-        - Commonwealth: **Childcare Priority = Medium** (good supply) ✓
-        - Commonwealth: **Eldercare Priority = #1** (zero supply, 13,092 elderly) ✓
-        - Commonwealth: **Disability Priority = #1** (zero services, 4,692 PWDs) ✓
-        - Overall: **Highest Priority for Investment** ✓
+        - Commonwealth: **Childcare Priority = Medium** (good supply) 
+        - Commonwealth: **Eldercare Priority = #1** (zero supply, 13,092 elderly) 
+        - Commonwealth: **Disability Priority = #1** (zero services, 4,692 PWDs) 
+        - Overall: **Highest Priority for Investment** 
 
         This matches the research report exactly.
         """)
@@ -13386,7 +13426,7 @@ elif page == "Zoning Map":
         "private/restricted zone records are excluded by the source."
     )
 
-    # ── Load shared data for all tabs ──────────────────────
+    #  Load shared data for all tabs 
     # (loaded once here so all tabs can use it without
     # re-reading from disk on every tab switch)
     @st.cache_data(show_spinner=False)
@@ -13418,7 +13458,7 @@ elif page == "Zoning Map":
 
     _zoning_summary, _demographics, _zoning_merged = _load_zoning_merged()
 
-    # ── City-wide KPI summary stats ─────────────────────────
+    #  City-wide KPI summary stats 
     _nlu_kpi = {"ROAD", "WATER", "X", "Unknown"}
     _total_brgy = len(_zoning_summary[
         ~_zoning_summary["Dominant Zone"].isin(_nlu_kpi)
@@ -13506,7 +13546,7 @@ elif page == "Zoning Map":
 
     with ztab1:
 
-        # ── Zone type colour palette (matches QC viewer legend) ──
+        #  Zone type colour palette (matches QC viewer legend) 
         ZONE_COLORS = {
             "R-3 HIGH DENSITY RESIDENTIAL ZONE":         [180, 90,  40,  180],
             "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": [220, 140, 80,  180],
@@ -13524,7 +13564,7 @@ elif page == "Zoning Map":
         }
         DEFAULT_COLOR = [160, 160, 160, 120]
 
-        # ── Cached data loader ──
+        #  Cached data loader 
         # (runs once on first load, then stays in memory across all
         # interactions, the main source of slowness was re-running
         # gpd.read_file on every selectbox change. Simplification
@@ -13562,19 +13602,19 @@ elif page == "Zoning Map":
             zoning_gdf["barangay"].dropna().unique().tolist()
         )
 
-        # ── Sidebar: colour legend ──
+        #  Sidebar: colour legend 
         st.sidebar.markdown("---")
         st.sidebar.markdown("## Zone Types")
         for zone in all_zone_types:
             color = ZONE_COLORS.get(zone, DEFAULT_COLOR)
             r, g, b = color[0], color[1], color[2]
             st.sidebar.markdown(
-                f'<span style="color:rgba({r},{g},{b},1);font-size:22px;">■</span> '
+                f'<span style="color:rgba({r},{g},{b},1);font-size:22px;"></span> '
                 f'<b>{zone}</b>',
                 unsafe_allow_html=True
             )
 
-        # ── Main-area: barangay filter only ──
+        #  Main-area: barangay filter only 
         selected_barangay = st.selectbox(
             "Select barangay",
             ["All"] + all_barangays,
@@ -13583,7 +13623,7 @@ elif page == "Zoning Map":
 
         st.info("Hover over a zone polygon to view barangay and zone type.")
 
-        # ── Filter ──
+        #  Filter 
         gdf_filtered = zoning_gdf.copy()
 
         if selected_barangay != "All":
@@ -13595,7 +13635,7 @@ elif page == "Zoning Map":
             st.warning("No zones match the current filters.")
             st.stop()
 
-        # ── Filter barangay borders ──
+        #  Filter barangay borders 
         if selected_barangay != "All":
             name_col = next(
                 (c for c in barangay_borders.columns
@@ -13615,12 +13655,12 @@ elif page == "Zoning Map":
         else:
             borders_filtered = barangay_borders
 
-        # ── Add fill color ──
+        #  Add fill color 
         gdf_filtered["fill_color"] = gdf_filtered["zone_type"].apply(
             lambda z: ZONE_COLORS.get(z, DEFAULT_COLOR)
         )
 
-        # ── KPI row ──
+        #  KPI row 
         col_k1, col_k2, col_k3 = st.columns(3)
         with col_k1:
             with st.container(border=True):
@@ -13632,7 +13672,7 @@ elif page == "Zoning Map":
             with st.container(border=True):
                 st.metric("Zone types", gdf_filtered["zone_type"].nunique())
 
-        # ── Legend above map, explicit dark text for dark-mode readability ──
+        #  Legend above map, explicit dark text for dark-mode readability 
         legend_items = "".join([
             f'<div style="display:flex;align-items:center;gap:6px;">'
             f'<span style="display:inline-block;width:14px;height:14px;'
@@ -13652,7 +13692,7 @@ elif page == "Zoning Map":
             unsafe_allow_html=True
         )
 
-        # ── Map ──
+        #  Map 
         _centroids = (
             gdf_filtered.geometry
             .to_crs("EPSG:3123")
@@ -13712,7 +13752,7 @@ elif page == "Zoning Map":
         with st.container(border=True):
             st.pydeck_chart(deck, height=620, width="stretch")
 
-        # ── Summary table ──
+        #  Summary table 
         st.subheader("Zone Type Breakdown by Barangay")
         st.caption(
             "Number of zone polygons per zone type per barangay "
