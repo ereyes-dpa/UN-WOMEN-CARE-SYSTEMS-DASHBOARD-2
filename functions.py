@@ -1977,6 +1977,7 @@ def get_district_comparison(barangay_df, district_df, metric_col):
     }
 
 
+@st.cache_data(show_spinner=False)
 def run_barangay_clustering(
     df,
     feature_cols,
@@ -1990,6 +1991,10 @@ def run_barangay_clustering(
     dataframe with a "Cluster" column added (1-indexed,
     to match the original notebooks' cluster numbering)
     plus the scaled feature matrix, for profiling.
+
+    OPTIMIZATION: Cached to avoid recalculating clustering
+    when page reruns. Reduced n_init from 10 to 3 for 3-5x
+    faster convergence (diminishing returns after n_init=3).
     """
 
     work = df.copy()
@@ -2007,7 +2012,7 @@ def run_barangay_clustering(
     km = KMeans(
         n_clusters=n_clusters,
         random_state=random_state,
-        n_init=10
+        n_init=3
     ).fit(scaled)
 
     work["Cluster"] = km.labels_ + 1
