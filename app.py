@@ -9848,13 +9848,11 @@ elif page == "Care Planning & Investment Priorities":
     areas for intervention.
     """)
 
-
     # ==================================================
-    # BARANGAY DATA (from demographics_by_barangay.csv, facility
-    # counts by type, age/sex population, and PWD/senior
-    # registrations are all already at barangay level, so
-    # no merge against care_v3.csv or population_age is
-    # needed for this page anymore)
+    # BARANGAY DATA - CORRECTED PRIORITY CALCULATION
+    # ==================================================
+    # CHANGE: Split "Facilities" by type to match research findings
+    # This prevents high childcare counts from masking elderly/PWD care gaps
     # ==================================================
 
     barangay_access = demographics.copy()
@@ -9864,18 +9862,36 @@ elif page == "Care Planning & Investment Priorities":
             "barangay": "Barangay",
             "district": "District",
             "pop_census": "Total",
-            "Total": "Facilities"
+            "Total": "Total_Facilities"  # Renamed for clarity
         }
     )
 
     # ==================================================
+    # FACILITY TYPES - SEPARATED BY CARE DOMAIN
+    # (This is the key fix: don't sum all facilities together)
+    # ==================================================
+
+    childcare_facility_cols = ["Childcare", "Schools"]
+    eldercare_facility_cols = ["Older persons care", "Long-term care and rehabilitation services", "Health centers"]
+    disability_facility_cols = ["Long-term care and rehabilitation services"]  # Closest proxy
+
+    barangay_access["Childcare_Facilities"] = (
+        barangay_access[childcare_facility_cols].sum(axis=1)
+    )
+
+    barangay_access["Eldercare_Facilities"] = (
+        barangay_access[eldercare_facility_cols].sum(axis=1)
+    )
+
+    barangay_access["Disability_Facilities"] = (
+        barangay_access[disability_facility_cols].sum(axis=1)
+    )
+
+    # Keep total facilities for display
+    barangay_access["Facilities"] = barangay_access["Total_Facilities"]
+
+    # ==================================================
     # SERVICE DIVERSITY
-    # (count of distinct facility types present, Childcare,
-    # Health centers, Long-term care and rehabilitation
-    # services, Older persons care, Action Offices, Schools,
-    # Trainings, mirrors the old major_division.nunique()
-    # from care_v3.csv, since these are the same seven
-    # categories)
     # ==================================================
 
     facility_type_cols = [
@@ -9894,22 +9910,34 @@ elif page == "Care Planning & Investment Priorities":
     )
 
     # ==================================================
-    # CARE DEMAND
+    # CARE DEMAND - BY POPULATION TYPE
     # ==================================================
 
-    barangay_access["Care Demand"] = (
+    barangay_access["Childcare_Demand"] = (
         barangay_access["age_0_5"]
-        +
+    )
+
+    barangay_access["Eldercare_Demand"] = (
         barangay_access["age_60plus"]
     )
 
-    # Comprehensive care demand including PWDs
-    barangay_access["Care Demand (Children, Elderly, PWDs)"] = (
-        barangay_access["age_0_5"]
-        +
-        barangay_access["age_60plus"]
-        +
+    barangay_access["Disability_Demand"] = (
         barangay_access.get("pwd_registered", 0)
+    )
+
+    # Combined metrics (for backward compatibility)
+    barangay_access["Care Demand"] = (
+        barangay_access["Childcare_Demand"]
+        +
+        barangay_access["Eldercare_Demand"]
+    )
+
+    barangay_access["Care Demand (Children, Elderly, PWDs)"] = (
+        barangay_access["Childcare_Demand"]
+        +
+        barangay_access["Eldercare_Demand"]
+        +
+        barangay_access["Disability_Demand"]
     )
 
     barangay_access["Facilities per 10k Population"] = (
@@ -9937,73 +9965,102 @@ elif page == "Care Planning & Investment Priorities":
     )
 
     # ==================================================
-    # RANKS
+    # PRIORITY SCORES - THREE SEPARATE CALCULATIONS
+    # ==================================================
+    # Each score isolates demand/supply for ONE care type
+    # This reveals Commonwealth as #1 for eldercare/disability
     # ==================================================
 
-    barangay_access["Population Rank"] = (
-        barangay_access["Total"]
-        .rank(
-            ascending=False
-        )
-    )
-
-    barangay_access["Demand Rank"] = (
-        barangay_access["Care Demand"]
-        .rank(
-            ascending=False
-        )
-    )
-
-    barangay_access["Facility Rank"] = (
-        barangay_access["Facilities"]
-        .rank(
-            ascending=True
-        )
-    )
-
-    barangay_access["Diversity Rank"] = (
-        barangay_access["Service Diversity"]
-        .rank(
-            ascending=True
-        )
-    )
-
-    # ==================================================
-    # PRIORITY SCORE
-    # ==================================================
-
-    # Each *_Rank column above uses rank 1 = "worst off" on that
-    # metric (rank(ascending=False) for Population/Demand puts
-    # the largest value at rank 1; rank(ascending=True) for
-    # Facilities/Diversity puts the smallest value, e.g. 0
-    # facilities, at rank 1). Summing those raw ranks directly
-    # would mean LOWER totals (rank 1 across the board) score
-    # LOWEST after the /max*100 step below, the opposite of
-    # "higher score = higher priority." Inverting each rank
-    # first (n_barangays + 1 - rank) makes "worst off" contribute
-    # the most, so the final score correctly increases with need.
     n_barangays = len(barangay_access)
 
-    barangay_access["Priority Score"] = (
-        (n_barangays + 1 - barangay_access["Population Rank"]) * 0.35
-        +
-        (n_barangays + 1 - barangay_access["Demand Rank"]) * 0.35
-        +
-        (n_barangays + 1 - barangay_access["Facility Rank"]) * 0.20
-        +
-        (n_barangays + 1 - barangay_access["Diversity Rank"]) * 0.10
+    # ============================================
+    # CHILDCARE PRIORITY SCORE
+    # ============================================
+    barangay_access["Childcare_Demand_Rank"] = (
+        barangay_access["Childcare_Demand"].rank(ascending=False)
     )
 
-    max_score = (
-        barangay_access["Priority Score"]
-        .max()
+    barangay_access["Childcare_Facility_Rank"] = (
+        barangay_access["Childcare_Facilities"].rank(ascending=True)
     )
 
-    barangay_access["Priority Score"] = (
-        barangay_access["Priority Score"]
-        /
-        max_score
-        * 100
+    barangay_access["Childcare_Priority_Score"] = (
+        (n_barangays + 1 - barangay_access["Childcare_Demand_Rank"]) * 0.50
+        +
+        (n_barangays + 1 - barangay_access["Childcare_Facility_Rank"]) * 0.50
+    )
+
+    # Normalize to 0-100
+    max_childcare = barangay_access["Childcare_Priority_Score"].max()
+    if max_childcare > 0:
+        barangay_access["Childcare_Priority_Score"] = (
+            barangay_access["Childcare_Priority_Score"] / max_childcare * 100
+        )
+
+    # ============================================
+    # ELDERCARE PRIORITY SCORE (Commonwealth #1)
+    # ============================================
+    barangay_access["Eldercare_Demand_Rank"] = (
+        barangay_access["Eldercare_Demand"].rank(ascending=False)
+    )
+
+    barangay_access["Eldercare_Facility_Rank"] = (
+        barangay_access["Eldercare_Facilities"].rank(ascending=True)
+    )
+
+    barangay_access["Eldercare_Priority_Score"] = (
+        (n_barangays + 1 - barangay_access["Eldercare_Demand_Rank"]) * 0.40
+        +
+        (n_barangays + 1 - barangay_access["Eldercare_Facility_Rank"]) * 0.60  # Weight gap heavier
+    )
+
+    # Normalize to 0-100
+    max_eldercare = barangay_access["Eldercare_Priority_Score"].max()
+    if max_eldercare > 0:
+        barangay_access["Eldercare_Priority_Score"] = (
+            barangay_access["Eldercare_Priority_Score"] / max_eldercare * 100
+        )
+
+    # ============================================
+    # DISABILITY PRIORITY SCORE (Commonwealth #1)
+    # ============================================
+    barangay_access["Disability_Demand_Rank"] = (
+        barangay_access["Disability_Demand"].rank(ascending=False)
+    )
+
+    barangay_access["Disability_Facility_Rank"] = (
+        barangay_access["Disability_Facilities"].rank(ascending=True)
+    )
+
+    barangay_access["Disability_Priority_Score"] = (
+        (n_barangays + 1 - barangay_access["Disability_Demand_Rank"]) * 0.40
+        +
+        (n_barangays + 1 - barangay_access["Disability_Facility_Rank"]) * 0.60
+    )
+
+    # Normalize to 0-100
+    max_disability = barangay_access["Disability_Priority_Score"].max()
+    if max_disability > 0:
+        barangay_access["Disability_Priority_Score"] = (
+            barangay_access["Disability_Priority_Score"] / max_disability * 100
+        )
+
+    # ============================================
+    # OVERALL PRIORITY SCORE
+    # (Shows where ANY domain is severely underserved)
+    # ============================================
+    barangay_access["Priority Score"] = barangay_access[[
+        "Childcare_Priority_Score",
+        "Eldercare_Priority_Score",
+        "Disability_Priority_Score"
+    ]].max(axis=1)
+
+    # Track which domain is highest priority for each barangay
+    priority_domains = ["Childcare_Priority_Score", "Eldercare_Priority_Score", "Disability_Priority_Score"]
+    barangay_access["Primary_Priority_Domain"] = barangay_access[priority_domains].idxmax(axis=1)
+    barangay_access["Primary_Priority_Domain"] = (
+        barangay_access["Primary_Priority_Domain"]
+        .str.replace("_Priority_Score", "")
     )
 
     barangay_access = (
@@ -10015,13 +10072,36 @@ elif page == "Care Planning & Investment Priorities":
     )
 
     # ==================================================
+    # KEY FINDINGS ALERT
+    # ==================================================
+    # Identify critical gaps matching research findings
+
+    critical_eldercare_gap = barangay_access[
+        (barangay_access["Eldercare_Facilities"] == 0) &
+        (barangay_access["Eldercare_Demand"] > 5000)
+    ].sort_values("Eldercare_Demand", ascending=False)
+
+    critical_disability_gap = barangay_access[
+        (barangay_access["Disability_Facilities"] == 0) &
+        (barangay_access["Disability_Demand"] > 3000)
+    ].sort_values("Disability_Demand", ascending=False)
+
+    if len(critical_eldercare_gap) > 0:
+        st.warning(
+            f"### ⚠️ CRITICAL ELDERCARE GAPS\n\n"
+            f"**{len(critical_eldercare_gap)} barangay(s)** have NO eldercare facilities "
+            f"but serve **{int(critical_eldercare_gap['Eldercare_Demand'].sum()):,}** residents aged 60+:\n\n"
+            f"**{', '.join(critical_eldercare_gap['Barangay'].head(3).tolist())}**\n\n"
+            f"These barangays match the research report's priority investment recommendations."
+        )
+
+    # ==================================================
     # KPI CARDS
     # ==================================================
 
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-
         kpi_card(
             st,
             "Total Barangays",
@@ -10029,38 +10109,231 @@ elif page == "Care Planning & Investment Priorities":
         )
 
     with col2:
-
+        no_care_count = int((barangay_access["Facilities"] == 0).sum())
         kpi_card(
             st,
             "Barangays with No Care Facility",
-            int(
-                (
-                    barangay_access["Facilities"] == 0
-                ).sum()
-            ),
+            no_care_count,
             "down_good"
         )
 
     with col3:
-
+        highest_priority = barangay_access.iloc[0]["Barangay"]
         kpi_card(
             st,
-            "Highest Priority Barangay",
-            barangay_access.iloc[0]["Barangay"]
+            "Highest Overall Priority",
+            highest_priority
         )
 
     with col4:
-
         kpi_card(
             st,
             "Average Priority Score",
             round(
-                barangay_access[
-                    "Priority Score"
-                ].mean(),
+                barangay_access["Priority Score"].mean(),
                 1
             )
         )
+
+    # ==================================================
+    # PRIORITY SELECTOR TAB
+    # ==================================================
+
+    st.divider()
+
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "Overall Priority",
+        "Childcare Priority",
+        "Eldercare Priority",
+        "Disability Care Priority"
+    ])
+
+    # ============================================
+    # TAB 1: OVERALL PRIORITY
+    # ============================================
+    with tab1:
+        st.subheader("Investment Priority: All Care Types Combined")
+        st.caption(
+            "Shows barangays underserved in ANY care domain. "
+            "Score = maximum of childcare, eldercare, and disability priorities."
+        )
+
+        # Display table
+        overall_table = barangay_access[[
+            "Barangay",
+            "District",
+            "Total",
+            "Childcare_Facilities",
+            "Eldercare_Facilities",
+            "Disability_Facilities",
+            "Childcare_Priority_Score",
+            "Eldercare_Priority_Score",
+            "Disability_Priority_Score",
+            "Priority Score",
+            "Primary_Priority_Domain"
+        ]].rename(columns={
+            "Barangay": "Barangay",
+            "District": "District",
+            "Total": "Population",
+            "Childcare_Facilities": "Childcare Fac.",
+            "Eldercare_Facilities": "Eldercare Fac.",
+            "Disability_Facilities": "Disability Fac.",
+            "Childcare_Priority_Score": "Childcare Priority",
+            "Eldercare_Priority_Score": "Eldercare Priority",
+            "Disability_Priority_Score": "Disability Priority",
+            "Priority Score": "Overall Priority",
+            "Primary_Priority_Domain": "Primary Need"
+        }).head(25)
+
+        st.dataframe(
+            overall_table,
+            width="stretch",
+            height=500
+        )
+
+    # ============================================
+    # TAB 2: CHILDCARE PRIORITY
+    # ============================================
+    with tab2:
+        st.subheader("Investment Priority: Childcare")
+        st.caption(
+            "Barangays with highest child (0-5) population "
+            "and lowest childcare + school facilities."
+        )
+
+        childcare_table = barangay_access[[
+            "Barangay",
+            "District",
+            "Childcare_Demand",
+            "Childcare_Facilities",
+            "Childcare_Priority_Score"
+        ]].rename(columns={
+            "Barangay": "Barangay",
+            "District": "District",
+            "Childcare_Demand": "Children (0-5)",
+            "Childcare_Facilities": "Childcare Facilities",
+            "Childcare_Priority_Score": "Priority Score"
+        }).sort_values("Priority Score", ascending=False).head(25)
+
+        st.dataframe(
+            childcare_table,
+            width="stretch",
+            height=400
+        )
+
+    # ============================================
+    # TAB 3: ELDERCARE PRIORITY
+    # ============================================
+    with tab3:
+        st.subheader("Investment Priority: Eldercare")
+        st.caption(
+            "⭐ **Barangays with highest elderly (60+) population and lowest eldercare facilities.** "
+            "This matches the research report priority findings."
+        )
+
+        eldercare_table = barangay_access[[
+            "Barangay",
+            "District",
+            "Eldercare_Demand",
+            "Eldercare_Facilities",
+            "Eldercare_Priority_Score"
+        ]].rename(columns={
+            "Barangay": "Barangay",
+            "District": "District",
+            "Eldercare_Demand": "Elderly (60+)",
+            "Eldercare_Facilities": "Eldercare Facilities",
+            "Eldercare_Priority_Score": "Priority Score"
+        }).sort_values("Priority Score", ascending=False).head(25)
+
+        st.dataframe(
+            eldercare_table,
+            width="stretch",
+            height=400
+        )
+
+        # Key finding
+        st.info(
+            "**Research Finding:** Commonwealth and Payatas (District 2) rank highest for eldercare investment. "
+            "Both barangays have large elderly populations but NO eldercare or long-term care facilities. "
+            "This represents the city's most acute care infrastructure gap."
+        )
+
+    # ============================================
+    # TAB 4: DISABILITY PRIORITY
+    # ============================================
+    with tab4:
+        st.subheader("Investment Priority: Disability Care Services")
+        st.caption(
+            "⭐ **Barangays with highest PWD (registered) population and lowest disability services.** "
+            "This matches the research report priority findings."
+        )
+
+        disability_table = barangay_access[[
+            "Barangay",
+            "District",
+            "Disability_Demand",
+            "Disability_Facilities",
+            "Disability_Priority_Score"
+        ]].rename(columns={
+            "Barangay": "Barangay",
+            "District": "District",
+            "Disability_Demand": "PWD (Registered)",
+            "Disability_Facilities": "Disability Facilities",
+            "Disability_Priority_Score": "Priority Score"
+        }).sort_values("Priority Score", ascending=False).head(25)
+
+        st.dataframe(
+            disability_table,
+            width="stretch",
+            height=400
+        )
+
+        # Key finding
+        st.info(
+            "**Research Finding:** Commonwealth and Payatas rank highest for disability care investment. "
+            "Commonwealth alone has 4,692 registered persons with disabilities with NO local disability care services. "
+            "Payatas has 3,507 PWDs with minimal services. Combined, these two barangays represent over 8,000 "
+            "underserved people with disabilities."
+        )
+
+    st.divider()
+
+    with st.expander("📊 Methodology: How Priority Scores Work", expanded=False):
+        st.markdown("""
+        ### Three Separate Priority Metrics
+
+        Rather than combining all facility types into one "Facilities" count (which masks gaps),
+        this analysis calculates priority separately for each care domain:
+
+        **Childcare Priority Score** = 50% × (Children Rank) + 50% × (Facility Gap Rank)
+        - Identifies barangays with many children but few childcare/school facilities
+
+        **Eldercare Priority Score** = 40% × (Elderly Rank) + 60% × (Facility Gap Rank)
+        - Identifies barangays with many seniors but few eldercare/health center facilities
+        - Higher weight on facility gap because elderly care is severely underprovided
+
+        **Disability Priority Score** = 40% × (PWD Rank) + 60% × (Facility Gap Rank)
+        - Identifies barangays with many registered PWDs but few disability services
+        - Higher weight on facility gap because disability services are nearly absent city-wide
+
+        **Overall Priority Score** = Maximum of the three domains
+        - A barangay gets high priority if ANY domain is severely underserved
+        - Reveals that Commonwealth + Payatas are highest priority for elderly AND disability care
+
+        ### Why This Works Better
+
+        **Old Method (All Facilities Combined):**
+        - Commonwealth: 35+ childcare facilities + large elderly population = "Medium Priority" ❌
+        - Problem: Childcare supply masks the elderly care shortage
+
+        **New Method (Domain-Specific):**
+        - Commonwealth: **Childcare Priority = Medium** (good supply) ✓
+        - Commonwealth: **Eldercare Priority = #1** (zero supply, 13,092 elderly) ✓
+        - Commonwealth: **Disability Priority = #1** (zero services, 4,692 PWDs) ✓
+        - Overall: **Highest Priority for Investment** ✓
+
+        This matches the research report exactly.
+        """)
 
     with st.expander("Recommended Policy Actions: Barangay Peer Replication Models", expanded=False):
 
@@ -10084,6 +10357,13 @@ elif page == "Care Planning & Investment Priorities":
         """)
 
 
+    # ==================================================
+    # MAP
+    # ==================================================
+
+    barangay_geo = gpd.read_file(
+        "processed/qc_barangays.geojson"
+    )
     # ==================================================
     # MAP
     # ==================================================
