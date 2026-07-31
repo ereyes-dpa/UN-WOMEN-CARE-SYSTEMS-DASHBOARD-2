@@ -720,14 +720,19 @@ def clean_health_centers(df) :
 def clean_dataframe(df) :
     # Phase 1 Optimization: Address fallback logic
     # Use address_clean if available, fall back to address, then "Not available"
-    if "address_clean" in df.columns and "address" in df.columns:
-        df["Address"] = df["address_clean"].fillna(df["address"]).fillna("Not available")
-    elif "address_clean" in df.columns:
-        df["Address"] = df["address_clean"].fillna("Not available")
-    elif "address" in df.columns:
-        df["Address"] = df["address"].fillna("Not available")
-    else:
-        df["Address"] = "Not available"
+    # (future.no_silent_downcasting keeps fillna from attempting the
+    # deprecated object-dtype downcast, which otherwise raises a
+    # FutureWarning on every load; the column stays object dtype
+    # either way.)
+    with pd.option_context("future.no_silent_downcasting", True):
+        if "address_clean" in df.columns and "address" in df.columns:
+            df["Address"] = df["address_clean"].fillna(df["address"]).fillna("Not available")
+        elif "address_clean" in df.columns:
+            df["Address"] = df["address_clean"].fillna("Not available")
+        elif "address" in df.columns:
+            df["Address"] = df["address"].fillna("Not available")
+        else:
+            df["Address"] = "Not available"
 
     # Rename other columns
     rename_dict = {
@@ -1979,7 +1984,7 @@ def get_district_comparison(barangay_df, district_df, metric_col):
 
 @st.cache_data(show_spinner=False)
 def run_barangay_clustering(
-    df,
+    _df,
     feature_cols,
     n_clusters=4,
     random_state=0
@@ -1997,7 +2002,7 @@ def run_barangay_clustering(
     faster convergence (diminishing returns after n_init=3).
     """
 
-    work = df.copy()
+    work = _df.copy()
 
     feat = (
         work[feature_cols]
@@ -2111,6 +2116,21 @@ COLORMAPS = {
         (0.50, (158, 154, 200)),
         (0.75, (106, 81, 163)),
         (1.00, (63, 0, 125))
+    ],
+    # Oranges — mirrors the Climate Layers page's population
+    # choropleth (POP_COLOR_STOPS in app.py), so its legend can
+    # use the same gradient-bar rendering as the other raster
+    # legends on that page instead of discrete swatches. A warm
+    # ramp is deliberate: that choropleth sits directly under
+    # the flood layer's semi-transparent blue, and blue reads
+    # far more clearly against an orange base (its complement)
+    # than it did against the green tried first.
+    "Oranges": [
+        (0.00, (254, 237, 222)),
+        (0.25, (253, 190, 133)),
+        (0.50, (253, 141, 60)),
+        (0.75, (230, 85, 13)),
+        (1.00, (166, 54, 3))
     ]
 }
 
