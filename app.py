@@ -477,7 +477,7 @@ age_group_definition = {
         "18-59 (Working Age Adult)"
     ],
     "elderly_60_plus": [
-        "60+ (Elderly)"
+        "60+ (Older Persons)"
     ]
 }
 
@@ -501,7 +501,7 @@ district_pop = (
             "0-5 (Early Childhood)",
             "6-17 (School Age Children)",
             "18-59 (Working Age Adult)",
-            "60+ (Elderly)",
+            "60+ (Older Persons)",
             "Total"
         ]
     ]
@@ -516,7 +516,7 @@ district_pop = (
                 "School Age (6-17)",
             "18-59 (Working Age Adult)":
                 "Working Age (18-59)",
-            "60+ (Elderly)":
+            "60+ (Older Persons)":
                 "Older Persons (60+)"
         }
     )
@@ -628,7 +628,8 @@ def build_explorer_map(
     flood_risk_only=False,
     show_risk_rings=True,
     demand_pop_col=None,
-    demand_pop_label=None
+    demand_pop_label=None,
+    demand_pop_source="demographics"
 ):
     """
     Builds the full Care Services Explorer folium map and
@@ -690,11 +691,17 @@ def build_explorer_map(
     demand_pop_col/demand_pop_label pick which demographic column
     drives the population-density choropleth (e.g. "age_0_5" /
     "Child population (ages 0-5)") — None (the default) skips the
-    layer entirely. demand_legend_info is either None or
-    (vmin, vmax, demand_pop_label), same rationale as
-    climate_legend_info: a separate value the caller renders as an
-    external legend, clipped to the 2nd-98th percentile of the
-    computed density values.
+    layer entirely. demand_pop_source picks which table
+    demand_pop_col is looked up on: "demographics" (default) for
+    the shared `demographics` table, or "domestic_workers" for the
+    separate domestic_workers_barangay table (see
+    load_domestic_workers() in functions.py) — needed because
+    registered domestic worker counts aren't part of `demographics`.
+    demand_legend_info is either None or (vmin, vmax,
+    demand_pop_label), same rationale as climate_legend_info: a
+    separate value the caller renders as an external legend,
+    clipped to the 2nd-98th percentile of the computed density
+    values.
     """
 
     service_layers = {
@@ -868,8 +875,16 @@ def build_explorer_map(
             .str.upper()
         )
 
-        # Get barangay population from the demographics data
-        barangay_pop = demographics[
+        # Get barangay population from the demographics data, or
+        # from the separate domestic_workers_barangay table when
+        # demand_pop_source says so (see demand_pop_source in the
+        # docstring above).
+        _demand_source_df = (
+            demographics if demand_pop_source == "demographics"
+            else domestic_workers_barangay
+        )
+
+        barangay_pop = _demand_source_df[
             ["barangay", demand_pop_col]
         ].drop_duplicates().copy()
 
@@ -1243,13 +1258,24 @@ if st.session_state.page == "Schools":
         key="school_sector"
     )
 
-    # School category options (school types)
+    # School category options (school types). Was hardcoded to
+    # only 4 of the 7 categories actually present in the data —
+    # missing "Junior high school", "Private school", and
+    # "Special Education Program" — which meant that data was
+    # always visible on the map/table under "All" but could never
+    # be filtered to on its own. Order matches
+    # SCHOOL_TYPE_COLORS_MAP in functions.py and
+    # SCHOOL_SUBCATEGORY_OPTIONS on the Climate Layers page, the
+    # two other places this same category list is spelled out.
     category_options = [
         "All",
         "Preschool",
         "Elementary school",
+        "Junior high school",
+        "Senior high school",
         "High school",
-        "Senior high school"
+        "Private school",
+        "Special Education Program"
     ]
 
     selected_school_category = st.sidebar.radio(
@@ -1448,7 +1474,11 @@ if page == "Care Services Explorer":
         <span style="color:#8FA8E0;font-size:22px;">▲</span>
         <b>Senior high school</b><br>
         <span style="color:#B5CBEE;font-size:22px;">▲</span>
-        <b>High school</b>
+        <b>High school</b><br>
+        <span style="color:#4C1D95;font-size:22px;">▲</span>
+        <b>Private school</b><br>
+        <span style="color:#D9E6F7;font-size:22px;">▲</span>
+        <b>Special Education Program</b>
         """,
         unsafe_allow_html=True
     )
@@ -1602,7 +1632,7 @@ if page == "Home":
 
 
     k1.metric(
-        "Elderly (60+)",
+        "Older Persons (60+)",
         f"{elderly_pct:.1f}%",
         f"~{int(elderly_pop):,} residents"
     )
@@ -1646,13 +1676,13 @@ if page == "Home":
     Quezon City serves 2.95M residents with uneven care-service distribution.
     Barangays in northern and southern districts face the dual challenge of
     high population density and low facility access. Climate hazards (flood,
-    heat) compound vulnerability for elderly, children, and persons with disabilities.
+    heat) compound vulnerability for older persons, children, and persons with disabilities.
     """)
 
     with st.expander("Key Decision Points", expanded=False):
         st.info(
             """
-            1. **Accessibility Gaps** → Which districts lack childcare, health, and elderly care?
+            1. **Accessibility Gaps** → Which districts lack childcare, health, and older persons care?
             2. **Climate Vulnerability Hotspots** → Which barangays have high-risk populations + flood exposure?
             3. **Resource Efficiency** → Where can facility expansion or relocation have the highest impact?
 
@@ -1679,7 +1709,7 @@ if page == "Home":
 
         3. **Scenario-test in Care Planning** → Use the Care Planning & Investment Priorities page to
            model 2–3 allocation scenarios (e.g., "Add 10 childcare centers in District 4" or
-           "Prioritize elderly care in southern barangays"). Check the impact on accessibility metrics.
+           "Prioritize older persons care in southern barangays"). Check the impact on accessibility metrics.
 
         **Medium-term (Next 90 Days):**
         - Export the **Barangay Clusters** analysis to identify peer barangays for shared
@@ -1756,7 +1786,7 @@ if page == "Home":
                     "#055B52",
                     "Care Services Maps",
                     "Interactive maps for childcare, schools, health centers, "
-                    "elderly care, long-term rehabilitation, action offices, and migration centers. "
+                    "older persons care, long-term rehabilitation, action offices, and migration centers. "
                     "Filter by district and identify gaps."
                 ),
                 (
@@ -1829,7 +1859,7 @@ elif page == "Population Overview":
             "18-59 (Working Age Adult)"
         ],
         "elderly_60_plus": [
-            "60+ (Elderly)"
+            "60+ (Older Persons)"
         ]
     }
 
@@ -1864,7 +1894,7 @@ elif page == "Population Overview":
         "0-5 (Early Childhood)",
         "6-17 (School Age Children)",
         "18-59 (Working Age Adult)",
-        "60+ (Elderly)"
+        "60+ (Older Persons)"
     ]
 
     for col in age_cols + ["Total"]:
@@ -1931,12 +1961,23 @@ elif page == "Population Overview":
     )
 
     # Total Population - Primary Metric
-    top1, _ = st.columns([1, 1])
+    top1, top2 = st.columns([1, 1])
     kpi_card(
         top1,
         "Total Population",
         f"{total_population:,.0f}",
         caption="residents citywide"
+    )
+
+    total_domestic_workers = (
+        domestic_workers_barangay["domestic_workers_total"].sum()
+    )
+
+    kpi_card(
+        top2,
+        "Registered Domestic Workers",
+        f"{total_domestic_workers:,.0f}",
+        caption="citywide, across barangays"
     )
 
     st.divider()
@@ -2116,6 +2157,53 @@ elif page == "Population Overview":
         )
 
         # ---------------------------------------------------
+        # DOMESTIC WORKERS (separate source, same convention
+        # as the Care Planning page: merged in once here so
+        # the indicator dropdown below can treat it like every
+        # other population column. barangay_df["Barangay"] was
+        # already normalized to the uppercase barangay_key
+        # form above, so it lines up directly with
+        # domestic_workers_barangay's own barangay_key.
+        # ---------------------------------------------------
+
+        barangay_df = barangay_df.merge(
+            domestic_workers_barangay[
+                [
+                    "barangay_key",
+                    "domestic_workers_total"
+                ]
+            ],
+            left_on="Barangay",
+            right_on="barangay_key",
+            how="left"
+        )
+
+        # ---------------------------------------------------
+        # DOMESTIC WORKER SUPPLY RATIOS, how many registered
+        # domestic workers exist relative to the two dependent
+        # groups care planning cares most about (children and
+        # older persons), not just the raw domestic worker count
+        # above. Per-1,000 rather than per-100 to match the
+        # "per 1,000 residents" convention already used for
+        # domestic workers on the Care Planning page. Barangays
+        # with zero children/elderly (division by zero, -> inf)
+        # are treated the same as a genuine data gap (NaN), same
+        # as any other unmatched barangay on this map.
+        # ---------------------------------------------------
+
+        barangay_df["domestic_workers_per_1000_children"] = (
+            barangay_df["domestic_workers_total"]
+            / barangay_df["children_0_17"]
+            * 1000
+        ).replace([np.inf, -np.inf], np.nan).round(1)
+
+        barangay_df["domestic_workers_per_1000_elderly"] = (
+            barangay_df["domestic_workers_total"]
+            / barangay_df["elderly"]
+            * 1000
+        ).replace([np.inf, -np.inf], np.nan).round(1)
+
+        # ---------------------------------------------------
         # MAP, only the indicators that are genuinely useful
         # to visualize spatially (dropped care_demand_index
         # and sex_ratio from the MAP since they read better
@@ -2133,7 +2221,10 @@ elif page == "Population Overview":
                 "Older Persons Population",
                 "Children Share (%)",
                 "Older Persons Share (%)",
-                "Population Density"
+                "Population Density",
+                "Domestic Workers Population",
+                "Domestic Workers per 1,000 Children (0-17)",
+                "Domestic Workers per 1,000 Older Persons (60+)"
             ]
         )
 
@@ -2152,7 +2243,13 @@ elif page == "Population Overview":
             "Older Persons Share (%)":
                 "elderly_pct",
             "Population Density":
-                "population_density"
+                "population_density",
+            "Domestic Workers Population":
+                "domestic_workers_total",
+            "Domestic Workers per 1,000 Children (0-17)":
+                "domestic_workers_per_1000_children",
+            "Domestic Workers per 1,000 Older Persons (60+)":
+                "domestic_workers_per_1000_elderly"
         }
 
         selected_col = indicator_map[indicator]
@@ -2180,12 +2277,26 @@ elif page == "Population Overview":
                 "and child-focused services.",
             "Older Persons Share (%)":
                 "Percentage of the barangay's population aged 60+. "
-                "Higher values signal greater demand for elderly "
+                "Higher values signal greater demand for older persons "
                 "care and health services.",
             "Population Density":
                 "Residents per square kilometer. Higher density "
                 "areas typically need more concentrated infrastructure "
-                "and service delivery points."
+                "and service delivery points.",
+            "Domestic Workers Population":
+                "Registered domestic workers, by barangay (raw count). "
+                "Source: processed/domestic_workers.csv, a separate "
+                "dataset from the population/sex tables above.",
+            "Domestic Workers per 1,000 Children (0-17)":
+                "Registered domestic workers per 1,000 children (aged "
+                "0-17) in the barangay, a rough proxy for how much "
+                "paid care support exists relative to the number of "
+                "children who may need it.",
+            "Domestic Workers per 1,000 Older Persons (60+)":
+                "Registered domestic workers per 1,000 older persons "
+                "(60+) in the barangay, a rough proxy for how much "
+                "paid care support exists relative to the number of "
+                "older persons who may need it."
         }
 
         st.caption(indicator_descriptions[indicator])
@@ -2269,7 +2380,9 @@ elif page == "Population Overview":
             indicator_units = {
                 "Children Share (%)": "%",
                 "Older Persons Share (%)": "%",
-                "Population Density": "people/km²"
+                "Population Density": "people/km²",
+                "Domestic Workers per 1,000 Children (0-17)": "/1,000 children",
+                "Domestic Workers per 1,000 Older Persons (60+)": "/1,000 older persons"
             }
 
             st.markdown(
@@ -2334,7 +2447,7 @@ elif page == "Population Overview":
                 xaxis_title="Population Density"
             )
             with st.container(border=True, key="qcd-chart-2"):
-                st.plotly_chart(fig_top_den, width="stretch")
+                st.plotly_chart(fig_top_den, use_container_width=True)
 
         with col_den2:
             fig_bottom_den = px.bar(
@@ -2351,7 +2464,7 @@ elif page == "Population Overview":
                 xaxis_title="Population Density"
             )
             with st.container(border=True, key="qcd-chart-3"):
-                st.plotly_chart(fig_bottom_den, width="stretch")
+                st.plotly_chart(fig_bottom_den, use_container_width=True)
 
         st.divider()
 
@@ -2466,7 +2579,7 @@ elif page == "Population Overview":
             "Working Age (18-59)":
                 "18-59 (Working Age Adult)",
             "Older Persons (60+)":
-                "60+ (Elderly)"
+                "60+ (Older Persons)"
         }
 
         district_col = district_col_map[
@@ -2609,7 +2722,7 @@ elif page == "Population Overview":
         with st.container(border=True, key="qcd-chart-6"):
             st.plotly_chart(
                 fig_age,
-                width="stretch"
+                use_container_width=True
             )
 
         st.divider()
@@ -2662,7 +2775,7 @@ elif page == "Population Overview":
 
         with col_pyr1:
             with st.container(border=True, key="qcd-chart-7"):
-                st.plotly_chart(fig_pyramid, width="stretch")
+                st.plotly_chart(fig_pyramid, use_container_width=True)
 
         with col_pyr2:
             # Format district names for consistency
@@ -2692,7 +2805,7 @@ elif page == "Population Overview":
                 margin=dict(l=0, r=0, t=40, b=0)
             )
             with st.container(border=True, key="qcd-chart-8"):
-                st.plotly_chart(fig_ratio, width="stretch")
+                st.plotly_chart(fig_ratio, use_container_width=True)
 
         st.divider()
 
@@ -2836,10 +2949,10 @@ elif page == "Population Overview":
         fig_dist_age.update_layout(height=350, hovermode="x unified")
 
         with st.container(border=True, key="qcd-chart-district-age"):
-            st.plotly_chart(fig_dist_age, width='stretch')
+            st.plotly_chart(fig_dist_age, use_container_width=True)
 
         # Vulnerable populations in this district
-        vuln_col1, vuln_col2, vuln_col3 = st.columns(3)
+        vuln_col1, vuln_col2, vuln_col3, vuln_col4 = st.columns(4)
 
         kpi_card(
             vuln_col1,
@@ -2860,6 +2973,37 @@ elif page == "Population Overview":
             "Migrant Workers (Total)",
             f"{int(district_profile['migrant_workers_total']):,.0f}",
             caption=f"{district_profile['migrant_workers_male']:.0f}M, {district_profile['migrant_workers_female']:.0f}F"
+        )
+
+        # Domestic workers live in a separate source
+        # (domestic_workers_district, from load_domestic_workers()
+        # in functions.py) rather than demographics_district, so
+        # it's looked up by district here rather than pulled
+        # straight off district_profile like the KPIs above.
+        dw_district_row = domestic_workers_district[
+            domestic_workers_district["district"] == int(selected_district)
+        ]
+
+        dw_district_total = (
+            dw_district_row["domestic_workers_total"].iloc[0]
+            if not dw_district_row.empty else 0
+        )
+
+        dw_district_male = (
+            dw_district_row["domestic_workers_male"].iloc[0]
+            if not dw_district_row.empty else 0
+        )
+
+        dw_district_female = (
+            dw_district_row["domestic_workers_female"].iloc[0]
+            if not dw_district_row.empty else 0
+        )
+
+        kpi_card(
+            vuln_col4,
+            "Registered Domestic Workers",
+            f"{int(dw_district_total):,.0f}",
+            caption=f"{dw_district_male:.0f}M, {dw_district_female:.0f}F"
         )
 
         # Vulnerability comparison across all districts
@@ -2895,7 +3039,7 @@ elif page == "Population Overview":
         fig_vuln.update_layout(height=400, hovermode="x unified")
 
         with st.container(border=True, key="qcd-chart-district-vuln"):
-            st.plotly_chart(fig_vuln, width='stretch')
+            st.plotly_chart(fig_vuln, use_container_width=True)
 
     # =====================================================
     # SOCIO-ECONOMIC TAB
@@ -3150,11 +3294,11 @@ if page == "Childcare Centers":
         data=cc,
         get_position="[longitude, latitude]",
         get_fill_color="[r, g, b]",
-        get_line_color="[r, g, b]",
+        get_line_color=[40, 40, 40, 200],
         stroked=True,
         filled=True,
         opacity=0.9,
-        line_width_min_pixels=2,
+        line_width_min_pixels=1.5,
         get_radius=40,
         radius_min_pixels=4,
         radius_max_pixels=4,
@@ -3208,229 +3352,16 @@ if page == "Childcare Centers":
     # --------------------------------------------------
 
 
-    #  Zoning siting compatibility helper 
-    # (checks whether the dominant zone of each facility's
-    # barangay is compatible with that facility type under QC's
-    # Comprehensive Zoning Ordinance.  = compatible,
-    #  = likely restricted, ? = unclear or non-applicable)
-    _ZONE_COMPAT = {
-        "childcare": {
-            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "",
-            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "",
-            "R-1 LOW DENSITY RESIDENTIAL ZONE": "",
-            "C-1 MINOR COMMERCIAL ZONE": "",
-            "C-2 MAJOR COMMERCIAL ZONE": "",
-            "C-3 METROPOLITAN COMMERCIAL ZONE": "",
-            "INSTITUTIONAL": "",
-            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "",
-            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "",
-            "CEMETERY": "?", "UTILITY": "?",
-            "ROAD": "?", "WATER": "?", "X": "?",
-        },
-        "school": {
-            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "",
-            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "",
-            "R-1 LOW DENSITY RESIDENTIAL ZONE": "",
-            "C-1 MINOR COMMERCIAL ZONE": "",
-            "C-2 MAJOR COMMERCIAL ZONE": "",
-            "C-3 METROPOLITAN COMMERCIAL ZONE": "",
-            "INSTITUTIONAL": "",
-            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "",
-            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "",
-            "CEMETERY": "?", "UTILITY": "?",
-            "ROAD": "?", "WATER": "?", "X": "?",
-        },
-        "care": {
-            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "",
-            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "",
-            "R-1 LOW DENSITY RESIDENTIAL ZONE": "",
-            "C-1 MINOR COMMERCIAL ZONE": "",
-            "C-2 MAJOR COMMERCIAL ZONE": "",
-            "C-3 METROPOLITAN COMMERCIAL ZONE": "",
-            "INSTITUTIONAL": "",
-            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "",
-            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "",
-            "CEMETERY": "?", "UTILITY": "?",
-            "ROAD": "?", "WATER": "?", "X": "?",
-        },
-        "office": {
-            "R-3 HIGH DENSITY RESIDENTIAL ZONE": "",
-            "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE": "",
-            "R-1 LOW DENSITY RESIDENTIAL ZONE": "",
-            "C-1 MINOR COMMERCIAL ZONE": "",
-            "C-2 MAJOR COMMERCIAL ZONE": "",
-            "C-3 METROPOLITAN COMMERCIAL ZONE": "",
-            "INSTITUTIONAL": "",
-            "I-1 LIGHT INTENSITY INDUSTRIAL ZONE": "",
-            "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE": "",
-            "CEMETERY": "?", "UTILITY": "?",
-            "ROAD": "?", "WATER": "?", "X": "?",
-        },
-    }
-    try:
-        _zs_fc = pd.read_csv(
-            "processed/zoning/qc_zoning_summary.csv"
-        )
-        _nlu_fc = {"ROAD", "WATER", "X"}
-        _zc_fc = [
-            c for c in _zs_fc.columns
-            if c not in (
-                "barangay_id", "barangay", "total_polygons"
-            ) and c not in _nlu_fc
-        ]
-        def _dom_fc(row):
-            vals = {
-                c: row[c] for c in _zc_fc
-                if c in row and pd.notna(row[c])
-                and row[c] > 0
-            }
-            return max(vals, key=vals.get) if vals else "Unknown"
-        _zs_fc["_dom"] = _zs_fc.apply(_dom_fc, axis=1)
-        _brgy_zone_fc = dict(zip(
-            _zs_fc["barangay"].str.strip().str.title(),
-            _zs_fc["_dom"]
-        ))
-        _zoning_fc_loaded = True
-    except Exception:
-        _brgy_zone_fc = {}
-        _zoning_fc_loaded = False
-
-    def _zone_compat(barangay_name, facility_type):
-        if not _zoning_fc_loaded:
-            return "?"
-        zone = _brgy_zone_fc.get(
-            str(barangay_name).strip().title(), "Unknown"
-        )
-        return _ZONE_COMPAT.get(facility_type, {}).get(zone, "?")
-
-    #  Zoning siting compatibility helper 
-    # (Compatibility is determined by the dominant zone type of
-    # each facility's barangay from qc_zoning_summary.csv.
-    # Rules are based on QC's Comprehensive Zoning Ordinance:
-    # residential and institutional zones permit social care;
-    # industrial zones restrict childcare/health/schools;
-    # commercial zones generally allow most service types.
-    # Socialized housing and special development zones are
-    # treated as residential-equivalent.)
-    try:
-        _zs_fc = pd.read_csv(
-            "processed/zoning/qc_zoning_summary.csv"
-        )
-        _nlu_fc = {"ROAD", "WATER", "X"}
-        _zc_fc = [
-            c for c in _zs_fc.columns
-            if c not in (
-                "barangay_id", "barangay", "total_polygons"
-            ) and c not in _nlu_fc
-        ]
-        def _dom_fc(row):
-            vals = {c: row[c] for c in _zc_fc
-                    if c in row and pd_fc.notna(row[c]) and row[c] > 0}
-            return max(vals, key=vals.get) if vals else "Unknown"
-        _zs_fc["_dom"] = _zs_fc.apply(_dom_fc, axis=1)
-        _brgy_zone_fc = dict(zip(
-            _zs_fc["barangay"].str.strip().str.title(),
-            _zs_fc["_dom"]
-        ))
-        _zoning_fc_loaded = True
-    except Exception:
-        _brgy_zone_fc = {}
-        _zoning_fc_loaded = False
-
-    # Full zone coverage including all types found in QC data
-    _RESIDENTIAL = [
-        "R-3 HIGH DENSITY RESIDENTIAL ZONE",
-        "R-2 MEDIUM DENSITY RESIDENTIAL ZONE",
-        "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE",
-        "R-1 LOW DENSITY RESIDENTIAL ZONE",
-        "R-1-A LOW DENSITY RESIDENTIAL SUB-ZONE",
-        "SOCIALIZED HOUSING",
-        "SPECIAL URBAN DEVELOPMENT ZONE",
-    ]
-    _COMMERCIAL = [
-        "C-1 MINOR COMMERCIAL ZONE",
-        "C-2 MAJOR COMMERCIAL ZONE",
-        "C-3 METROPOLITAN COMMERCIAL ZONE",
-    ]
-    _INSTITUTIONAL = ["INSTITUTIONAL"]
-    _INDUSTRIAL = [
-        "I-1 LIGHT INTENSITY INDUSTRIAL ZONE",
-        "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE",
-    ]
-    _UNCLEAR = [
-        "CEMETERY", "UTILITY", "ROAD", "WATER",
-        "PARKS AND OPEN SPACE", "X", "Unknown",
-    ]
-
-    _ZONE_COMPAT = {
-        t: {
-            **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
-            **{z: "" for z in _INDUSTRIAL},
-            **{z: "?" for z in _UNCLEAR},
-        }
-        for t in ("childcare", "school", "care")
-    }
-    # Offices are compatible with industrial zones too
-    _ZONE_COMPAT["office"] = {
-        **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
-        **{z: "?" for z in _UNCLEAR},
-    }
-
-    def _zone_compat(barangay_name, facility_type):
-        if not _zoning_fc_loaded:
-            return "?"
-        zone = _brgy_zone_fc.get(
-            str(barangay_name).strip().title(), "Unknown"
-        )
-        return _ZONE_COMPAT.get(facility_type, {}).get(zone, "?")
-
     st.subheader("Facilities")
 
-    st.caption(
-        "**Zoning Compatibility** indicates whether the facility's "
-        "barangay is zoned for this use under QC's Comprehensive "
-        "Zoning Ordinance:  compatible,  likely restricted, "
-        "? unclear or non-applicable land use."
-    )
-
-    with st.expander("How is Zoning Compatibility calculated?"):
-        st.markdown("""
-**Zoning Compatibility** is determined by matching each facility's barangay
-to its **dominant zone type**, the most common land-use classification in
-that barangay based on polygon count from QC's Zoning Administration Unit
-(excluding roads, water bodies, and unclassified zones).
-
-The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
-
-| Symbol | Meaning | Zone types |
-|--------|---------|------------|
-|  | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
-|  | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
-| ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
-
-**Important caveats:**
-- This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
-  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows .
-- Zoning rules are simplified, actual permitting depends on the specific use classification and
-  any variances or conditional use permits already granted.
-- To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
-        """)
-
-
     _cc_disp = cc[["Name","Category","Sector","District","barangay","Address"]].copy()
-    _cc_disp["Zoning Compatibility"] = _cc_disp["barangay"].apply(
-        lambda b: _zone_compat(b, "childcare")
-    )
     with st.container(border=True, key="qcd-chart-13"):
         st.dataframe(
-            _cc_disp[["Name","Category","Sector","District",
-                       "Address","Zoning Compatibility"]].rename(
+            _cc_disp[["Name","Category","Sector","District","Address"]].rename(
                 columns={"Sector": "Provider Type"}
             ),
             width='stretch'
         )
-
-
     # --------------------------------------------------
     # CHILDCARE ANALYTICS
     # --------------------------------------------------
@@ -3708,13 +3639,12 @@ elif page == "Schools":
 
     if selected_school_category != "All":
 
+        # Exact match, not .str.contains(): "High school" is a
+        # substring of "Junior high school" and "Senior high
+        # school", so a contains-based filter here pulls in both
+        # of those whenever "High school" is selected.
         sch = sch[
-            sch["Category"]
-            .str.contains(
-                selected_school_category,
-                case=False,
-                na=False
-            )
+            sch["Category"] == selected_school_category
         ]
 
     # --------------------------------------------------
@@ -3794,16 +3724,24 @@ elif page == "Schools":
     # SCHOOL POINTS
     # --------------------------------------------------
 
+    # get_line_color used to match get_fill_color exactly (no
+    # border contrast at all). That's invisible in practice for
+    # "Special Education Program", whose color (#D9E6F7) is a
+    # very pale near-white — with no outline it disappears into
+    # the light basemap entirely, which is why those dots showed
+    # up in the table but not on the map. A fixed dark outline
+    # gives every category a visible edge regardless of how pale
+    # its fill color is.
     school_layer = pdk.Layer(
         "ScatterplotLayer",
         data=sch,
         get_position="[longitude, latitude]",
         get_fill_color="[r, g, b]",
-        get_line_color="[r, g, b]",
+        get_line_color=[40, 40, 40, 200],
         stroked=True,
         filled=True,
         opacity=0.9,
-        line_width_min_pixels=2,
+        line_width_min_pixels=1.5,
         get_radius=40,
         radius_min_pixels=4,
         radius_max_pixels=4,
@@ -3858,131 +3796,14 @@ elif page == "Schools":
     # TABLE
     # --------------------------------------------------
 
-    #  Zoning siting compatibility helper 
-    # (Compatibility is determined by the dominant zone type of
-    # each facility's barangay from qc_zoning_summary.csv.
-    # Rules are based on QC's Comprehensive Zoning Ordinance:
-    # residential and institutional zones permit social care;
-    # industrial zones restrict childcare/health/schools;
-    # commercial zones generally allow most service types.
-    # Socialized housing and special development zones are
-    # treated as residential-equivalent.)
-    try:
-        _zs_fc = pd.read_csv(
-            "processed/zoning/qc_zoning_summary.csv"
-        )
-        _nlu_fc = {"ROAD", "WATER", "X"}
-        _zc_fc = [
-            c for c in _zs_fc.columns
-            if c not in (
-                "barangay_id", "barangay", "total_polygons"
-            ) and c not in _nlu_fc
-        ]
-        def _dom_fc(row):
-            vals = {c: row[c] for c in _zc_fc
-                    if c in row and pd.notna(row[c]) and row[c] > 0}
-            return max(vals, key=vals.get) if vals else "Unknown"
-        _zs_fc["_dom"] = _zs_fc.apply(_dom_fc, axis=1)
-        _brgy_zone_fc = dict(zip(
-            _zs_fc["barangay"].str.strip().str.title(),
-            _zs_fc["_dom"]
-        ))
-        _zoning_fc_loaded = True
-    except Exception:
-        _brgy_zone_fc = {}
-        _zoning_fc_loaded = False
-
-    # Full zone coverage including all types found in QC data
-    _RESIDENTIAL = [
-        "R-3 HIGH DENSITY RESIDENTIAL ZONE",
-        "R-2 MEDIUM DENSITY RESIDENTIAL ZONE",
-        "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE",
-        "R-1 LOW DENSITY RESIDENTIAL ZONE",
-        "R-1-A LOW DENSITY RESIDENTIAL SUB-ZONE",
-        "SOCIALIZED HOUSING",
-        "SPECIAL URBAN DEVELOPMENT ZONE",
-    ]
-    _COMMERCIAL = [
-        "C-1 MINOR COMMERCIAL ZONE",
-        "C-2 MAJOR COMMERCIAL ZONE",
-        "C-3 METROPOLITAN COMMERCIAL ZONE",
-    ]
-    _INSTITUTIONAL = ["INSTITUTIONAL"]
-    _INDUSTRIAL = [
-        "I-1 LIGHT INTENSITY INDUSTRIAL ZONE",
-        "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE",
-    ]
-    _UNCLEAR = [
-        "CEMETERY", "UTILITY", "ROAD", "WATER",
-        "PARKS AND OPEN SPACE", "X", "Unknown",
-    ]
-
-    _ZONE_COMPAT = {
-        t: {
-            **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
-            **{z: "" for z in _INDUSTRIAL},
-            **{z: "?" for z in _UNCLEAR},
-        }
-        for t in ("childcare", "school", "care")
-    }
-    # Offices are compatible with industrial zones too
-    _ZONE_COMPAT["office"] = {
-        **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
-        **{z: "?" for z in _UNCLEAR},
-    }
-
-    def _zone_compat(barangay_name, facility_type):
-        if not _zoning_fc_loaded:
-            return "?"
-        zone = _brgy_zone_fc.get(
-            str(barangay_name).strip().title(), "Unknown"
-        )
-        return _ZONE_COMPAT.get(facility_type, {}).get(zone, "?")
-
     st.subheader("Schools")
 
-    st.caption(
-        "**Zoning Compatibility** indicates whether each school's "
-        "barangay permits educational use under QC's zoning "
-        "ordinance:  compatible,  likely restricted, ? unclear."
-    )
-
-    with st.expander("How is Zoning Compatibility calculated?"):
-        st.markdown("""
-**Zoning Compatibility** is determined by matching each facility's barangay
-to its **dominant zone type**, the most common land-use classification in
-that barangay based on polygon count from QC's Zoning Administration Unit
-(excluding roads, water bodies, and unclassified zones).
-
-The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
-
-| Symbol | Meaning | Zone types |
-|--------|---------|------------|
-|  | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
-|  | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
-| ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
-
-**Important caveats:**
-- This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
-  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows .
-- Zoning rules are simplified, actual permitting depends on the specific use classification and
-  any variances or conditional use permits already granted.
-- To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
-        """)
-
-
     _sch_disp = sch[["Name","Sector","Category","District","barangay","Address"]].copy()
-    _sch_disp["Zoning Compatibility"] = _sch_disp["barangay"].apply(
-        lambda b: _zone_compat(b, "school")
-    )
     with st.container(border=True, key="qcd-chart-17"):
         st.dataframe(
-            _sch_disp[["Name","Sector","Category","District",
-                        "Address","Zoning Compatibility"]],
+            _sch_disp[["Name","Sector","Category","District","Address"]],
             width='stretch'
         )
-
-
     # --------------------------------------------------
     # SCHOOL KPIs
     # --------------------------------------------------
@@ -4495,11 +4316,11 @@ elif page == "Health Centers Map":
         data=hc,
         get_position="[longitude, latitude]",
         get_fill_color="[r, g, b]",
-        get_line_color="[r, g, b]",
+        get_line_color=[40, 40, 40, 200],
         stroked=True,
         filled=True,
         opacity=0.9,
-        line_width_min_pixels=2,
+        line_width_min_pixels=1.5,
         get_radius=40,
         radius_min_pixels=4,
         radius_max_pixels=4,
@@ -4625,7 +4446,7 @@ elif page == "Health Centers Map":
         district_capacity_chart,
         x="district",
         y="health_centers",
-        title="Health Infrastructure Gaps by District",
+        title="Health Centers by District",
         text_auto=True,
         color_discrete_sequence=["#7F47ED"]
     )
@@ -4780,174 +4601,6 @@ elif page == "Health Centers Map":
         st.plotly_chart(
             fig
         )
-
-    # =====================================================
-    # NEW SECTION: HEALTH DEMOGRAPHICS BY BARANGAY
-    # =====================================================
-
-    st.divider()
-    st.markdown("### Health Demographics by Barangay")
-    st.markdown("""
-    This section identifies barangays with high health needs but limited access to health centers:
-    - **Seniors (60+):** Primary users of health services
-    - **Women (15-49):** Critical for reproductive health and maternal services
-    - **Health Facility Accessibility:** Centers per 1,000 in target population
-    """)
-
-    # Load full demographics
-    demographics = load_demographics()
-
-    # Ensure women_15_49 column exists; if not, estimate from available data
-    if 'women_15_49' not in demographics.columns:
-        # Estimate from age_18_59_f if available
-        if 'age_18_59_f' in demographics.columns:
-            demographics['women_15_49'] = demographics['age_18_59_f'] * 0.65
-        else:
-            # Fallback: use total female population * proportion
-            demographics['women_15_49'] = demographics.get('pop_census', 0) * 0.245
-
-    # Build health metrics by barangay
-    health_by_barangay = health_centers.groupby(
-        health_centers['barangay'].str.strip()
-    ).size().reset_index(name='health_centers_count')
-    health_by_barangay.columns = ['barangay', 'health_centers_count']
-
-    # Merge with demographics
-    health_metrics = demographics[[
-        'barangay', 'age_60plus', 'women_15_49', 'pop_census', 'district'
-    ]].copy()
-
-    # Normalize district for consistent display
-    health_metrics['District'] = 'District ' + health_metrics['district'].astype(str)
-
-    health_metrics = health_metrics.merge(
-        health_by_barangay,
-        on='barangay',
-        how='left'
-    ).fillna(0)
-
-    health_metrics['health_centers_count'] = health_metrics['health_centers_count'].astype(int)
-
-    # Calculate per-1,000 ratios
-    health_metrics['health_per_1k_seniors'] = (
-        health_metrics['health_centers_count'] /
-        health_metrics['age_60plus'] * 1000
-    ).replace([np.inf, -np.inf], np.nan)
-
-    health_metrics['health_per_1k_women_1549'] = (
-        health_metrics['health_centers_count'] /
-        health_metrics['women_15_49'] * 1000
-    ).replace([np.inf, -np.inf], np.nan)
-
-    # Tab layout for different demographics
-    tab_seniors, tab_women = st.tabs(["Seniors (60+) Access", "Women (15-49) Access"])
-
-    with tab_seniors:
-        st.markdown("#### Health Centers per 1,000 Seniors (60+)")
-
-        # Top 10 barangays by senior population with poorest access
-        seniors_access = health_metrics[
-            health_metrics['age_60plus'] > 0
-        ].copy().sort_values(
-            'health_per_1k_seniors',
-            ascending=True
-        ).head(10)
-
-        fig_seniors = px.bar(
-            seniors_access,
-            x='barangay',
-            y='health_per_1k_seniors',
-            color='District',
-            title='Barangays with Most Limited Health Access for Seniors (Bottom 10)',
-            labels={
-                'health_per_1k_seniors': 'Health Centers per 1,000 Seniors',
-                'barangay': 'Barangay'
-            },
-            color_discrete_sequence=QCD_CATEGORICAL
-        )
-        fig_seniors.update_xaxes(tickangle=45)
-
-        with st.container(border=True, key="qcd-chart-27"):
-            st.plotly_chart(fig_seniors)
-
-        # KPI: Average health centers per 1,000 seniors (citywide)
-        avg_health_per_1k_seniors = (
-            health_centers.shape[0] /
-            demographics['age_60plus'].sum() * 1000
-        )
-
-        col1, col2 = st.columns(2)
-        with col1:
-            kpi_card(
-                col1,
-                "Avg Health Centers per 1,000 Seniors",
-                f"{avg_health_per_1k_seniors:.2f}",
-                "up_good"
-            )
-        with col2:
-            high_need_seniors = (
-                health_metrics[health_metrics['health_per_1k_seniors'] < avg_health_per_1k_seniors * 0.8]
-            ).shape[0]
-            kpi_card(
-                col2,
-                "Barangays Below Avg Access",
-                f"{high_need_seniors}",
-                "neutral"
-            )
-
-    with tab_women:
-        st.markdown("#### Health Centers per 1,000 Women (15-49)")
-
-        # Top 10 barangays by women population with poorest access
-        women_access = health_metrics[
-            health_metrics['women_15_49'] > 0
-        ].copy().sort_values(
-            'health_per_1k_women_1549',
-            ascending=True
-        ).head(10)
-
-        fig_women = px.bar(
-            women_access,
-            x='barangay',
-            y='health_per_1k_women_1549',
-            color='District',
-            title='Barangays with Most Limited Health Access for Women (15-49) (Bottom 10)',
-            labels={
-                'health_per_1k_women_1549': 'Health Centers per 1,000 Women (15-49)',
-                'barangay': 'Barangay'
-            },
-            color_discrete_sequence=QCD_CATEGORICAL
-        )
-        fig_women.update_xaxes(tickangle=45)
-
-        with st.container(border=True, key="qcd-chart-28"):
-            st.plotly_chart(fig_women)
-
-        # KPI: Average health centers per 1,000 women
-        total_women_1549 = demographics['women_15_49'].sum()
-        avg_health_per_1k_women = (
-            health_centers.shape[0] /
-            total_women_1549 * 1000
-        )
-
-        col1, col2 = st.columns(2)
-        with col1:
-            kpi_card(
-                col1,
-                "Avg Health Centers per 1,000 Women (15-49)",
-                f"{avg_health_per_1k_women:.2f}",
-                "up_good"
-            )
-        with col2:
-            high_need_women = (
-                health_metrics[health_metrics['health_per_1k_women_1549'] < avg_health_per_1k_women * 0.8]
-            ).shape[0]
-            kpi_card(
-                col2,
-                "Barangays Below Avg Access",
-                f"{high_need_women}",
-                "neutral"
-            )
 
 elif page == "Older Persons Center Map":
 
@@ -5265,11 +4918,11 @@ elif page == "Older Persons Center Map":
         data=opc,
         get_position="[longitude, latitude]",
         get_fill_color="[r, g, b]",
-        get_line_color="[r, g, b]",
+        get_line_color=[40, 40, 40, 200],
         stroked=True,
         filled=True,
         opacity=0.9,
-        line_width_min_pixels=2,
+        line_width_min_pixels=1.5,
         get_radius=40,
         radius_min_pixels=4,
         radius_max_pixels=4,
@@ -5535,7 +5188,7 @@ elif page == "Older Persons Center Map":
     # =====================================================
 
     st.divider()
-    st.markdown("### Elderly Vulnerability Profile")
+    st.markdown("### Older Persons Vulnerability Profile")
 
     # Load demographics
     demographics = load_demographics()
@@ -5545,7 +5198,7 @@ elif page == "Older Persons Center Map":
     tab_barangay, tab_district = st.tabs(["Barangay Analysis", "District Analysis"])
 
     with tab_barangay:
-        st.markdown("#### Barangay-Level Elderly Indicators")
+        st.markdown("#### Barangay-Level Older Persons Indicators")
 
         # Create elderly profile dataset
         elderly_profile = demographics[[
@@ -5590,7 +5243,7 @@ elif page == "Older Persons Center Map":
             size='age_80plus',
             color='District',
             hover_name='barangay',
-            title='Elderly Population Size vs Vulnerability (Size = 80+)',
+            title='Older Persons Population Size vs Vulnerability (Size = 80+)',
             labels={
                 'age_60plus': 'Population 60+',
                 'elderly_vulnerable': 'Avg Vulnerability Index (Food + Housing)',
@@ -5603,7 +5256,7 @@ elif page == "Older Persons Center Map":
             st.plotly_chart(fig)
 
         # High-need barangays table
-        st.markdown("##### Top 10 High-Need Barangays for Elderly Services")
+        st.markdown("##### Top 10 High-Need Barangays for Older Persons Services")
 
         display_table = high_need_elderly[[
             'barangay',
@@ -5638,7 +5291,7 @@ elif page == "Older Persons Center Map":
             st.dataframe(display_table, width='stretch', hide_index=True)
 
     with tab_district:
-        st.markdown("#### District-Level Elderly Summary")
+        st.markdown("#### District-Level Older Persons Summary")
 
         elderly_district = demographics_district[[
             'district',
@@ -5695,18 +5348,26 @@ elif page == "Older Persons Center Map":
             )
 
         # District comparison chart
+        # (renamed columns, not just plotly's labels= param — labels=
+        # only retitles the axis/legend, the individual legend entries
+        # for a wide-format y=[...] chart come straight from the
+        # column names themselves, e.g. "age_60plus" would still show
+        # in the legend even with labels={'variable': 'Age Group'})
         fig_dist = px.bar(
-            elderly_district,
+            elderly_district.rename(columns={
+                'age_60plus': '60+',
+                'age_80plus': '80+'
+            }),
             x='district',
-            y=['age_60plus', 'age_80plus'],
+            y=['60+', '80+'],
             barmode='group',
-            title='Elderly Population by District',
+            title='Older Persons Population by District',
             labels={
                 'value': 'Population',
                 'variable': 'Age Group',
                 'district': 'District'
             },
-            color_discrete_map={'age_60plus': '#7F47ED', 'age_80plus': '#FF6B6B'}
+            color_discrete_map={'60+': '#7F47ED', '80+': '#FF6B6B'}
         )
         fig_dist.update_xaxes(tickformat="d")
 
@@ -5715,19 +5376,22 @@ elif page == "Older Persons Center Map":
 
         # Vulnerability by district
         fig_vuln = px.bar(
-            elderly_district,
+            elderly_district.rename(columns={
+                'cbms_food_insecurity_prevalence_pct_hhw': 'Food Insecurity',
+                'cbms_housing_inadequacy_index_pct_hhw': 'Housing Inadequacy'
+            }),
             x='district',
-            y=['cbms_food_insecurity_prevalence_pct_hhw', 'cbms_housing_inadequacy_index_pct_hhw'],
+            y=['Food Insecurity', 'Housing Inadequacy'],
             barmode='group',
-            title='Elderly Vulnerability Indicators by District',
+            title='Older Persons Vulnerability Indicators by District',
             labels={
                 'value': 'Percentage (%)',
                 'variable': 'Indicator',
                 'district': 'District'
             },
             color_discrete_map={
-                'cbms_food_insecurity_prevalence_pct_hhw': '#FF6B6B',
-                'cbms_housing_inadequacy_index_pct_hhw': '#FFA500'
+                'Food Insecurity': '#FF6B6B',
+                'Housing Inadequacy': '#FFA500'
             }
         )
         fig_vuln.update_xaxes(tickformat="d")
@@ -5974,11 +5638,11 @@ elif page == "Long-Term Care & Rehabilitation":
         data=ltc,
         get_position="[longitude, latitude]",
         get_fill_color="[r, g, b]",
-        get_line_color="[r, g, b]",
+        get_line_color=[40, 40, 40, 200],
         stroked=True,
         filled=True,
         opacity=0.9,
-        line_width_min_pixels=2,
+        line_width_min_pixels=1.5,
         get_radius=40,
         radius_min_pixels=4,
         radius_max_pixels=4,
@@ -6030,137 +5694,21 @@ elif page == "Long-Term Care & Rehabilitation":
     # TABLE
     # ----------------------------------
 
-    #  Zoning siting compatibility helper 
-    # (Compatibility is determined by the dominant zone type of
-    # each facility's barangay from qc_zoning_summary.csv.
-    # Rules are based on QC's Comprehensive Zoning Ordinance:
-    # residential and institutional zones permit social care;
-    # industrial zones restrict childcare/health/schools;
-    # commercial zones generally allow most service types.
-    # Socialized housing and special development zones are
-    # treated as residential-equivalent.)
-    try:
-        _zs_fc = pd.read_csv(
-            "processed/zoning/qc_zoning_summary.csv"
-        )
-        _nlu_fc = {"ROAD", "WATER", "X"}
-        _zc_fc = [
-            c for c in _zs_fc.columns
-            if c not in (
-                "barangay_id", "barangay", "total_polygons"
-            ) and c not in _nlu_fc
-        ]
-        def _dom_fc(row):
-            vals = {c: row[c] for c in _zc_fc
-                    if c in row and pd.notna(row[c]) and row[c] > 0}
-            return max(vals, key=vals.get) if vals else "Unknown"
-        _zs_fc["_dom"] = _zs_fc.apply(_dom_fc, axis=1)
-        _brgy_zone_fc = dict(zip(
-            _zs_fc["barangay"].str.strip().str.title(),
-            _zs_fc["_dom"]
-        ))
-        _zoning_fc_loaded = True
-    except Exception:
-        _brgy_zone_fc = {}
-        _zoning_fc_loaded = False
-
-    # Full zone coverage including all types found in QC data
-    _RESIDENTIAL = [
-        "R-3 HIGH DENSITY RESIDENTIAL ZONE",
-        "R-2 MEDIUM DENSITY RESIDENTIAL ZONE",
-        "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE",
-        "R-1 LOW DENSITY RESIDENTIAL ZONE",
-        "R-1-A LOW DENSITY RESIDENTIAL SUB-ZONE",
-        "SOCIALIZED HOUSING",
-        "SPECIAL URBAN DEVELOPMENT ZONE",
-    ]
-    _COMMERCIAL = [
-        "C-1 MINOR COMMERCIAL ZONE",
-        "C-2 MAJOR COMMERCIAL ZONE",
-        "C-3 METROPOLITAN COMMERCIAL ZONE",
-    ]
-    _INSTITUTIONAL = ["INSTITUTIONAL"]
-    _INDUSTRIAL = [
-        "I-1 LIGHT INTENSITY INDUSTRIAL ZONE",
-        "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE",
-    ]
-    _UNCLEAR = [
-        "CEMETERY", "UTILITY", "ROAD", "WATER",
-        "PARKS AND OPEN SPACE", "X", "Unknown",
-    ]
-
-    _ZONE_COMPAT = {
-        t: {
-            **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
-            **{z: "" for z in _INDUSTRIAL},
-            **{z: "?" for z in _UNCLEAR},
-        }
-        for t in ("childcare", "school", "care")
-    }
-    # Offices are compatible with industrial zones too
-    _ZONE_COMPAT["office"] = {
-        **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
-        **{z: "?" for z in _UNCLEAR},
-    }
-
-    def _zone_compat(barangay_name, facility_type):
-        if not _zoning_fc_loaded:
-            return "?"
-        zone = _brgy_zone_fc.get(
-            str(barangay_name).strip().title(), "Unknown"
-        )
-        return _ZONE_COMPAT.get(facility_type, {}).get(zone, "?")
-
     st.subheader("Facilities")
 
-    st.caption(
-        "**Zoning Compatibility** indicates whether the facility's "
-        "barangay is zoned for care use under QC's zoning ordinance: "
-        " compatible,  likely restricted, ? unclear."
-    )
-
-    with st.expander("How is Zoning Compatibility calculated?"):
-        st.markdown("""
-**Zoning Compatibility** is determined by matching each facility's barangay
-to its **dominant zone type**, the most common land-use classification in
-that barangay based on polygon count from QC's Zoning Administration Unit
-(excluding roads, water bodies, and unclassified zones).
-
-The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
-
-| Symbol | Meaning | Zone types |
-|--------|---------|------------|
-|  | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
-|  | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
-| ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
-
-**Important caveats:**
-- This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
-  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows .
-- Zoning rules are simplified, actual permitting depends on the specific use classification and
-  any variances or conditional use permits already granted.
-- To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
-        """)
-
-
     _ltc_disp = ltc[["Name","Category","District","barangay","Address"]].copy()
-    _ltc_disp["Zoning Compatibility"] = _ltc_disp["barangay"].apply(
-        lambda b: _zone_compat(b, "care")
-    )
     with st.container(border=True, key="qcd-chart-36"):
         st.dataframe(
-            _ltc_disp[["Name","Category","District",
-                        "Address","Zoning Compatibility"]],
+            _ltc_disp[["Name","Category","District","Address"]],
             width='stretch'
         )
-
     # --------------------------------------------------
     # REHABILITATION KPIs
     # --------------------------------------------------
 
     elderly_population = (
         population_age[
-            "60+ (Elderly)"
+            "60+ (Older Persons)"
         ]
         .sum()
     )
@@ -6317,24 +5865,6 @@ The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
             ),
             width="stretch"
         )
-
-    top_categories = (
-        long_term_care["Category"]
-        .value_counts()
-    )
-
-    st.info(
-        f"""
-        Quezon City currently has
-        {total_facilities:,} rehabilitation and long-term care facilities
-        covering {covered_barangays:,} barangays.
-
-        The most common service type is
-        {top_categories.index[0]}
-        ({top_categories.iloc[0]} facilities).
-        """
-    )
-
 
     ranking = (
         coverage[
@@ -6995,11 +6525,11 @@ elif page == "Action Offices":
         data=sat,
         get_position="[longitude, latitude]",
         get_fill_color="[r, g, b]",
-        get_line_color="[r, g, b]",
+        get_line_color=[40, 40, 40, 200],
         stroked=True,
         filled=True,
         opacity=0.9,
-        line_width_min_pixels=2,
+        line_width_min_pixels=1.5,
         get_radius=40,
         radius_min_pixels=4,
         radius_max_pixels=4,
@@ -7049,130 +6579,14 @@ elif page == "Action Offices":
     # TABLE
     # ----------------------------------
 
-    #  Zoning siting compatibility helper 
-    # (Compatibility is determined by the dominant zone type of
-    # each facility's barangay from qc_zoning_summary.csv.
-    # Rules are based on QC's Comprehensive Zoning Ordinance:
-    # residential and institutional zones permit social care;
-    # industrial zones restrict childcare/health/schools;
-    # commercial zones generally allow most service types.
-    # Socialized housing and special development zones are
-    # treated as residential-equivalent.)
-    try:
-        _zs_fc = pd.read_csv(
-            "processed/zoning/qc_zoning_summary.csv"
-        )
-        _nlu_fc = {"ROAD", "WATER", "X"}
-        _zc_fc = [
-            c for c in _zs_fc.columns
-            if c not in (
-                "barangay_id", "barangay", "total_polygons"
-            ) and c not in _nlu_fc
-        ]
-        def _dom_fc(row):
-            vals = {c: row[c] for c in _zc_fc
-                    if c in row and pd.notna(row[c]) and row[c] > 0}
-            return max(vals, key=vals.get) if vals else "Unknown"
-        _zs_fc["_dom"] = _zs_fc.apply(_dom_fc, axis=1)
-        _brgy_zone_fc = dict(zip(
-            _zs_fc["barangay"].str.strip().str.title(),
-            _zs_fc["_dom"]
-        ))
-        _zoning_fc_loaded = True
-    except Exception:
-        _brgy_zone_fc = {}
-        _zoning_fc_loaded = False
-
-    # Full zone coverage including all types found in QC data
-    _RESIDENTIAL = [
-        "R-3 HIGH DENSITY RESIDENTIAL ZONE",
-        "R-2 MEDIUM DENSITY RESIDENTIAL ZONE",
-        "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE",
-        "R-1 LOW DENSITY RESIDENTIAL ZONE",
-        "R-1-A LOW DENSITY RESIDENTIAL SUB-ZONE",
-        "SOCIALIZED HOUSING",
-        "SPECIAL URBAN DEVELOPMENT ZONE",
-    ]
-    _COMMERCIAL = [
-        "C-1 MINOR COMMERCIAL ZONE",
-        "C-2 MAJOR COMMERCIAL ZONE",
-        "C-3 METROPOLITAN COMMERCIAL ZONE",
-    ]
-    _INSTITUTIONAL = ["INSTITUTIONAL"]
-    _INDUSTRIAL = [
-        "I-1 LIGHT INTENSITY INDUSTRIAL ZONE",
-        "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE",
-    ]
-    _UNCLEAR = [
-        "CEMETERY", "UTILITY", "ROAD", "WATER",
-        "PARKS AND OPEN SPACE", "X", "Unknown",
-    ]
-
-    _ZONE_COMPAT = {
-        t: {
-            **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
-            **{z: "" for z in _INDUSTRIAL},
-            **{z: "?" for z in _UNCLEAR},
-        }
-        for t in ("childcare", "school", "care")
-    }
-    # Offices are compatible with industrial zones too
-    _ZONE_COMPAT["office"] = {
-        **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
-        **{z: "?" for z in _UNCLEAR},
-    }
-
-    def _zone_compat(barangay_name, facility_type):
-        if not _zoning_fc_loaded:
-            return "?"
-        zone = _brgy_zone_fc.get(
-            str(barangay_name).strip().title(), "Unknown"
-        )
-        return _ZONE_COMPAT.get(facility_type, {}).get(zone, "?")
-
     st.subheader("Action Offices")
 
-    st.caption(
-        "**Zoning Compatibility** indicates whether each office's "
-        "barangay permits this use under QC's zoning ordinance. "
-        "Action offices are generally compatible across most zone "
-        "types including industrial:  compatible, ? unclear."
-    )
-
-    with st.expander("How is Zoning Compatibility calculated?"):
-        st.markdown("""
-**Zoning Compatibility** is determined by matching each facility's barangay
-to its **dominant zone type**, the most common land-use classification in
-that barangay based on polygon count from QC's Zoning Administration Unit
-(excluding roads, water bodies, and unclassified zones).
-
-The compatibility rules follow QC's **Comprehensive Zoning Ordinance**:
-
-| Symbol | Meaning | Zone types |
-|--------|---------|------------|
-|  | Compatible | All residential zones (R-1, R-2, R-3, Socialized Housing), Commercial zones (C-1, C-2, C-3), Institutional |
-|  | Likely restricted | Industrial zones (I-1, I-2), social care facilities typically require rezoning or a special use permit in these areas |
-| ? | Unclear / non-applicable | Cemeteries, utilities, parks, roads, water bodies, or unclassified zones |
-
-**Important caveats:**
-- This is based on the **dominant** zone type per barangay, not the exact parcel the facility sits on.
-  A facility in a mixed-use barangay may be on a compatible parcel even if the barangay's dominant zone shows .
-- Zoning rules are simplified, actual permitting depends on the specific use classification and
-  any variances or conditional use permits already granted.
-- To verify a specific barangay's zoning in detail, see the **Zoning Map** page → Zone Polygon Viewer tab.
-        """)
-
-
     _sat_disp = sat[["District","barangay","Address"]].copy()
-    _sat_disp["Zoning Compatibility"] = _sat_disp["barangay"].apply(
-        lambda b: _zone_compat(b, "office")
-    )
     with st.container(border=True, key="qcd-chart-50"):
         st.dataframe(
-            _sat_disp[["District","Address","Zoning Compatibility"]],
+            _sat_disp[["District","Address"]],
             width='stretch'
         )
-
 elif page == "Migration Resource Center":
 
     st.markdown(
@@ -7388,11 +6802,11 @@ elif page == "Migration Resource Center":
         data=mig,
         get_position="[longitude, latitude]",
         get_fill_color="[r, g, b]",
-        get_line_color="[r, g, b]",
+        get_line_color=[40, 40, 40, 200],
         stroked=True,
         filled=True,
         opacity=0.9,
-        line_width_min_pixels=2,
+        line_width_min_pixels=1.5,
         get_radius=40,
         radius_min_pixels=4,
         radius_max_pixels=4,
@@ -7459,101 +6873,7 @@ elif page == "Migration Resource Center":
         if c in mig.columns
     ]
 
-    #  Zoning siting compatibility helper 
-    # (Compatibility is determined by the dominant zone type of
-    # each facility's barangay from qc_zoning_summary.csv.
-    # Rules are based on QC's Comprehensive Zoning Ordinance:
-    # residential and institutional zones permit social care;
-    # industrial zones restrict childcare/health/schools;
-    # commercial zones generally allow most service types.
-    # Socialized housing and special development zones are
-    # treated as residential-equivalent.)
-    try:
-        _zs_fc = pd.read_csv(
-            "processed/zoning/qc_zoning_summary.csv"
-        )
-        _nlu_fc = {"ROAD", "WATER", "X"}
-        _zc_fc = [
-            c for c in _zs_fc.columns
-            if c not in (
-                "barangay_id", "barangay", "total_polygons"
-            ) and c not in _nlu_fc
-        ]
-        def _dom_fc(row):
-            vals = {c: row[c] for c in _zc_fc
-                    if c in row and pd.notna(row[c]) and row[c] > 0}
-            return max(vals, key=vals.get) if vals else "Unknown"
-        _zs_fc["_dom"] = _zs_fc.apply(_dom_fc, axis=1)
-        _brgy_zone_fc = dict(zip(
-            _zs_fc["barangay"].str.strip().str.title(),
-            _zs_fc["_dom"]
-        ))
-        _zoning_fc_loaded = True
-    except Exception:
-        _brgy_zone_fc = {}
-        _zoning_fc_loaded = False
-
-    # Full zone coverage including all types found in QC data
-    _RESIDENTIAL = [
-        "R-3 HIGH DENSITY RESIDENTIAL ZONE",
-        "R-2 MEDIUM DENSITY RESIDENTIAL ZONE",
-        "R-2-A MEDIUM DENSITY RESIDENTIAL SUB-ZONE",
-        "R-1 LOW DENSITY RESIDENTIAL ZONE",
-        "R-1-A LOW DENSITY RESIDENTIAL SUB-ZONE",
-        "SOCIALIZED HOUSING",
-        "SPECIAL URBAN DEVELOPMENT ZONE",
-    ]
-    _COMMERCIAL = [
-        "C-1 MINOR COMMERCIAL ZONE",
-        "C-2 MAJOR COMMERCIAL ZONE",
-        "C-3 METROPOLITAN COMMERCIAL ZONE",
-    ]
-    _INSTITUTIONAL = ["INSTITUTIONAL"]
-    _INDUSTRIAL = [
-        "I-1 LIGHT INTENSITY INDUSTRIAL ZONE",
-        "I-2 MEDIUM INTENSITY INDUSTRIAL ZONE",
-    ]
-    _UNCLEAR = [
-        "CEMETERY", "UTILITY", "ROAD", "WATER",
-        "PARKS AND OPEN SPACE", "X", "Unknown",
-    ]
-
-    _ZONE_COMPAT = {
-        t: {
-            **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL},
-            **{z: "" for z in _INDUSTRIAL},
-            **{z: "?" for z in _UNCLEAR},
-        }
-        for t in ("childcare", "school", "care")
-    }
-    # Offices are compatible with industrial zones too
-    _ZONE_COMPAT["office"] = {
-        **{z: "" for z in _RESIDENTIAL + _COMMERCIAL + _INSTITUTIONAL + _INDUSTRIAL},
-        **{z: "?" for z in _UNCLEAR},
-    }
-
-    def _zone_compat(barangay_name, facility_type):
-        if not _zoning_fc_loaded:
-            return "?"
-        zone = _brgy_zone_fc.get(
-            str(barangay_name).strip().title(), "Unknown"
-        )
-        return _ZONE_COMPAT.get(facility_type, {}).get(zone, "?")
-
-    st.caption(
-        "**Zoning Compatibility** indicates whether each center's "
-        "barangay permits social care use under QC's zoning ordinance: "
-        " compatible,  likely restricted, ? unclear."
-    )
-
-    _mig_disp = mig[
-        display_cols + (["barangay"] if "barangay" in mig.columns else [])
-    ].copy()
-    if "barangay" in _mig_disp.columns:
-        _mig_disp["Zoning Compatibility"] = _mig_disp["barangay"].apply(
-            lambda b: _zone_compat(b, "care")
-        )
-        _mig_disp = _mig_disp.drop(columns=["barangay"])
+    _mig_disp = mig[display_cols].copy()
 
     with st.container(border=True, key="qcd-chart-52"):
         st.dataframe(_mig_disp, width="stretch")
@@ -7795,13 +7115,18 @@ elif page == "Care Services Explorer":
     # Population dropdown, so the two stay in sync conceptually
     # (kept as a separate dict rather than imported, matching how
     # service_layers is already duplicated between this page and
-    # build_explorer_map above).
+    # build_explorer_map above). Each value is (source, column),
+    # same convention as Climate Layers' CLIMATE_POP_OPTIONS:
+    # "demographics" columns come from the shared `demographics`
+    # table, "domestic_workers" from the separate
+    # domestic_workers_barangay table.
     POP_DENSITY_OPTIONS = {
-        "Child population (ages 0-5)": "age_0_5",
-        "Child population (ages 6-17)": "age_6_17",
-        "Older persons (60+)": "age_60plus",
-        "Persons with disabilities (registered)": "pwd_registered",
-        "Total population": "pop_census"
+        "Child population (ages 0-5)": ("demographics", "age_0_5"),
+        "Child population (ages 6-17)": ("demographics", "age_6_17"),
+        "Older persons (60+)": ("demographics", "age_60plus"),
+        "Persons with disabilities (registered)": ("demographics", "pwd_registered"),
+        "Total population": ("demographics", "pop_census"),
+        "Domestic workers (registered)": ("domestic_workers", "domestic_workers_total")
     }
 
     col_toggle1, col_toggle2 = st.columns(2)
@@ -7818,7 +7143,9 @@ elif page == "Care Services Explorer":
             )
         )
 
-        selected_density_col = POP_DENSITY_OPTIONS[selected_density_label]
+        selected_density_source, selected_density_col = (
+            POP_DENSITY_OPTIONS[selected_density_label]
+        )
 
     with col_toggle2:
         show_flood_risk_only = st.checkbox(
@@ -7920,7 +7247,8 @@ elif page == "Care Services Explorer":
         flood_risk_only=show_flood_risk_only,
         show_risk_rings=False,
         demand_pop_col=selected_density_col,
-        demand_pop_label=selected_density_label
+        demand_pop_label=selected_density_label,
+        demand_pop_source=selected_density_source
     )
 
     if demand_legend_info is not None:
@@ -8582,13 +7910,13 @@ elif page == "Accessibility Analysis":
             barangay_access["Schools"]
         )
 
-        barangay_access["Elderly-Serving Facilities"] = (
+        barangay_access["Older Persons-Serving Facilities"] = (
             barangay_access["Older persons care"]
             +
             barangay_access["Long-term care and rehabilitation services"]
         )
 
-        # Calculate Children and Elderly per Facility ratios
+        # Calculate Children and Older Persons per Facility ratios
         barangay_access["Children per Facility"] = np.where(
             barangay_access["Child-Serving Facilities"] != 0,
             barangay_access["age_0_5"]
@@ -8596,10 +7924,10 @@ elif page == "Accessibility Analysis":
             np.nan
         )
 
-        barangay_access["Elderly per Facility"] = np.where(
-            barangay_access["Elderly-Serving Facilities"] != 0,
+        barangay_access["Older Persons per Facility"] = np.where(
+            barangay_access["Older Persons-Serving Facilities"] != 0,
             barangay_access["age_60plus"]
-            / barangay_access["Elderly-Serving Facilities"],
+            / barangay_access["Older Persons-Serving Facilities"],
             np.nan
         )
 
@@ -8907,17 +8235,17 @@ elif page == "Accessibility Analysis":
 
             top_elderly = (
                 barangay_access
-                .dropna(subset=["Elderly per Facility"])
-                .sort_values("Elderly per Facility", ascending=False)
+                .dropna(subset=["Older Persons per Facility"])
+                .sort_values("Older Persons per Facility", ascending=False)
                 .head(15)
             )
 
             fig = px.bar(
                 top_elderly,
-                x="Elderly per Facility",
+                x="Older Persons per Facility",
                 y="Barangay",
                 orientation="h",
-                color="Elderly per Facility",
+                color="Older Persons per Facility",
                 color_continuous_scale="Purples",
                 title="Highest Senior Citizens per Facility (60+ yrs)"
             )
@@ -8960,7 +8288,7 @@ elif page == "Accessibility Analysis":
                single-purpose clinics.
 
             2. **Prioritize Mixed-Service Centers** → In high-need barangays, co-locate childcare, health,
-               and elderly care. A single multi-service center serving clustered barangays is often more
+               and older persons care. A single multi-service center serving clustered barangays is often more
                cost-effective than separate facilities.
 
             3. **Climate Risk Overlay** → Check the Climate Layers page to see if
@@ -9502,7 +8830,7 @@ elif page == "Care Planning & Investment Priorities":
         barangay_access["Eldercare_Demand"]
     )
 
-    barangay_access["Care Demand (Children, Elderly, Persons with Disabilities)"] = (
+    barangay_access["Care Demand (Children, Older Persons, Persons with Disabilities)"] = (
         barangay_access["Childcare_Demand"]
         +
         barangay_access["Eldercare_Demand"]
@@ -9524,7 +8852,7 @@ elif page == "Care Planning & Investment Priorities":
     )
 
     barangay_access["Care Demand per Facility (with Persons with Disabilities)"] = (
-        barangay_access["Care Demand (Children, Elderly, Persons with Disabilities)"]
+        barangay_access["Care Demand (Children, Older Persons, Persons with Disabilities)"]
         /
         barangay_access["Facilities"]
     )
@@ -9691,9 +9019,9 @@ elif page == "Care Planning & Investment Priorities":
         **Childcare Priority Score** = 50% × (Children Rank) + 50% × (Facility Gap Rank)
         - Identifies barangays with many children but few childcare/school facilities
 
-        **Eldercare Priority Score** = 40% × (Elderly Rank) + 60% × (Facility Gap Rank)
+        **Older Persons Priority Score** = 40% × (Older Persons Rank) + 60% × (Facility Gap Rank)
         - Identifies barangays with many seniors but few eldercare/health center facilities
-        - Higher weight on facility gap because elderly care is severely underprovided
+        - Higher weight on facility gap because older persons care is severely underprovided
 
         **Disability Priority Score** = 40% × (Persons with Disabilities Rank) + 60% × (Facility Gap Rank)
         - Identifies barangays with many registered persons with disabilities but few disability services
@@ -9701,7 +9029,7 @@ elif page == "Care Planning & Investment Priorities":
 
         **Overall Priority Score** = Maximum of the three domains
         - A barangay gets high priority if ANY domain is severely underserved
-        - Reveals that Commonwealth + Payatas are highest priority for elderly AND disability care
+        - Reveals that Commonwealth + Payatas are highest priority for older persons AND disability care
         """)
 
     with st.expander("Recommended Policy Actions: Barangay Peer Replication Models", expanded=False):
@@ -9717,7 +9045,7 @@ elif page == "Care Planning & Investment Priorities":
            expansion plan that brings those barangays closer to the "established ecosystem" model.
 
         3. **Cost-Efficient Multi-Service Centers** → Instead of replicating every facility type individually,
-           combine services. A multi-service hub (kindergarten + health clinic + elderly support) in one
+           combine services. A multi-service hub (kindergarten + health clinic + older persons support) in one
            location can serve a cluster of 3–4 barangays and lower operational costs.
 
         4. **Partnership & Advocacy** → Share successful models with LGU partners, private providers, and NGOs
@@ -10053,7 +9381,7 @@ elif page == "Care Planning & Investment Priorities":
         y="Barangay",
         orientation="h",
         color="Priority Score",
-        title="Top 25 Critical Intervention Zones (Children & Elderly Underserved)",
+        title="Top 25 Critical Intervention Zones (Children & Older Persons Underserved)",
         color_continuous_scale=QCD_SEQUENTIAL
     )
 
@@ -10231,7 +9559,7 @@ elif page == "Barangay Clusters":
         3. **Tailor Services by Cluster Type** →
            - **Dense, Young Clusters** → Emphasize childcare, schools, reproductive health
            - **Sparse, Aging Clusters** → Emphasize mobile health clinics, long-term care, elder transportation
-           - **Underserved (Mixed Age)** → Build integrated primary care + basic childcare/elderly support
+           - **Underserved (Mixed Age)** → Build integrated primary care + basic childcare/older persons support
            - **Well-Served Clusters** → Focus on quality/specialty services and peer mentoring
 
         4. **Cross-Cluster Coordination** → Some services (e.g., specialty care, teaching hospitals) don't need
@@ -10253,7 +9581,7 @@ elif page == "Barangay Clusters":
             "18-59 (Working Age Adult)"
         ],
         "elderly_60_plus": [
-            "60+ (Elderly)"
+            "60+ (Older Persons)"
         ]
     }
 
@@ -10267,7 +9595,7 @@ elif page == "Barangay Clusters":
         "0-5 (Early Childhood)",
         "6-17 (School Age Children)",
         "18-59 (Working Age Adult)",
-        "60+ (Elderly)",
+        "60+ (Older Persons)",
         "Total"
     ]
 
@@ -10616,7 +9944,7 @@ elif page == "Barangay Clusters":
             },
             2: {
                 "title": "Aging Communities",
-                "description": "Neighborhoods with high elderly population and aging demographics. Priority: elderly care services, geriatric health centers, and age-friendly community programs."
+                "description": "Neighborhoods with high older persons population and aging demographics. Priority: older persons care services, geriatric health centers, and age-friendly community programs."
             },
             3: {
                 "title": "Food-Insecure Areas",
@@ -10799,7 +10127,7 @@ elif page == "Barangay Clusters":
             "Total": "Avg. Population",
             "population_density": "Avg. Density (per km²)",
             "children_pct": "Avg. Children Share (%)",
-            "elderly_pct": "Avg. Elderly Share (%)",
+            "elderly_pct": "Avg. Older Persons Share (%)",
             "facilities_per_10k": "Avg. Facilities per 10k Pop.",
             "disability_prevalence_rate_pct": "Avg. Disability Prevalence (%)",
             "cbms_food_insecurity_prevalence_pct": "Avg. Food Insecurity (%)",
@@ -10850,7 +10178,7 @@ elif page == "Barangay Clusters":
                     "barangay_name": "Barangay",
                     "population_density": "Density (per km²)",
                     "children_pct": "Children Share (%)",
-                    "elderly_pct": "Elderly Share (%)",
+                    "elderly_pct": "Older Persons Share (%)",
                     "facilities_per_10k": "Facilities per 10k Pop.",
                     "disability_prevalence_rate_pct": "Disability Prevalence (%)",
                     "cbms_food_insecurity_prevalence_pct": "Food Insecurity (%)"
@@ -10922,12 +10250,19 @@ elif page == "Climate Layers":
         "Migration resource centers": migration_centers
     }
 
+    # Each value is (source, column): "demographics" columns are
+    # looked up on the shared `demographics` table, "domestic_workers"
+    # columns on the separate domestic_workers_barangay table (see
+    # load_domestic_workers() in functions.py) — kept as a tuple so
+    # the render code below can pull from whichever table each
+    # option actually lives in.
     CLIMATE_POP_OPTIONS = {
-        "Child population (ages 0-5)": "age_0_5",
-        "Child population (ages 6-17)": "age_6_17",
-        "Older persons (60+)": "age_60plus",
-        "Persons with disabilities (registered)": "pwd_registered",
-        "Total population": "pop_census"
+        "Child population (ages 0-5)": ("demographics", "age_0_5"),
+        "Child population (ages 6-17)": ("demographics", "age_6_17"),
+        "Older persons (60+)": ("demographics", "age_60plus"),
+        "Persons with disabilities (registered)": ("demographics", "pwd_registered"),
+        "Total population": ("demographics", "pop_census"),
+        "Domestic workers (registered)": ("domestic_workers", "domestic_workers_total")
     }
 
     # School type sub-filter, only shown when "Schools" is the
@@ -11028,17 +10363,27 @@ elif page == "Climate Layers":
         + " – Close " + facility_points["close_hours"]
     )
 
+    # Light purple, the same "generic facility" color used for
+    # markers elsewhere in the app (e.g. Migration Resource Centers,
+    # Day Care Center, Milk Bank), so this page's dots read as part
+    # of the same visual system rather than a one-off. A fixed dark
+    # outline (same as every other facility layer in the app) is
+    # what actually keeps a light fill color visible against a light
+    # basemap — that's the fix, not the hue. The previous pale
+    # yellow, and before that this same light purple without an
+    # outline, both blended into the background for the same reason:
+    # no outline contrast.
     facility_layer = pdk.Layer(
         "ScatterplotLayer",
         data=facility_points,
         get_position="[longitude, latitude]",
-        get_fill_color=[255, 232, 124, 235],
-        get_line_color=[90, 80, 30, 255],
-        line_width_min_pixels=0.8,
+        get_fill_color=[196, 181, 253, 235],
+        get_line_color=[40, 40, 40, 200],
+        line_width_min_pixels=1.2,
         stroked=True,
-        get_radius=45,
-        radius_min_pixels=2.5,
-        radius_max_pixels=8,
+        get_radius=50,
+        radius_min_pixels=4,
+        radius_max_pixels=10,
         pickable=True
     )
 
@@ -11220,21 +10565,30 @@ elif page == "Climate Layers":
 
     with flood_tab:
         selected_pop_label = st.selectbox(
-            "Population",
+            "Population Density Layer",
             list(CLIMATE_POP_OPTIONS.keys()),
             index=0,
             key="climate_pop_filter"
         )
 
-        selected_pop_col = CLIMATE_POP_OPTIONS[selected_pop_label]
+        selected_pop_source, selected_pop_col = (
+            CLIMATE_POP_OPTIONS[selected_pop_label]
+        )
 
         # --------------------------------------------------
-        # BARANGAY POPULATION CHOROPLETH (light peach -> deep
-        # orange classes: light = fewer people, dark = more).
-        # Shares this tab with the flood overlay below, so the
-        # base color is a deliberately warm tone — it needs to
-        # stay visually distinct from the flood layer's blue,
-        # not blend with it the way a cool-hued ramp would.
+        # BARANGAY POPULATION DENSITY CHOROPLETH (light -> dark
+        # green, same "Greens" ramp and per-km² framing as the
+        # Population Density Layer on the Care Services Explorer
+        # page, so the two read as one consistent system).
+        # Shares this tab with the flood overlay below: a
+        # semi-transparent blue BitmapLayer draws on top of this
+        # choropleth, and green is adjacent to blue rather than
+        # its complement (orange was used here previously for
+        # exactly that reason), so at high density + high flood
+        # opacity the two can blend toward a muddy blue-green.
+        # Kept as requested since it matches Care Services
+        # Explorer, but worth knowing if that blending turns out
+        # to be a problem in practice.
         # --------------------------------------------------
 
         clim_barangay = gpd.read_file(
@@ -11248,7 +10602,13 @@ elif page == "Climate Layers":
             .str.upper()
         )
 
-        clim_demo = demographics[
+        _clim_pop_source_df = (
+            demographics
+            if selected_pop_source == "demographics"
+            else domestic_workers_barangay
+        )
+
+        clim_demo = _clim_pop_source_df[
             ["barangay", "district", selected_pop_col]
         ].copy()
 
@@ -11266,29 +10626,33 @@ elif page == "Climate Layers":
             how="left"
         )
 
-        # ColorBrewer "Oranges" — chosen over a cool-hued ramp
-        # (grays, greens) specifically because the flood BitmapLayer
-        # (see below) draws its semi-transparent blue on top of this
-        # choropleth. Blue and orange are complements, so the flood
-        # layer stays clearly legible as "blue" at every population
-        # level, instead of blending toward a muddy blue-gray or
-        # blue-green the way the earlier grayscale/green ramps did.
-        #
-        # This is a CONTINUOUS scale (value_to_rgba + the "Oranges"
-        # colormap from functions.py), not discrete quantile bins.
-        # Population is heavily right-skewed here (e.g. for child
-        # population: median ~800 but max ~28,600), so equal-COUNT
-        # quantile bins put a huge value range into one "top 20%"
-        # bucket — and since QC's highest-population barangays also
-        # tend to be its largest by land area, that single bucket
-        # visually dominated the whole map at one flat, very dark
-        # color, regardless of which colors were chosen. A continuous
-        # scale spreads color smoothly across the actual value
-        # distribution instead, clipped to the 2nd-98th percentile
-        # (matching the clip_percentiles convention the raster layers
-        # already use) so a small number of extreme barangays don't
-        # flatten everyone else to the light end.
-        pop_values = clim_barangay[selected_pop_col].dropna()
+        # Same area/density calculation as the Care Services
+        # Explorer's Population Density Layer (build_explorer_map
+        # in app.py): reproject to EPSG:3123 for accurate area,
+        # then count / area_km2.
+        clim_barangay_proj = clim_barangay.to_crs("EPSG:3123")
+
+        clim_barangay["area_km2"] = (
+            clim_barangay_proj.geometry.area / 1_000_000
+        )
+
+        clim_barangay["population_density"] = (
+            clim_barangay[selected_pop_col]
+            / clim_barangay["area_km2"]
+        )
+
+        # CONTINUOUS scale (value_to_rgba + the "Greens" colormap
+        # from functions.py), not discrete quantile bins. Density
+        # is heavily right-skewed here, same rationale as the
+        # other choropleths on this page, so the color range is
+        # clipped to the 2nd-98th percentile rather than the raw
+        # min/max, to keep a handful of extreme barangays from
+        # flattening everyone else to the light end.
+        pop_values = (
+            clim_barangay["population_density"]
+            .replace([np.inf, -np.inf], np.nan)
+            .dropna()
+        )
 
         pop_vmin, pop_vmax = pop_values.quantile([0.02, 0.98])
 
@@ -11301,19 +10665,19 @@ elif page == "Climate Layers":
                 value,
                 pop_vmin,
                 pop_vmax,
-                colormap="Oranges",
+                colormap="Greens",
                 alpha=190
             )
 
         clim_barangay["fill_color"] = (
-            clim_barangay[selected_pop_col].apply(pop_color_for_value)
+            clim_barangay["population_density"].apply(pop_color_for_value)
         )
 
         # Pre-formatted tooltip value (raw column may be NaN for
         # unmatched polygons, which would render as a blank).
         clim_barangay["pop_display"] = (
-            clim_barangay[selected_pop_col]
-            .map(lambda v: f"{v:,.0f}" if pd.notna(v) else "No data")
+            clim_barangay["population_density"]
+            .map(lambda v: f"{v:,.1f}/km²" if pd.notna(v) else "No data")
         )
 
         clim_barangay["district_display"] = (
@@ -11326,7 +10690,9 @@ elif page == "Climate Layers":
         # template works for both layers in the deck built below.
         clim_barangay["Name"] = clim_barangay["barangay_name"]
         clim_barangay["Line1"] = "District " + clim_barangay["district_display"]
-        clim_barangay["Line2"] = f"{selected_pop_label}: " + clim_barangay["pop_display"]
+        clim_barangay["Line2"] = (
+            f"{selected_pop_label} density: " + clim_barangay["pop_display"]
+        )
         clim_barangay["Line3"] = ""
 
         clim_geojson = json.loads(
@@ -11452,7 +10818,7 @@ elif page == "Climate Layers":
                 "High-risk flood areas (&gt;50cm, 100-yr event)"
             )
             + _legend_item(
-                '<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:rgb(255,232,124);border:1px solid #5a501e;"></span>',
+                '<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:rgb(196,181,253);border:1px solid #282828;"></span>',
                 f"{selected_fac_label} facilities"
             )
             + '</div>'
@@ -11462,11 +10828,11 @@ elif page == "Climate Layers":
             st.markdown(legend_html, unsafe_allow_html=True)
             st.markdown(
                 render_colormap_legend_html(
-                    colormap="Oranges",
+                    colormap="Greens",
                     vmin=pop_vmin,
                     vmax=pop_vmax,
-                    unit="",
-                    label=selected_pop_label
+                    unit="/km²",
+                    label=f"{selected_pop_label} Density"
                 ),
                 unsafe_allow_html=True
             )
@@ -11489,7 +10855,7 @@ elif page == "Climate Layers":
             1. **Audit Facility Flood Risk** → On the map above, look for facilities that fall inside the
                blue high-risk flood areas (>50cm in a 100-year rain event). These are your at-risk assets.
                Use the Facilities filter to check each service type, and prioritize those serving vulnerable
-               populations (childcare, elderly care, health centers).
+               populations (childcare, older persons care, health centers).
 
             2. **Tiered Mitigation Strategy** →
                - **Tier 1 (Immediate):** Facilities in the flood zone → Elevate critical equipment, install

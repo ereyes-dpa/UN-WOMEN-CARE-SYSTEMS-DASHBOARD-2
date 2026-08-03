@@ -448,6 +448,13 @@ def school_color(category):
         return "#B5CBEE"  # lighter UN WOMEN blue
     elif "special education" in category:
         return "#D9E6F7"  # lightest UN WOMEN blue
+    elif "private school" in category:
+        return "#4C1D95"  # UN WOMEN purple, outside the grade-tier
+                           # blue gradient since "Private school" isn't
+                           # a grade level like the others — same
+                           # purple used for "private/generic" facility
+                           # markers elsewhere (e.g. Childcare Centers,
+                           # Health Centers on Care Services Explorer)
 
     return "#4472C4"  # default to UN WOMEN Blue
 
@@ -601,7 +608,8 @@ SCHOOL_TYPE_COLORS_MAP = {
     "Junior high school": "#6B8FD4",                 # medium UN WOMEN blue
     "Senior high school": "#8FA8E0",                 # light UN WOMEN blue
     "High school": "#B5CBEE",                        # lighter UN WOMEN blue
-    "Special Education Program": "#D9E6F7"          # lightest UN WOMEN blue
+    "Special Education Program": "#D9E6F7",          # lightest UN WOMEN blue
+    "Private school": "#4C1D95"                      # UN WOMEN purple, outside the grade-tier gradient
 }
 
 def school_type_color(school_type):
@@ -1038,7 +1046,7 @@ def load_data_for_kpis():
             "age_0_5": "0-5 (Early Childhood)",
             "age_6_17": "6-17 (School Age Children)",
             "age_18_59": "18-59 (Working Age Adult)",
-            "age_60plus": "60+ (Elderly)",
+            "age_60plus": "60+ (Older Persons)",
             "pop_census": "Total"
         }
     )
@@ -1695,7 +1703,7 @@ def compute_population_per_facility(
     at the barangay level.
 
     barangay_pop must contain:
-        "Barangay", "0-5 (Early Childhood)", "60+ (Elderly)"
+        "Barangay", "0-5 (Early Childhood)", "60+ (Older Persons)"
 
     care_clean must contain:
         "barangay", "major_division"
@@ -1742,7 +1750,7 @@ def compute_population_per_facility(
         ]
         .groupby("barangay")
         .size()
-        .reset_index(name="Elderly-Serving Facilities")
+        .reset_index(name="Older Persons-Serving Facilities")
     )
 
     out = barangay_pop.copy()
@@ -1772,8 +1780,8 @@ def compute_population_per_facility(
         out["Child-Serving Facilities"].fillna(0)
     )
 
-    out["Elderly-Serving Facilities"] = (
-        out["Elderly-Serving Facilities"].fillna(0)
+    out["Older Persons-Serving Facilities"] = (
+        out["Older Persons-Serving Facilities"].fillna(0)
     )
 
     # children per facility — np.nan when there are no
@@ -1785,9 +1793,9 @@ def compute_population_per_facility(
         np.nan
     )
 
-    out["Elderly per Facility"] = np.where(
-        out["Elderly-Serving Facilities"] != 0,
-        out["60+ (Elderly)"] / out["Elderly-Serving Facilities"],
+    out["Older Persons per Facility"] = np.where(
+        out["Older Persons-Serving Facilities"] != 0,
+        out["60+ (Older Persons)"] / out["Older Persons-Serving Facilities"],
         np.nan
     )
 
