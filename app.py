@@ -257,10 +257,24 @@ h1, h2, h3, h4 {
 fcdo_logo = get_base64("assets/fcdo_logo.png")
 un_logo   = get_base64("assets/unwomen_logo.png")
 qc_logo   = get_base64("assets/qc_logo.png")
+gad_logo  = get_base64("assets/qc.png")
 
-QC_HEIGHT   = 60
-FCDO_HEIGHT = 60
-UN_HEIGHT   = 40
+# Heights are chosen for consistent *visual weight*, not
+# identical pixel height: QC is a dense, near-square seal,
+# while FCDO and UN Women are wide wordmark+icon banners
+# with a lot of thin strokes, whitespace, and small caption
+# text. At equal pixel height the seal reads as too small
+# and the wordmark captions become illegible, so QC is sized
+# up relative to the banners until the three read as
+# comparably "heavy" on the page. All three sit in one
+# shared flex row so they share a single vertical-center
+# alignment, no per-logo nudging needed.
+LOGO_ROW_HEIGHT = 100
+
+FCDO_HEIGHT = 56
+UN_HEIGHT   = 56
+QC_HEIGHT   = 85
+GAD_HEIGHT  = 60
 
 left_col, spacer_col, right_col = st.columns([1, 3, 3])
 
@@ -272,14 +286,15 @@ with left_col:
         <div style="
             display:flex;
             align-items:center;
-            height:80px;
+            gap:20px;
+            height:{LOGO_ROW_HEIGHT}px;
         ">
             <a href="https://quezoncity.gov.ph/" target="_blank">
                 <img src="data:image/png;base64,{qc_logo}"
-                     style="height:{QC_HEIGHT}px; width:auto;
-                    transform: translateY(14px);
-        ">
+                     style="height:{QC_HEIGHT}px; width:auto;">
             </a>
+            <img src="data:image/png;base64,{gad_logo}"
+                 style="height:{GAD_HEIGHT}px; width:auto;">
         </div>
         """,
         unsafe_allow_html=True
@@ -295,29 +310,23 @@ with right_col:
             justify-content:flex-end;
             align-items:center;
             gap:20px;
-            height:80px;
+            height:{LOGO_ROW_HEIGHT}px;
         ">
             <a href="https://www.gov.uk/government/organisations/foreign-commonwealth-development-office"
                target="_blank">
                 <img src="data:image/webp;base64,{fcdo_logo}"
-                     style="
-                        height:{FCDO_HEIGHT}px;
-                        width:auto;
-                        transform: translateY(8px);
-                     ">
+                     style="height:{FCDO_HEIGHT}px; width:auto;">
             </a>
             <a href="https://www.unwomen.org/en"
                target="_blank">
                 <img src="data:image/png;base64,{un_logo}"
-                     style="
-                        height:{UN_HEIGHT}px;
-                        width:auto;
-                     ">
+                     style="height:{UN_HEIGHT}px; width:auto;">
             </a>
         </div>
         """,
         unsafe_allow_html=True
     )
+
 
 # --------------------------------------------------
 # TITLE
@@ -445,7 +454,7 @@ district_pop = (
             "0-5 (Early Childhood)",
             "6-17 (School Age Children)",
             "18-59 (Working Age Adult)",
-            "60+ (Elderly)",
+            "60+ (Older Persons)",
             "Total"
         ]
     ]
@@ -460,7 +469,7 @@ district_pop = (
                 "School Age (6-17)",
             "18-59 (Working Age Adult)":
                 "Working Age (18-59)",
-            "60+ (Elderly)":
+            "60+ (Older Persons)":
                 "Older Persons (60+)"
         }
     )
