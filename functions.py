@@ -9,6 +9,14 @@ import numpy as np
 import plotly.io as pio
 import plotly.graph_objects as go
 from PIL import Image
+    
+
+import rasterio
+from rasterio.warp import transform_bounds, transform_geom
+from rasterio.mask import mask as rio_mask
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+from pyproj import Transformer
 
 # --------------------------------------------------
 # TRANSPARENT PLOTLY TEMPLATE
@@ -115,7 +123,7 @@ def format_district_list(districts):
 
 # --------------------------------------------------
 # ACCESSIBILITY RATIO INDICATORS
-# (facility-per-1,000 ratios from demographics.csv's
+# (facility-per-1,000 ratios from demographics_by_barangay.csv's
 # pre-computed ratio_* columns — facility count for the
 # relevant type, divided by the population it serves, per
 # 1,000. See indicators_codebook.csv, "Accesibility"
@@ -440,6 +448,13 @@ def school_color(category):
         return "#B5CBEE"  # lighter UN WOMEN blue
     elif "special education" in category:
         return "#D9E6F7"  # lightest UN WOMEN blue
+    elif "private school" in category:
+        return "#4C1D95"  # UN WOMEN purple, outside the grade-tier
+                           # blue gradient since "Private school" isn't
+                           # a grade level like the others — same
+                           # purple used for "private/generic" facility
+                           # markers elsewhere (e.g. Childcare Centers,
+                           # Health Centers on Care Services Explorer)
 
     return "#4472C4"  # default to UN WOMEN Blue
 
@@ -593,7 +608,8 @@ SCHOOL_TYPE_COLORS_MAP = {
     "Junior high school": "#6B8FD4",                 # medium UN WOMEN blue
     "Senior high school": "#8FA8E0",                 # light UN WOMEN blue
     "High school": "#B5CBEE",                        # lighter UN WOMEN blue
-    "Special Education Program": "#D9E6F7"          # lightest UN WOMEN blue
+    "Special Education Program": "#D9E6F7",          # lightest UN WOMEN blue
+    "Private school": "#4C1D95"                      # UN WOMEN purple, outside the grade-tier gradient
 }
 
 def school_type_color(school_type):
@@ -641,27 +657,29 @@ def category_color(cat):
 
 def health_category_mapper(cat):
 
-    cat = str(cat)
+    cat = str(cat).lower().strip()
 
-    if "National government-owned hospitals" in cat:
+    # Handle already-mapped values (if raw CSV is already in mapped form)
+    if cat in ["national", "qc lgu", "pharmacy", "super health", "health center", "milk bank"]:
+        return cat.title() if " " not in cat else ("QC LGU" if "qc" in cat else cat.title())
+
+    # Handle raw unmapped values
+    if "national" in cat:
         return "National"
 
-    elif "LGU-run hospitals" in cat:
+    elif "lgu" in cat or "qc" in cat:
         return "QC LGU"
 
-    elif "LGU-run lying-in clinics" in cat:
-        return "QC LGU"
-
-    elif "Health center pharmacy" in cat:
+    elif "pharmacy" in cat:
         return "Pharmacy"
 
-    elif "Super health care centers" in cat:
+    elif "super" in cat:
         return "Super Health"
 
-    elif "Health centers" in cat:
+    elif "health" in cat and "center" in cat:
         return "Health Center"
 
-    elif "Human milk bank" in cat:
+    elif "milk" in cat:
         return "Milk Bank"
 
     return "Other"
@@ -710,14 +728,19 @@ def clean_health_centers(df) :
 def clean_dataframe(df) :
     # Phase 1 Optimization: Address fallback logic
     # Use address_clean if available, fall back to address, then "Not available"
-    if "address_clean" in df.columns and "address" in df.columns:
-        df["Address"] = df["address_clean"].fillna(df["address"]).fillna("Not available")
-    elif "address_clean" in df.columns:
-        df["Address"] = df["address_clean"].fillna("Not available")
-    elif "address" in df.columns:
-        df["Address"] = df["address"].fillna("Not available")
-    else:
-        df["Address"] = "Not available"
+    # (future.no_silent_downcasting keeps fillna from attempting the
+    # deprecated object-dtype downcast, which otherwise raises a
+    # FutureWarning on every load; the column stays object dtype
+    # either way.)
+    with pd.option_context("future.no_silent_downcasting", True):
+        if "address_clean" in df.columns and "address" in df.columns:
+            df["Address"] = df["address_clean"].fillna(df["address"]).fillna("Not available")
+        elif "address_clean" in df.columns:
+            df["Address"] = df["address_clean"].fillna("Not available")
+        elif "address" in df.columns:
+            df["Address"] = df["address"].fillna("Not available")
+        else:
+            df["Address"] = "Not available"
 
     # Rename other columns
     rename_dict = {
@@ -937,7 +960,7 @@ def load_data():
 def load_data_for_kpis():
     """
     Loads the consolidated barangay-level demographics table
-    (processed/indicators/demographics.csv) and reshapes it into
+    (processed/indicators/demographics_by_barangay.csv) and reshapes it into
     the same three dataframes this function has always returned
     — population_summary, population_sex, population_age — so
     every downstream page (Population Overview, Schools, Health
@@ -945,7 +968,7 @@ def load_data_for_kpis():
     Analysis, Care Planning & Investment Priorities, Barangay
     Clusters) keeps working unchanged.
 
-    demographics.csv replaces the four legacy files this used to
+    demographics_by_barangay.csv replaces the four legacy files this used to
     read (population_summary.csv, population_2024_by_sex.csv,
     population_2024_by_age_group.csv,
     barangay_district_mapping.csv) with a single, richer,
@@ -953,19 +976,16 @@ def load_data_for_kpis():
     disability, and CBMS socio-economic indicators (consumed by
     other parts of the dashboard via load_demographics() below).
 
-    Unlike the legacy pipeline, demographics.csv already carries
+    Unlike the legacy pipeline, demographics_by_barangay.csv already carries
     a clean integer "district" per barangay, so no separate
     barangay-to-district mapping/merge step is needed here.
     """
-
-    import pandas as pd
-
     # ==================================================
     # LOAD FILE
     # ==================================================
 
     demographics = pd.read_csv(
-        "processed/indicators/demographics.csv"
+        "processed/indicators/demographics_by_barangay.csv"
     )
 
     # ==================================================
@@ -1026,7 +1046,7 @@ def load_data_for_kpis():
             "age_0_5": "0-5 (Early Childhood)",
             "age_6_17": "6-17 (School Age Children)",
             "age_18_59": "18-59 (Working Age Adult)",
-            "age_60plus": "60+ (Elderly)",
+            "age_60plus": "60+ (Older Persons)",
             "pop_census": "Total"
         }
     )
@@ -1046,7 +1066,7 @@ def load_data_for_kpis():
 def load_demographics():
     """
     Loads the full consolidated barangay-level indicators table
-    (processed/indicators/demographics.csv) with all 87 columns
+    (processed/indicators/demographics_by_barangay.csv) with all 87 columns
     intact — facility counts, age/sex breakdowns, registered
     seniors/PWDs, CBMS socio-economic indicators, migrant worker
     counts, and the pre-computed demand/accessibility ratio
@@ -1059,10 +1079,8 @@ def load_demographics():
     facilities-per-1,000 ratio columns.
     """
 
-    import pandas as pd
-
     demographics = pd.read_csv(
-        "processed/indicators/demographics.csv"
+        "processed/indicators/demographics_by_barangay.csv"
     )
 
     demographics["barangay"] = (
@@ -1080,6 +1098,37 @@ def load_demographics():
 
 
 @st.cache_data(show_spinner=False)
+def load_demographics_by_district():
+    """
+    Loads district-level consolidated demographics table
+    (processed/indicators/demographics_by_district.csv).
+
+    Returns a DataFrame with one row per district (1-6) containing:
+    - Area and population totals
+    - Age/sex breakdowns (matches barangay columns for consistency)
+    - Socioeconomic indicators (disability, food insecurity, housing)
+    - Migrant worker counts
+    - Pre-computed density and ratio metrics
+
+    Use this alongside load_demographics() to provide district context
+    when displaying barangay-level data, creating district comparisons,
+    or prioritizing resources by district need.
+    """
+
+    demographics_district = pd.read_csv(
+        "processed/indicators/demographics_by_district.csv"
+    )
+
+    # Normalize district to int (1-6) for consistency with barangay data
+    demographics_district["district"] = (
+        pd.to_numeric(demographics_district["district"], errors="coerce")
+        .astype("Int64")
+    )
+
+    return demographics_district
+
+
+@st.cache_data(show_spinner=False)
 def load_climate_context():
     """
     Loads the city-wide (non-barangay) flood risk indicators
@@ -1089,8 +1138,6 @@ def load_climate_context():
     meant for KPI cards/context on the Climate & Hazard Exposure
     page, not for a choropleth map.
     """
-
-    import pandas as pd
 
     climate = pd.read_csv(
         "processed/indicators/climate.csv"
@@ -1103,7 +1150,7 @@ def load_climate_context():
 def load_demand_context():
     """
     Loads the two city/district-level administrative context
-    tables that sit alongside demographics.csv:
+    tables that sit alongside demographics_by_barangay.csv:
 
     - processed/indicators/demand_city_context.csv — city-wide
       breakdowns (seniors by sex/age, seniors also registered
@@ -1120,8 +1167,6 @@ def load_demand_context():
 
     Returns (city_context, district_context).
     """
-
-    import pandas as pd
 
     city_context = pd.read_csv(
         "processed/indicators/demand_city_context.csv"
@@ -1153,7 +1198,7 @@ def load_domestic_workers():
     """
     Loads registered domestic worker counts (female/male/total)
     from processed/indicators/domestic_workers.csv — a separate
-    source from demographics.csv, at barangay level with each
+    source from demographics_by_barangay.csv, at barangay level with each
     row already tagged with its district.
 
     Returns (barangay_df, district_df):
@@ -1161,22 +1206,22 @@ def load_domestic_workers():
     - barangay_df: one row per barangay, columns
       ["barangay", "barangay_key", "district", "domestic_workers_female",
       "domestic_workers_male", "domestic_workers_total"]. "barangay"
-      is rewritten to match demographics.csv's spelling wherever a
+      is rewritten to match demographics_by_barangay.csv's spelling wherever a
       verified match exists (see RENAME MAP below), so this frame
-      can be merged against demographics.csv or qc_barangays.geojson
+      can be merged against demographics_by_barangay.csv or qc_barangays.geojson
       using the same barangay_key convention used everywhere else
       in this dashboard. barangay_key is the .strip().upper() form.
     - district_df: the same three count columns, summed up to
       one row per district (district as int 1-6, matching
-      demographics.csv's "district" column).
+      demographics_by_barangay.csv's "district" column).
 
-    The source file has more rows (147) than demographics.csv has
+    The source file has more rows (147) than demographics_by_barangay.csv has
     barangays (142) for two different reasons, both resolved here
     rather than left for every caller to rediscover:
 
     1. GENUINE DUPLICATE ROWS (same barangay, listed twice under
        different spellings) — both kept counts summed into one
-       row, written under demographics.csv's spelling:
+       row, written under demographics_by_barangay.csv's spelling:
          - "N.S. AMORANTO" + "NS AMORANTO" (1 female + 1 male
            between them) -> "N. S. Amoranto (Gintong Silahis)"
        And two more pairs where one of the two rows is all-zero,
@@ -1189,12 +1234,12 @@ def load_domestic_workers():
          - "KAUNLARAN" appears under both District 1 (0/0/0) and
            District 4 (0/0/0) — Quezon City has only one real
            Kaunlaran, in District 4 (confirmed against
-           qc_barangays.geojson, demographics.csv, and the QC
+           qc_barangays.geojson, demographics_by_barangay.csv, and the QC
            government's barangay directory) — the District 1 row
            is dropped.
 
     2. SPELLING/FORMAT VARIANTS of the same real barangay —
-       rewritten to demographics.csv's spelling so the join
+       rewritten to demographics_by_barangay.csv's spelling so the join
        works (see RENAME_MAP):
        roman-numeral vs. digit Escopa suffixes, "UP" vs. "U. P.",
        a missing parenthetical on Claro and Sto. Domingo, and a
@@ -1202,10 +1247,10 @@ def load_domestic_workers():
 
     Two source rows are NOT touched by either fix above, since
     they are not duplicates or misspellings but appear to be
-    genuinely distinct from anything in demographics.csv:
+    genuinely distinct from anything in demographics_by_barangay.csv:
     "SAN ISIDRO LABRADOR" (District 1) and "SAN ISIDRO GALAS"
     (District 4) are both real Quezon City barangays per public
-    barangay directories, but demographics.csv has only a plain
+    barangay directories, but demographics_by_barangay.csv has only a plain
     "San Isidro" (District 4) — which doesn't district-match
     "San Isidro Labrador" and isn't confirmed to be the same
     barangay as "San Isidro Galas" either. Both source rows are
@@ -1218,8 +1263,6 @@ def load_domestic_workers():
     barangay on Quezon City's official District IV list either;
     it's dropped rather than guessed at.
     """
-
-    import pandas as pd
 
     dw = pd.read_csv(
         "processed/domestic_workers.csv"
@@ -1292,7 +1335,7 @@ def load_domestic_workers():
 
     # --------------------------------------------------
     # RENAME remaining spelling/format variants to match
-    # demographics.csv exactly (see docstring case 2 above)
+    # demographics_by_barangay.csv exactly (see docstring case 2 above)
     # --------------------------------------------------
 
     RENAME_MAP = {
@@ -1317,7 +1360,7 @@ def load_domestic_workers():
     )
 
     # --------------------------------------------------
-    # NORMALIZE DISTRICT TO INT (matches demographics.csv)
+    # NORMALIZE DISTRICT TO INT (matches demographics_by_barangay.csv)
     # --------------------------------------------------
 
     dw["district"] = (
@@ -1392,9 +1435,6 @@ def sample_raster_at_points(path, lats, lons):
       flag_facilities_at_risk below, which handles that
       conversion.
     """
-
-    import rasterio
-    from pyproj import Transformer
 
     with rasterio.open(path) as src:
 
@@ -1543,17 +1583,13 @@ def compute_barangay_flood_exposure(
     thanks to @st.cache_data.
     """
 
-    import rasterio
-    from rasterio.warp import transform_geom
-    from rasterio.mask import mask as rio_mask
-
     barangay_gdf = gpd.read_file(
         barangay_path,
         engine="pyogrio"
     )
 
     # Land area in km^2 from the polygon geometry itself (not
-    # demographics.csv's area_km2) so this stays self-contained
+    # demographics_by_barangay.csv's area_km2) so this stays self-contained
     # and usable even if that column's CRS/precision differs —
     # reproject to a metric CRS (EPSG:3123, the same Philippine
     # projected CRS the climate rasters already use) purely for
@@ -1667,7 +1703,7 @@ def compute_population_per_facility(
     at the barangay level.
 
     barangay_pop must contain:
-        "Barangay", "0-5 (Early Childhood)", "60+ (Elderly)"
+        "Barangay", "0-5 (Early Childhood)", "60+ (Older Persons)"
 
     care_clean must contain:
         "barangay", "major_division"
@@ -1714,7 +1750,7 @@ def compute_population_per_facility(
         ]
         .groupby("barangay")
         .size()
-        .reset_index(name="Elderly-Serving Facilities")
+        .reset_index(name="Older Persons-Serving Facilities")
     )
 
     out = barangay_pop.copy()
@@ -1744,8 +1780,8 @@ def compute_population_per_facility(
         out["Child-Serving Facilities"].fillna(0)
     )
 
-    out["Elderly-Serving Facilities"] = (
-        out["Elderly-Serving Facilities"].fillna(0)
+    out["Older Persons-Serving Facilities"] = (
+        out["Older Persons-Serving Facilities"].fillna(0)
     )
 
     # children per facility — np.nan when there are no
@@ -1757,9 +1793,9 @@ def compute_population_per_facility(
         np.nan
     )
 
-    out["Elderly per Facility"] = np.where(
-        out["Elderly-Serving Facilities"] != 0,
-        out["60+ (Elderly)"] / out["Elderly-Serving Facilities"],
+    out["Older Persons per Facility"] = np.where(
+        out["Older Persons-Serving Facilities"] != 0,
+        out["60+ (Older Persons)"] / out["Older Persons-Serving Facilities"],
         np.nan
     )
 
@@ -1809,7 +1845,7 @@ def build_cluster_features(
     produced on the Population Overview page).
 
     demographics must be the full indicators table loaded by
-    load_demographics() (processed/indicators/demographics.csv).
+    load_demographics() (processed/indicators/demographics_by_barangay.csv).
     """
 
     facility_type_cols = [
@@ -1927,8 +1963,36 @@ def build_cluster_features(
 
     return out, feature_cols
 
+def get_district_comparison(barangay_df, district_df, metric_col):
+    """
+    Compare a barangay's metric against its district average.
+
+    Args:
+        barangay_df: one row from demographics (barangay level)
+        district_df: one row from demographics_district
+        metric_col: column name to compare (e.g., "disability_prevalence_rate_pct")
+
+    Returns:
+        dict with keys: barangay_value, district_avg, difference, pct_difference
+    """
+
+    barangay_val = barangay_df[metric_col]
+    district_val = district_df[metric_col]
+
+    return {
+        "barangay_value": barangay_val,
+        "district_avg": district_val,
+        "difference": barangay_val - district_val,
+        "pct_difference": (
+            ((barangay_val - district_val) / district_val * 100)
+            if district_val != 0 else np.nan
+        )
+    }
+
+
+@st.cache_data(show_spinner=False)
 def run_barangay_clustering(
-    df,
+    _df,
     feature_cols,
     n_clusters=4,
     random_state=0
@@ -1940,12 +2004,13 @@ def run_barangay_clustering(
     dataframe with a "Cluster" column added (1-indexed,
     to match the original notebooks' cluster numbering)
     plus the scaled feature matrix, for profiling.
+
+    OPTIMIZATION: Cached to avoid recalculating clustering
+    when page reruns. Reduced n_init from 10 to 3 for 3-5x
+    faster convergence (diminishing returns after n_init=3).
     """
 
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.cluster import KMeans
-
-    work = df.copy()
+    work = _df.copy()
 
     feat = (
         work[feature_cols]
@@ -1960,7 +2025,7 @@ def run_barangay_clustering(
     km = KMeans(
         n_clusters=n_clusters,
         random_state=random_state,
-        n_init=10
+        n_init=3
     ).fit(scaled)
 
     work["Cluster"] = km.labels_ + 1
@@ -2005,9 +2070,6 @@ def cluster_color(cluster_id):
 # values, since pydeck has no native raster-colormap
 # support — it only draws pre-rendered images.)
 # --------------------------------------------------
-import base64
-import io
-
 
 def _lerp_color(stops, t):
     """Linearly interpolate an RGB color from a list of
@@ -2062,6 +2124,21 @@ COLORMAPS = {
         (0.50, (158, 154, 200)),
         (0.75, (106, 81, 163)),
         (1.00, (63, 0, 125))
+    ],
+    # Oranges — mirrors the Climate Layers page's population
+    # choropleth (POP_COLOR_STOPS in app.py), so its legend can
+    # use the same gradient-bar rendering as the other raster
+    # legends on that page instead of discrete swatches. A warm
+    # ramp is deliberate: that choropleth sits directly under
+    # the flood layer's semi-transparent blue, and blue reads
+    # far more clearly against an orange base (its complement)
+    # than it did against the green tried first.
+    "Oranges": [
+        (0.00, (254, 237, 222)),
+        (0.25, (253, 190, 133)),
+        (0.50, (253, 141, 60)),
+        (0.75, (230, 85, 13)),
+        (1.00, (166, 54, 3))
     ]
 }
 
@@ -2196,10 +2273,6 @@ def _render_raster_rgba(
     See raster_to_bitmap_layer's docstring for the meaning of
     binary and mask_geometry.
     """
-
-    import rasterio
-    from rasterio.warp import transform_bounds, transform_geom
-    from rasterio.mask import mask as rio_mask
 
     with rasterio.open(path) as src:
 
