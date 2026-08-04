@@ -1215,7 +1215,7 @@ if page == "Home":
     # QUICK STATS (KPI CARDS)
     # =====================================================
 
-    total_barangays = len(barangay_df)
+    total_barangays = 142
     total_districts = len(district_pop)
 
     k1, k2, k3 = st.columns(3)
