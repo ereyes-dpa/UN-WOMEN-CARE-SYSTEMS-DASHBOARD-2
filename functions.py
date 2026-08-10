@@ -862,7 +862,7 @@ def load_data():
     care = pd.read_csv("processed/care_v6.csv")
 
     # Remove API facilities
-    care = care[care["data_source"] != "Google API"]
+    care = care[~care["data_source"].str.contains("Google API", na=False)]
 
     category_cols = [
         "major_division",
