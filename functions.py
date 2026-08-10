@@ -861,6 +861,9 @@ def load_data():
     # Updated to load care_v6.csv with latest facility data
     care = pd.read_csv("processed/care_v6.csv")
 
+    # Remove API facilities
+    care = care[care["data_source"] != "Google API"]
+
     category_cols = [
         "major_division",
         "sub_division",
