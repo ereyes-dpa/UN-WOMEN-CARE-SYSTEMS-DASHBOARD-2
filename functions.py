@@ -475,18 +475,39 @@ def school_provider_type_color(provider_type):
 
 # --------------------------------------------------
 # OLDERS CARE FUCNTIONS
+# (categories reassigned from the generic "Nursing care
+# center"/"Bahay Aruga for Abandoned Elderly" split to the
+# facility-type categories in the eldercare data review —
+# see care_v6.csv. Exact-match dict, same convention as
+# SCHOOL_TYPE_COLORS_MAP, since several category names now
+# share substrings like "Residential" and "Care Facility"
+# that a keyword-contains check (the old opc_color logic)
+# would confuse. All shades stay in the same green family
+# used for "Older Persons" everywhere else in the app (e.g.
+# DISTRICT_COLORS_MAP, the Care Services Explorer legend).
 # --------------------------------------------------
+
+OPC_CATEGORY_COLORS_MAP = {
+    "Residential Care Facility": "#055B52",
+    "Retirement and Assisted Living Facility": "#0B7A6E",
+    "Government Residential Care Facility": "#128C7E",
+    "Nursing care center": "#189A8C",
+    "Home Healthcare Service Provider": "#1FA89A",
+    "Residential and Assisted Living Facility": "#2FB8A8",
+    "Home Care and Respite Care Provider": "#4AC3B4",
+    "Assisted Living and Memory Care Facility": "#66CFC0",
+    "Nursing Home and Memory Care Facility": "#83DBCC",
+    "Retirement and Residential Care Facility": "#9FE3D6",
+    "Clergy Retirement Home": "#B8ECE1",
+    "Residential Care Facility and Home Healthcare Service Provider": "#3E8914",
+    "Community-based and Specialized Residential Care Home": "#A6CFC1",
+}
+
 def opc_color(category):
 
-    category = str(category).upper()
+    category = str(category).strip()
 
-    if "NURSING" in category:
-        return "#055B52"   # green gradient — darkest
-
-    elif "BAHAY ARUGA" in category:
-        return "#A6CFC1"   # green gradient — lightest (still visible on map)
-
-    return "#A6CFC1"
+    return OPC_CATEGORY_COLORS_MAP.get(category, "#A6CFC1")
 
 
 # --------------------------------------------------
@@ -725,6 +746,109 @@ def clean_health_centers(df) :
 
     return df
 
+# --------------------------------------------------
+# OVERLAPPING MARKER SPREAD
+# (a handful of facilities sit close enough together — same
+# building, same small complex — that their map markers render
+# on top of each other at city-wide zoom, e.g. two eldercare
+# facilities ~12m apart looked like one dot and undercounted the
+# visible total by one. This nudges each point in a tight cluster
+# out into a small circle around the cluster's own center, just
+# far enough apart to render as distinct markers, without moving
+# any point far enough to affect flood-zone sampling or any other
+# distance-based calculation that reads these coordinates.)
+# --------------------------------------------------
+
+def spread_overlapping_points(
+    df,
+    lat_col="latitude",
+    lon_col="longitude",
+    min_distance_m=15,
+    spread_radius_m=12
+):
+    """
+    Returns a copy of df with lat/lon nudged apart for any group
+    of rows within min_distance_m of each other (great-circle,
+    approximated via a flat-earth degrees-to-meters conversion —
+    fine at this scale, city-sized distances). Groups are found
+    by a simple union-find over all pairwise distances, so chains
+    of 3+ mutually-close points are spread as one cluster rather
+    than only fixing the closest pair.
+
+    Points in a cluster are placed evenly around a circle of
+    spread_radius_m centered on the cluster's original centroid,
+    so each one moves only a few meters — well under the
+    resolution of anything downstream (raster sampling, ratio
+    calculations) that also reads these columns.
+    """
+
+    n = len(df)
+
+    if n < 2:
+        return df
+
+    lat = df[lat_col].to_numpy(dtype=float)
+    lon = df[lon_col].to_numpy(dtype=float)
+
+    # Degrees-per-meter at this latitude (roughly constant across
+    # Quezon City's small extent, so one reference latitude is fine).
+    meters_per_deg_lat = 111_320.0
+    meters_per_deg_lon = 111_320.0 * np.cos(np.radians(np.nanmean(lat)))
+
+    parent = list(range(n))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(i, j):
+        ri, rj = find(i), find(j)
+        if ri != rj:
+            parent[rj] = ri
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            dy = (lat[i] - lat[j]) * meters_per_deg_lat
+            dx = (lon[i] - lon[j]) * meters_per_deg_lon
+            if (dx * dx + dy * dy) ** 0.5 < min_distance_m:
+                union(i, j)
+
+    clusters = {}
+    for i in range(n):
+        clusters.setdefault(find(i), []).append(i)
+
+    new_lat = lat.copy()
+    new_lon = lon.copy()
+
+    for members in clusters.values():
+
+        if len(members) < 2:
+            continue
+
+        center_lat = np.nanmean(lat[members])
+        center_lon = np.nanmean(lon[members])
+
+        for k, idx in enumerate(members):
+
+            angle = 2 * np.pi * k / len(members)
+
+            new_lat[idx] = (
+                center_lat
+                + (spread_radius_m * np.sin(angle)) / meters_per_deg_lat
+            )
+            new_lon[idx] = (
+                center_lon
+                + (spread_radius_m * np.cos(angle)) / meters_per_deg_lon
+            )
+
+    result = df.copy()
+    result[lat_col] = new_lat
+    result[lon_col] = new_lon
+
+    return result
+
 def clean_dataframe(df) :
     # Phase 1 Optimization: Address fallback logic
     # Use address_clean if available, fall back to address, then "Not available"
@@ -944,6 +1068,19 @@ def load_data():
     action_offices["Name"]    = "District " + action_offices["District"].astype(int).astype(str)
     migration_centers         = clean_dataframe(migration_centers)
     bus_stops                 = clean_dataframe(bus_stops)
+
+    # Spread markers that sit close enough together (same building/
+    # complex) to render as one dot on the map — see
+    # spread_overlapping_points's docstring. Skipped for
+    # action_offices (one per district, positions are already
+    # representative) and bus_stops (many genuinely sit within a
+    # few meters of each other at the same intersection/stop).
+    childcare_centers  = spread_overlapping_points(childcare_centers)
+    schools            = spread_overlapping_points(schools)
+    health_centers     = spread_overlapping_points(health_centers)
+    older_person_care  = spread_overlapping_points(older_person_care)
+    long_term_care     = spread_overlapping_points(long_term_care)
+    migration_centers  = spread_overlapping_points(migration_centers)
 
     return (
         childcare_centers,
@@ -1196,187 +1333,44 @@ def load_demand_context():
 @st.cache_data(show_spinner=False)
 def load_domestic_workers():
     """
-    Loads registered domestic worker counts (female/male/total)
-    from processed/indicators/domestic_workers.csv — a separate
-    source from demographics_by_barangay.csv, at barangay level with each
-    row already tagged with its district.
+    Returns registered domestic worker counts (female/male/total)
+    as (barangay_df, district_df).
 
-    Returns (barangay_df, district_df):
+    The counts now live directly in demographics_by_barangay.csv
+    (domestic_workers_female/male/total columns) — they used to
+    come from a separate processed/domestic_workers.csv, which
+    needed a fair amount of barangay-name reconciliation to line
+    up with demographics_by_barangay.csv's spelling (147 source
+    rows for 142 barangays: a few genuine duplicates to sum, a
+    few spelling variants to rewrite, two barangays — "Doña
+    Aurora"/"Aurora" and "San Isidro"/"San Isidro Galas" — left
+    unmatched as genuinely ambiguous). That reconciliation was
+    run once and the resulting columns were merged into
+    demographics_by_barangay.csv directly, so this function no
+    longer needs to redo it on every load — it just slices those
+    columns out. Kept as its own function (rather than inlining
+    at each call site) so every caller keeps using the same
+    (barangay_df, district_df) shape as before.
 
     - barangay_df: one row per barangay, columns
       ["barangay", "barangay_key", "district", "domestic_workers_female",
-      "domestic_workers_male", "domestic_workers_total"]. "barangay"
-      is rewritten to match demographics_by_barangay.csv's spelling wherever a
-      verified match exists (see RENAME MAP below), so this frame
-      can be merged against demographics_by_barangay.csv or qc_barangays.geojson
-      using the same barangay_key convention used everywhere else
-      in this dashboard. barangay_key is the .strip().upper() form.
-    - district_df: the same three count columns, summed up to
-      one row per district (district as int 1-6, matching
-      demographics_by_barangay.csv's "district" column).
-
-    The source file has more rows (147) than demographics_by_barangay.csv has
-    barangays (142) for two different reasons, both resolved here
-    rather than left for every caller to rediscover:
-
-    1. GENUINE DUPLICATE ROWS (same barangay, listed twice under
-       different spellings) — both kept counts summed into one
-       row, written under demographics_by_barangay.csv's spelling:
-         - "N.S. AMORANTO" + "NS AMORANTO" (1 female + 1 male
-           between them) -> "N. S. Amoranto (Gintong Silahis)"
-       And two more pairs where one of the two rows is all-zero,
-       so summing vs. simply dropping the zero row gives the same
-       result either way — the all-zero row is dropped:
-         - "AURORA" (0/0/0, District 4) is a duplicate of
-           "DOÑA AURORA" (0/0/0) -> kept as "Doña Aurora"
-         - "SANTO NIÑO" (0/0/0, District 4) is a duplicate of
-           "STO. NIÑO" (24/0/24) -> kept as "Sto. Niño"
-         - "KAUNLARAN" appears under both District 1 (0/0/0) and
-           District 4 (0/0/0) — Quezon City has only one real
-           Kaunlaran, in District 4 (confirmed against
-           qc_barangays.geojson, demographics_by_barangay.csv, and the QC
-           government's barangay directory) — the District 1 row
-           is dropped.
-
-    2. SPELLING/FORMAT VARIANTS of the same real barangay —
-       rewritten to demographics_by_barangay.csv's spelling so the join
-       works (see RENAME_MAP):
-       roman-numeral vs. digit Escopa suffixes, "UP" vs. "U. P.",
-       a missing parenthetical on Claro and Sto. Domingo, and a
-       hyphen/casing difference on Balong-bato.
-
-    Two source rows are NOT touched by either fix above, since
-    they are not duplicates or misspellings but appear to be
-    genuinely distinct from anything in demographics_by_barangay.csv:
-    "SAN ISIDRO LABRADOR" (District 1) and "SAN ISIDRO GALAS"
-    (District 4) are both real Quezon City barangays per public
-    barangay directories, but demographics_by_barangay.csv has only a plain
-    "San Isidro" (District 4) — which doesn't district-match
-    "San Isidro Labrador" and isn't confirmed to be the same
-    barangay as "San Isidro Galas" either. Both source rows are
-    all-zero, so this has no effect on any total, but they are
-    kept as their own (unmatched) rows rather than force-mapped
-    to "San Isidro" — a barangay-geometry join will show them as
-    unmatched/excluded rather than silently misattributing their
-    (zero) count to the wrong polygon. "DILIMAN VILLAGE" (also
-    all-zero) has no counterpart under any spelling and isn't a
-    barangay on Quezon City's official District IV list either;
-    it's dropped rather than guessed at.
+      "domestic_workers_male", "domestic_workers_total"].
+    - district_df: the same three count columns, summed to one
+      row per district (district as int 1-6).
     """
 
-    dw = pd.read_csv(
-        "processed/domestic_workers.csv"
+    demo = pd.read_csv(
+        "processed/indicators/demographics_by_barangay.csv"
     )
 
-    dw = dw.rename(
-        columns={
-            "BARANGAY": "barangay",
-            "DISTRICT": "district",
-            "FEMALE": "domestic_workers_female",
-            "MALE": "domestic_workers_male",
-            "TOTAL": "domestic_workers_total"
-        }
-    )
-
-    dw["barangay"] = dw["barangay"].astype(str).str.strip()
-    dw["district"] = dw["district"].astype(str).str.strip()
-
-    # --------------------------------------------------
-    # DROP confirmed all-zero duplicate rows (see docstring
-    # case 1 above — only the spurious half of each pair)
-    # --------------------------------------------------
-
-    drop_mask = (
-        (
-            (dw["barangay"].str.upper() == "AURORA")
-            & (dw["district"] == "DISTRICT 4")
-        )
-        | (
-            (dw["barangay"].str.upper() == "SANTO NIÑO")
-            & (dw["district"] == "DISTRICT 4")
-        )
-        | (
-            (dw["barangay"].str.upper() == "KAUNLARAN")
-            & (dw["district"] != "DISTRICT 4")
-        )
-        | (dw["barangay"].str.upper() == "DILIMAN VILLAGE")
-    )
-
-    dw = dw.loc[~drop_mask]
-
-    # --------------------------------------------------
-    # MERGE the N.S./NS Amoranto split into one row
-    # (the one genuine duplicate that isn't all-zero on
-    # one side, so it's summed rather than dropped)
-    # --------------------------------------------------
-
-    amoranto_mask = dw["barangay"].isin(
-        ["N.S. AMORANTO", "NS AMORANTO"]
-    )
-
-    if amoranto_mask.sum() > 1:
-
-        merged_row = {
-            "barangay": "N. S. Amoranto (Gintong Silahis)",
-            "district": dw.loc[amoranto_mask, "district"].iloc[0],
-            "domestic_workers_female":
-                dw.loc[amoranto_mask, "domestic_workers_female"].sum(),
-            "domestic_workers_male":
-                dw.loc[amoranto_mask, "domestic_workers_male"].sum(),
-            "domestic_workers_total":
-                dw.loc[amoranto_mask, "domestic_workers_total"].sum()
-        }
-
-        dw = dw.loc[~amoranto_mask]
-        dw = pd.concat(
-            [dw, pd.DataFrame([merged_row])],
-            ignore_index=True
-        )
-
-    # --------------------------------------------------
-    # RENAME remaining spelling/format variants to match
-    # demographics_by_barangay.csv exactly (see docstring case 2 above)
-    # --------------------------------------------------
-
-    RENAME_MAP = {
-        "AURORA": "Doña Aurora",
-        "SANTO NIÑO": "Sto. Niño",
-        "ESCOPA I": "Escopa 1",
-        "ESCOPA II": "Escopa 2",
-        "ESCOPA III": "Escopa 3",
-        "ESCOPA IV": "Escopa 4",
-        "UP CAMPUS": "U. P. Campus",
-        "UP VILLAGE": "U. P. Village",
-        "CLARO": "Claro (Quirino 3-B)",
-        "STO. DOMINGO": "Sto. Domingo (Matalahib)",
-        "BALONG BATO": "Balong-bato"
-    }
-
-    dw["barangay"] = (
-        dw["barangay"]
-        .str.upper()
-        .map(RENAME_MAP)
-        .fillna(dw["barangay"])
-    )
-
-    # --------------------------------------------------
-    # NORMALIZE DISTRICT TO INT (matches demographics_by_barangay.csv)
-    # --------------------------------------------------
-
-    dw["district"] = (
-        dw["district"]
-        .str.replace("DISTRICT ", "", regex=False)
-        .astype(int)
-    )
-
-    dw["barangay_key"] = (
-        dw["barangay"]
+    demo["barangay_key"] = (
+        demo["barangay"]
         .astype(str)
         .str.strip()
         .str.upper()
     )
 
-    barangay_df = dw[
+    barangay_df = demo[
         [
             "barangay",
             "barangay_key",
@@ -2249,6 +2243,183 @@ def render_colormap_legend_html(
         ">
             <span>{vmin_display:.1f} {unit}</span>
             <span>{vmax_display:.1f} {unit}</span>
+        </div>
+    </div>
+    """
+
+
+# --------------------------------------------------
+# DISCRETE CHOROPLETH BINS
+# (matches the client's reference GIS maps — discrete legend
+# swatches with labeled ranges, e.g. "0-1", "1-2", "2-4" — rather
+# than a continuous gradient. Bin edges are computed from
+# quantiles of the data itself rather than hand-picked per
+# indicator, since this dashboard drives the same choropleth off
+# ~20 different accessibility ratios with very different scales
+# (ACCESSIBILITY_RATIO_INDICATORS in this file); a fixed bin set
+# tuned for one indicator would be meaningless for another.
+# --------------------------------------------------
+
+def compute_quantile_bins(values, n_bins=6):
+    """
+    Computes up to n_bins discrete bin edges from the strictly
+    positive values in `values` (a pandas Series). Zero and NaN
+    are excluded here, the caller treats zero as its own "No
+    facility" bin rather than the bottom of this range, matching
+    the reference maps' explicit no-facility styling.
+
+    Returns a sorted list of unique edges (may be shorter than
+    n_bins+1 if the data has few distinct positive values, e.g.
+    a sparse indicator with mostly 0s and a handful of 1s).
+    """
+
+    positive = values[(values > 0) & values.notna()]
+
+    if positive.empty:
+        return []
+
+    quantile_points = np.linspace(0, 1, n_bins + 1)
+    edges = sorted(positive.quantile(quantile_points).unique())
+
+    return edges
+
+
+def _round_bin_edge(value):
+    """
+    Rounds a bin edge to a readable precision that scales with
+    its magnitude, matching how the reference maps show whole
+    numbers for high-magnitude indicators (e.g. "16+") and
+    decimals for low-magnitude ones (e.g. "0.25").
+    """
+
+    if value < 1:
+        return round(value, 2)
+    elif value < 10:
+        return round(value, 1)
+    else:
+        return round(value)
+
+
+def format_bin_label(lo, hi, is_last):
+    """
+    Formats one bin's range as a legend label, e.g. "2 - 4" or,
+    for the open-ended top bin, "16+". Shared by
+    discrete_bin_color_and_label (per-value lookup) and the
+    legend-building code (per-bin, independent of any single
+    value) so both describe the same bin the same way.
+    """
+
+    lo_r, hi_r = _round_bin_edge(lo), _round_bin_edge(hi)
+
+    if is_last and hi_r == lo_r:
+        return f"{lo_r}+"
+
+    return f"{lo_r} - {hi_r}"
+
+
+def bin_edges_to_labels(edges):
+    """
+    Turns a full list of bin edges (from compute_quantile_bins)
+    into one range label per bin, in the same low-to-high order
+    as the `colors` list passed to discrete_bin_color_and_label —
+    for building a legend without needing a real data value per
+    bin.
+    """
+
+    return [
+        format_bin_label(edges[i], edges[i + 1], i == len(edges) - 2)
+        for i in range(len(edges) - 1)
+    ]
+
+
+def discrete_bin_color_and_label(value, edges, colors, zero_color):
+    """
+    Assigns a fill color and a legend-style range label to a
+    single ratio value, given the bin edges from
+    compute_quantile_bins() and a light-to-dark `colors` list
+    (one per bin, low value = light, high value = dark — higher
+    ratio means more facilities per capita, so darker reads as
+    "better served", the same convention as the reference maps).
+
+    zero_color is used for exactly 0 (no facility of this type at
+    all) — kept visually distinct from the lightest positive bin
+    rather than folded into it, so "none" and "very few" don't
+    look the same on the map. NaN (unmatched/no-data barangay)
+    reuses zero_color since the map has no way to tell "zero"
+    apart from "missing" without a separate data-quality layer.
+    """
+
+    if pd.isna(value) or value == 0 or not edges:
+        return zero_color, "No facility"
+
+    for i in range(len(edges) - 1):
+
+        lo, hi = edges[i], edges[i + 1]
+        is_last = i == len(edges) - 2
+
+        if (lo <= value <= hi) if is_last else (lo <= value < hi):
+
+            color = colors[min(i, len(colors) - 1)]
+            label = format_bin_label(lo, hi, is_last)
+
+            return color, label
+
+    # Falls outside every bin (shouldn't happen given edges span
+    # the data's own min/max, but guards against float edge cases)
+    return colors[-1], format_bin_label(edges[-1], edges[-1], True)
+
+
+def render_discrete_legend_html(bin_labels_colors, zero_label, zero_color, label=None):
+    """
+    Builds a discrete swatch legend (colored square + range label
+    per row) matching the reference GIS maps' legend style, as an
+    alternative to render_colormap_legend_html's continuous
+    gradient bar.
+
+    bin_labels_colors: list of (label, [r,g,b] or [r,g,b,a]) pairs,
+    already ordered light-to-dark / low-to-high.
+    zero_label/zero_color: the "No facility" row, shown first.
+
+    Returns a raw HTML string; pass to st.markdown(...,
+    unsafe_allow_html=True).
+    """
+
+    def _swatch_item(swatch_label, rgb):
+
+        r, g, b = rgb[0], rgb[1], rgb[2]
+
+        return (
+            '<span style="display:inline-flex;align-items:center;'
+            'margin-right:20px;margin-top:4px;white-space:nowrap;">'
+            f'<span style="display:inline-block;width:16px;height:16px;'
+            f'background:rgb({r},{g},{b});border:1px solid #999;'
+            'margin-right:6px;flex-shrink:0;"></span>'
+            f'<span style="font-size:12px;color:#1a1a1a;">{swatch_label}</span>'
+            '</span>'
+        )
+
+    label_html = (
+        f'<div style="font-size:13px;font-weight:600;'
+        f'margin-bottom:4px;color:#1a1a1a;">{label}</div>'
+        if label else ""
+    )
+
+    items_html = _swatch_item(zero_label, zero_color)
+
+    for swatch_label, rgb in bin_labels_colors:
+        items_html += _swatch_item(swatch_label, rgb)
+
+    return f"""
+    <div style="
+        margin-top:8px;
+        margin-bottom:8px;
+        background:#ffffff;
+        padding:10px 12px;
+        border-radius:6px;
+    ">
+        {label_html}
+        <div style="display:flex;flex-wrap:wrap;align-items:center;">
+            {items_html}
         </div>
     </div>
     """
