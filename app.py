@@ -629,7 +629,9 @@ def build_explorer_map(
     show_risk_rings=True,
     demand_pop_col=None,
     demand_pop_label=None,
-    demand_pop_source="demographics"
+    demand_pop_source="demographics",
+    demand_metric="density",
+    selected_source="All"
 ):
     """
     Builds the full Care Services Explorer folium map and
@@ -697,11 +699,24 @@ def build_explorer_map(
     separate domestic_workers_barangay table (see
     load_domestic_workers() in functions.py) — needed because
     registered domestic worker counts aren't part of `demographics`.
-    demand_legend_info is either None or (vmin, vmax,
-    demand_pop_label), same rationale as climate_legend_info: a
-    separate value the caller renders as an external legend,
-    clipped to the 2nd-98th percentile of the computed density
-    values.
+    demand_legend_info is either None or (vmin, vmax, label,
+    colormap), same rationale as climate_legend_info: a separate
+    value the caller renders as an external legend, clipped to
+    the 2nd-98th percentile of the computed density/count
+    values. colormap is "Greens" for demand_metric="density" or
+    "Oranges" for "count", so the caller's legend always matches
+    what's actually drawn on the map.
+
+    demand_metric switches the population layer between
+    "density" (default — people per km², "Greens" ramp, same
+    convention as before) and "count" (raw population for the
+    selected group, no area division, "Oranges" ramp so it reads
+    as visually distinct from density and doesn't compete with
+    the Blues flood layer or green boundary fill it sits under).
+
+    selected_source filters every service layer's facilities to
+    just "Administrative data" or "Google API" rows (the
+    data_source column from care_v6.csv) when not "All".
     """
 
     service_layers = {
@@ -848,18 +863,31 @@ def build_explorer_map(
             "color": "#666666",
             "weight": 1,
             "fillOpacity": 0.10,
-        }
+        },
+        tooltip=folium.GeoJsonTooltip(
+            fields=["barangay_name"],
+            aliases=["Barangay:"],
+            sticky=True
+        )
     ).add_to(m)
 
     # ------------------------------------------
-    # POPULATION DENSITY CHOROPLETH (Demand Layer)
-    # demand_pop_col selects *which* demographic group's density
-    # is shown (e.g. children 0-5, older persons, total population)
-    # — driven by a dropdown on the calling page rather than a
-    # fixed always-pop_census toggle. demand_legend_info is
-    # returned alongside the map HTML (mirroring climate_legend_info
-    # below) so the caller can render an external gradient-bar
-    # legend, since folium's rendered HTML is opaque to Streamlit.
+    # POPULATION DENSITY / COUNT CHOROPLETH (Demand Layer)
+    # demand_pop_col selects *which* demographic group is shown
+    # (e.g. children 0-5, older persons, total population) —
+    # driven by a dropdown on the calling page rather than a
+    # fixed always-pop_census toggle. demand_metric switches
+    # between "density" (people per km², Greens ramp) and
+    # "count" (raw population for the group, Oranges ramp) — see
+    # docstring above. Built as a manual GeoJson + per-feature
+    # style_function (rather than folium.Choropleth) so a
+    # GeoJsonTooltip can show the barangay name and value on
+    # hover, matching the interactivity of the pydeck-based maps
+    # elsewhere in the app (folium.Choropleth has no tooltip
+    # hook). demand_legend_info is returned alongside the map
+    # HTML (mirroring climate_legend_info below) so the caller
+    # can render an external gradient-bar legend, since folium's
+    # rendered HTML is opaque to Streamlit.
     # ------------------------------------------
 
     demand_legend_info = None
@@ -903,47 +931,87 @@ def build_explorer_map(
             how="left"
         )
 
-        # Reproject to projected CRS (EPSG:3123 - Philippine Zone 3) for accurate area calculation
-        barangay_map_gdf_proj = barangay_map_gdf.to_crs("EPSG:3123")
+        if demand_metric == "count":
 
-        # Calculate area in km² from projected geometry
-        barangay_map_gdf["area_km2"] = (
-            barangay_map_gdf_proj.geometry.area / 1_000_000
-        )
+            barangay_map_gdf["demand_value"] = (
+                barangay_map_gdf[demand_pop_col].fillna(0)
+            )
 
-        # Calculate population density
-        barangay_map_gdf["population_density"] = (
-            barangay_map_gdf[demand_pop_col] /
-            barangay_map_gdf["area_km2"]
-        ).fillna(0)
+            _demand_colormap = "Oranges"
+            _demand_unit = ""
+            _demand_legend_suffix = ""
 
-        # Create choropleth
-        folium.Choropleth(
-            geo_data=barangay_map_gdf.__geo_interface__,
-            name="Population Density",
-            data=barangay_map_gdf,
-            columns=["barangay_name", "population_density"],
-            key_on="feature.properties.barangay_name",
-            fill_color="YlGn",
-            fill_opacity=0.5,
-            line_opacity=0.2,
-            legend_name=f"{demand_pop_label} Density (per km²)",
-            nan_fill_color="white",
-            nan_fill_opacity=0.0
-        ).add_to(m)
+        else:
+
+            # Reproject to projected CRS (EPSG:3123 - Philippine Zone 3) for accurate area calculation
+            barangay_map_gdf_proj = barangay_map_gdf.to_crs("EPSG:3123")
+
+            # Calculate area in km² from projected geometry
+            barangay_map_gdf["area_km2"] = (
+                barangay_map_gdf_proj.geometry.area / 1_000_000
+            )
+
+            # Calculate population density
+            barangay_map_gdf["demand_value"] = (
+                barangay_map_gdf[demand_pop_col] /
+                barangay_map_gdf["area_km2"]
+            ).fillna(0)
+
+            _demand_colormap = "Greens"
+            _demand_unit = "/km²"
+            _demand_legend_suffix = " Density (per km²)"
 
         # Clipped to the 2nd-98th percentile, matching the
         # clip_percentiles convention used for the raster layers
-        # elsewhere in this app, so a handful of extreme-density
+        # elsewhere in this app, so a handful of extreme
         # barangays don't flatten the external legend's scale.
         _density_vmin, _density_vmax = (
-            barangay_map_gdf["population_density"]
+            barangay_map_gdf["demand_value"]
             .replace([np.inf, -np.inf], np.nan)
             .dropna()
             .quantile([0.02, 0.98])
         )
 
-        demand_legend_info = (_density_vmin, _density_vmax, demand_pop_label)
+        barangay_map_gdf["demand_display"] = (
+            barangay_map_gdf["demand_value"]
+            .map(lambda v: f"{v:,.1f}{_demand_unit}")
+        )
+
+        def _demand_fill_hex(value):
+            r, g, b, _a = value_to_rgba(
+                value,
+                _density_vmin,
+                _density_vmax,
+                colormap=_demand_colormap
+            )
+            return "#{:02X}{:02X}{:02X}".format(r, g, b)
+
+        barangay_map_gdf["fill_hex"] = (
+            barangay_map_gdf["demand_value"].apply(_demand_fill_hex)
+        )
+
+        folium.GeoJson(
+            barangay_map_gdf.__geo_interface__,
+            name="Population Layer",
+            style_function=lambda x: {
+                "fillColor": x["properties"]["fill_hex"],
+                "color": "#999999",
+                "weight": 0.5,
+                "fillOpacity": 0.6,
+            },
+            tooltip=folium.GeoJsonTooltip(
+                fields=["barangay_name", "demand_display"],
+                aliases=["Barangay:", f"{demand_pop_label}:"],
+                sticky=True
+            )
+        ).add_to(m)
+
+        demand_legend_info = (
+            _density_vmin,
+            _density_vmax,
+            f"{demand_pop_label}{_demand_legend_suffix}",
+            _demand_colormap
+        )
 
     # ------------------------------------------
     # CLIMATE OVERLAYS
@@ -1018,6 +1086,10 @@ def build_explorer_map(
                 )
             ]
 
+        if selected_source != "All" and "data_source" in df.columns:
+
+            df = df[df["data_source"] == selected_source]
+
         df = df.dropna(
             subset=[
                 layer["lat_col"],
@@ -1032,6 +1104,7 @@ def build_explorer_map(
         has_close = "close_hours" in df.columns
         has_district = layer["district_col"] in df.columns
         has_address = layer["address_col"] in df.columns
+        has_source = "data_source" in df.columns
 
         records = df.to_dict("records")
 
@@ -1071,6 +1144,9 @@ def build_explorer_map(
 
             if has_close and pd.notna(row_dict["close_hours"]):
                 popup_html += f"<br>Close: {row_dict['close_hours']}"
+
+            if has_source and pd.notna(row_dict["data_source"]):
+                popup_html += f"<br>Source: {row_dict['data_source']}"
 
             is_flood_risk = bool(row_dict.get("flood_risk", False))
 
@@ -1173,15 +1249,21 @@ def build_explorer_map(
 
 # Default values so variables always exist
 selected_category = "All"
+selected_health_source = "All"
 
 selected_childcare_category = "All"
+selected_childcare_source = "All"
 
 selected_school_sector = "All"
 selected_school_category = "All"
+selected_school_source = "All"
 
 selected_opc_category = "All"
+selected_opc_sector = "All"
+selected_opc_source = "All"
 
 selected_ltc_category = "All"
+selected_ltc_source = "All"
 
 # --------------------------------------------------
 # SIDEBAR
@@ -1211,7 +1293,7 @@ st.sidebar.subheader("Care Maps")
 # --------------------------------------------------
 
 if st.sidebar.button(
-    "Childcare Centers",
+    "Childcare Facilities",
     width='stretch'
 ):
     st.session_state.page = "Childcare Centers"
@@ -1231,6 +1313,16 @@ if st.session_state.page == "Childcare Centers":
             "Supervised Neighborhood Play"
         ],
         key="childcare_category"
+    )
+
+    selected_childcare_source = st.sidebar.radio(
+        "Data Source",
+        [
+            "All",
+            "Administrative data",
+            "Google API"
+        ],
+        key="childcare_source"
     )
 
 # --------------------------------------------------
@@ -1284,12 +1376,22 @@ if st.session_state.page == "Schools":
         key="school_category"
     )
 
+    selected_school_source = st.sidebar.radio(
+        "Data Source",
+        [
+            "All",
+            "Administrative data",
+            "Google API"
+        ],
+        key="school_source"
+    )
+
 # --------------------------------------------------
 # HEALTH CENTERS
 # --------------------------------------------------
 
 if st.sidebar.button(
-    "Health Centers Map",
+    "Health Centers",
     width='stretch'
 ):
     st.session_state.page = "Health Centers Map"
@@ -1313,12 +1415,22 @@ if st.session_state.page == "Health Centers Map":
         key="health_category"
     )
 
+    selected_health_source = st.sidebar.radio(
+        "Data Source",
+        [
+            "All",
+            "Administrative data",
+            "Google API"
+        ],
+        key="health_source"
+    )
+
 # --------------------------------------------------
 # OLDER PERSONS
 # --------------------------------------------------
 
 if st.sidebar.button(
-    "Older Persons Center Map",
+    "Older Persons Care Facilities",
     width='stretch'
 ):
     st.session_state.page = "Older Persons Center Map"
@@ -1328,14 +1440,43 @@ if st.session_state.page == "Older Persons Center Map":
 
     st.sidebar.markdown("##### Filters")
 
+    # Derived from the data (like Long-Term Care's category
+    # filter below) rather than hardcoded, since the eldercare
+    # dataset review reassigned every facility from the old
+    # generic "Nursing Care Center"/"Bahay Aruga" split to a
+    # dozen more specific facility-type categories — hardcoding
+    # them here would silently go stale the next time the
+    # underlying data changes.
+    opc_categories = sorted(
+        older_person_care["Category"]
+        .dropna()
+        .unique()
+    )
+
     selected_opc_category = st.sidebar.radio(
         "Facility Type",
+        ["All"] + list(opc_categories),
+        key="opc_category"
+    )
+
+    selected_opc_sector = st.sidebar.radio(
+        "Provider Type",
         [
             "All",
-            "Nursing Care Center",
-            "Bahay Aruga for Abandoned Elderly"
+            "Public",
+            "Private"
         ],
-        key="opc_category"
+        key="opc_sector"
+    )
+
+    selected_opc_source = st.sidebar.radio(
+        "Data Source",
+        [
+            "All",
+            "Administrative data",
+            "Google API"
+        ],
+        key="opc_source"
     )
 
 # --------------------------------------------------
@@ -1363,6 +1504,16 @@ if st.session_state.page == "Long-Term Care & Rehabilitation":
         "Facility Category",
         ["All"] + list(ltc_categories),
         key="ltc_category"
+    )
+
+    selected_ltc_source = st.sidebar.radio(
+        "Data Source",
+        [
+            "All",
+            "Administrative data",
+            "Google API"
+        ],
+        key="ltc_source"
     )
 
 # --------------------------------------------------
@@ -1511,15 +1662,18 @@ if page == "Care Services Explorer":
     st.sidebar.markdown("---")
     st.sidebar.markdown("## Older Persons")
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#055B52;font-size:22px;">●</span>
-        <b>Nursing Care Center</b><br>
-        <span style="color:#A6CFC1;font-size:22px;">●</span>
-        <b>Bahay Aruga</b>
-        """,
-        unsafe_allow_html=True
-    )
+    for cat in sorted(older_person_care["Category"].dropna().unique()):
+
+        st.sidebar.markdown(
+            f"""
+            <span style="
+                color:{opc_color(cat)};
+                font-size:22px;
+            ">●</span>
+            <b>{cat}</b>
+            """,
+            unsafe_allow_html=True
+        )
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("## Long-Term Care")
@@ -2111,6 +2265,19 @@ elif page == "Population Overview":
             age_group_definition["children_0_17"]
         ].sum(axis=1)
 
+        # Split out of children_0_17 rather than merged into it —
+        # both bands already exist as separate columns on
+        # population_age (see age_group_definition["children_0_17"]
+        # above), so this is just naming them for the indicator
+        # dropdown below, no new data.
+        barangay_df["children_0_5"] = (
+            barangay_df[age_group_definition["children_0_17"][0]]
+        )
+
+        barangay_df["children_6_17"] = (
+            barangay_df[age_group_definition["children_0_17"][1]]
+        )
+
         barangay_df["working_age"] = barangay_df[
             age_group_definition["working_age_18_59"]
         ].sum(axis=1)
@@ -2191,9 +2358,13 @@ elif page == "Population Overview":
         # as any other unmatched barangay on this map.
         # ---------------------------------------------------
 
+        # Per 1,000 children aged 0-5 specifically (not the
+        # combined 0-17 band), since domestic worker demand tracks
+        # early-childhood care needs far more closely than
+        # school-age children.
         barangay_df["domestic_workers_per_1000_children"] = (
             barangay_df["domestic_workers_total"]
-            / barangay_df["children_0_17"]
+            / barangay_df["children_0_5"]
             * 1000
         ).replace([np.inf, -np.inf], np.nan).round(1)
 
@@ -2217,13 +2388,15 @@ elif page == "Population Overview":
                 "Female Population",
                 "Male Population",
                 "Children Population (0-17)",
+                "Children Population (0-5)",
+                "Children Population (6-17)",
                 "Working Age Population",
                 "Older Persons Population",
                 "Children Share (%)",
                 "Older Persons Share (%)",
                 "Population Density",
                 "Domestic Workers Population",
-                "Domestic Workers per 1,000 Children (0-17)",
+                "Domestic Workers per 1,000 Children (0-5)",
                 "Domestic Workers per 1,000 Older Persons (60+)"
             ]
         )
@@ -2234,6 +2407,10 @@ elif page == "Population Overview":
             "Female Population": "Female",
             "Children Population (0-17)":
                 "children_0_17",
+            "Children Population (0-5)":
+                "children_0_5",
+            "Children Population (6-17)":
+                "children_6_17",
             "Working Age Population":
                 "working_age",
             "Older Persons Population":
@@ -2246,7 +2423,7 @@ elif page == "Population Overview":
                 "population_density",
             "Domestic Workers Population":
                 "domestic_workers_total",
-            "Domestic Workers per 1,000 Children (0-17)":
+            "Domestic Workers per 1,000 Children (0-5)":
                 "domestic_workers_per_1000_children",
             "Domestic Workers per 1,000 Older Persons (60+)":
                 "domestic_workers_per_1000_elderly"
@@ -2265,6 +2442,13 @@ elif page == "Population Overview":
                 "Combined count of residents aged 0–5 and 6–17, "
                 "the population segment most dependent on schools, "
                 "childcare, and pediatric health services.",
+            "Children Population (0-5)":
+                "Residents aged 0–5 (early childhood), the segment "
+                "most dependent on childcare and ECCD services.",
+            "Children Population (6-17)":
+                "Residents aged 6–17 (school age), the segment "
+                "most dependent on schools and pediatric health "
+                "services.",
             "Working Age Population":
                 "Residents aged 18–59, the segment that typically "
                 "supports the local economy and tax base.",
@@ -2285,13 +2469,12 @@ elif page == "Population Overview":
                 "and service delivery points.",
             "Domestic Workers Population":
                 "Registered domestic workers, by barangay (raw count). "
-                "Source: processed/domestic_workers.csv, a separate "
-                "dataset from the population/sex tables above.",
-            "Domestic Workers per 1,000 Children (0-17)":
+                "Source: processed/indicators/demographics_by_barangay.csv.",
+            "Domestic Workers per 1,000 Children (0-5)":
                 "Registered domestic workers per 1,000 children (aged "
-                "0-17) in the barangay, a rough proxy for how much "
+                "0-5) in the barangay, a rough proxy for how much "
                 "paid care support exists relative to the number of "
-                "children who may need it.",
+                "young children who may need it.",
             "Domestic Workers per 1,000 Older Persons (60+)":
                 "Registered domestic workers per 1,000 older persons "
                 "(60+) in the barangay, a rough proxy for how much "
@@ -2381,7 +2564,7 @@ elif page == "Population Overview":
                 "Children Share (%)": "%",
                 "Older Persons Share (%)": "%",
                 "Population Density": "people/km²",
-                "Domestic Workers per 1,000 Children (0-17)": "/1,000 children",
+                "Domestic Workers per 1,000 Children (0-5)": "/1,000 children",
                 "Domestic Workers per 1,000 Older Persons (60+)": "/1,000 older persons"
             }
 
@@ -3233,6 +3416,12 @@ if page == "Childcare Centers":
             )
         ]
 
+    if selected_childcare_source != "All":
+
+        cc = cc[
+            cc["data_source"] == selected_childcare_source
+        ]
+
     # --------------------------------------------------
     # COLOR CONVERSION
     # --------------------------------------------------
@@ -3317,7 +3506,8 @@ if page == "Childcare Centers":
         District: {District}<br/>
         Address: {Address}<br/>
         Open: {open_hours}<br/>
-        Close: {close_hours}
+        Close: {close_hours}<br/>
+        Source: {data_source}
         """,
         "style": {
             "backgroundColor": "white",
@@ -3557,11 +3747,31 @@ elif page == "Schools":
 
     st.divider()
 
-    school_age_population = (
+    # Preschool-relevant population is ages 3-5, not the full 0-5
+    # early-childhood band (ages 0-2 aren't school-age) — same
+    # age_3_5 column already used by the Schools accessibility
+    # ratio ("School Facilities per 1,000 Children (3-5)" in
+    # ACCESSIBILITY_RATIO_INDICATORS), pulled from `demographics`
+    # since population_age only carries the wider 0-5 band.
+    preschool_age_population = (
+        demographics["age_3_5"]
+        .sum()
+    )
+
+    school_age_6_17_population = (
         population_age[
             "6-17 (School Age Children)"
         ]
         .sum()
+    )
+
+    # Schools cover the full 3-17 range (Preschool through Senior
+    # High), not just the 6-17 band, so the KPI's primary value is
+    # the combined total with the two bands broken out in the
+    # caption rather than only showing 6-17.
+    school_age_population = (
+        preschool_age_population
+        + school_age_6_17_population
     )
 
     children_per_school = (
@@ -3573,8 +3783,12 @@ elif page == "Schools":
 
     kpi_card(
         c1,
-        "School-Age Population (6-17)",
-        f"{school_age_population:,.0f}"
+        "School-Age Population (3-17)",
+        f"{school_age_population:,.0f}",
+        caption=(
+            f"{preschool_age_population:,.0f} (3-5) · "
+            f"{school_age_6_17_population:,.0f} (6-17)"
+        )
     )
 
     kpi_card(
@@ -3645,6 +3859,12 @@ elif page == "Schools":
         # of those whenever "High school" is selected.
         sch = sch[
             sch["Category"] == selected_school_category
+        ]
+
+    if selected_school_source != "All":
+
+        sch = sch[
+            sch["data_source"] == selected_school_source
         ]
 
     # --------------------------------------------------
@@ -3762,7 +3982,8 @@ elif page == "Schools":
         District: {District}<br/>
         Address: {Address}<br/>
         Open: {open_hours}<br/>
-        Close: {close_hours}
+        Close: {close_hours}<br/>
+        Source: {data_source}
         """,
         "style": {
             "backgroundColor": "white",
@@ -4214,6 +4435,12 @@ elif page == "Health Centers Map":
             )
         ]
 
+    if selected_health_source != "All":
+
+        hc = hc[
+            hc["data_source"] == selected_health_source
+        ]
+
     # --------------------------------------------------
     # REMOVE MISSING COORDINATES
     # --------------------------------------------------
@@ -4339,7 +4566,8 @@ elif page == "Health Centers Map":
         Barangay: {barangay_display}<br/>
         Address: {Address}<br/>
         Open: {open_display}<br/>
-        Close: {close_display}
+        Close: {close_display}<br/>
+        Source: {data_source}
         """,
         "style": {
             "backgroundColor": "white",
@@ -4795,13 +5023,26 @@ elif page == "Older Persons Center Map":
 
     if selected_opc_category != "All":
 
+        # Exact match, not .str.contains(): several of the
+        # reassigned eldercare categories share substrings (e.g.
+        # "Residential Care Facility" is itself a substring of
+        # "Residential Care Facility and Home Healthcare Service
+        # Provider"), same rationale as the Schools category
+        # filter above.
         opc = opc[
-            opc["Category"]
-            .str.contains(
-                selected_opc_category,
-                case=False,
-                na=False
-            )
+            opc["Category"] == selected_opc_category
+        ]
+
+    if selected_opc_sector != "All":
+
+        opc = opc[
+            opc["Sector"] == selected_opc_sector
+        ]
+
+    if selected_opc_source != "All":
+
+        opc = opc[
+            opc["data_source"] == selected_opc_source
         ]
 
     # --------------------------------------------------
@@ -4837,6 +5078,24 @@ elif page == "Older Persons Center Map":
     else:
 
         opc["barangay_display"] = (
+            "Not available"
+        )
+
+    # Two facilities (CGNH Nursing Care Facility Services, Wellness
+    # Place & Care Homes) weren't part of the eldercare data review
+    # that assigned Sector (Public/Private) to every other facility,
+    # so they still carry no provider type — shown as "Not
+    # available" rather than a blank tooltip line.
+    if "Sector" in opc.columns:
+
+        opc["sector_display"] = (
+            opc["Sector"]
+            .fillna("Not available")
+        )
+
+    else:
+
+        opc["sector_display"] = (
             "Not available"
         )
 
@@ -4937,11 +5196,13 @@ elif page == "Older Persons Center Map":
         "html": """
         <b>{Name}</b><br/>
         Category: {Category}<br/>
+        Provider Type: {sector_display}<br/>
         District: {District}<br/>
         Barangay: {barangay_display}<br/>
         Address: {Address}<br/>
         Open: {open_display}<br/>
-        Close: {close_display}
+        Close: {close_display}<br/>
+        Source: {data_source}
         """,
         "style": {
             "backgroundColor": "white",
@@ -5059,8 +5320,19 @@ elif page == "Older Persons Center Map":
             fig
         )
 
-    seniors_barangay = pd.read_csv(
-        "processed/seniors_per_barangay.csv"
+    # seniors_registered here matches "Senior Citizens" from the
+    # old standalone processed/seniors_per_barangay.csv exactly
+    # (verified before that file was retired) — demographics is
+    # the single source of truth now, one less file to keep in
+    # sync.
+    seniors_barangay = demographics[
+        ["barangay", "district", "seniors_registered"]
+    ].rename(
+        columns={
+            "barangay": "Barangay",
+            "district": "District",
+            "seniors_registered": "Senior Citizens"
+        }
     )
 
     top_barangays = (
@@ -5524,6 +5796,12 @@ elif page == "Long-Term Care & Rehabilitation":
             )
         ]
 
+    if selected_ltc_source != "All":
+
+        ltc = ltc[
+            ltc["data_source"] == selected_ltc_source
+        ]
+
     # --------------------------------------------------
     # MISSING COORDINATES
     # --------------------------------------------------
@@ -5657,6 +5935,7 @@ elif page == "Long-Term Care & Rehabilitation":
         "html": """
         <b>{Name}</b><br/>
         Category: {Category}<br/>
+        Source: {data_source}<br/>
         District: {District}<br/>
         Barangay: {barangay_display}<br/>
         Address: {Address}<br/>
@@ -7072,7 +7351,7 @@ elif page == "Care Services Explorer":
     # FILTERS
     # --------------------------------------------------
 
-    col1, col2 = st.columns([2, 1])
+    col1, col2, col3 = st.columns([2, 1, 1])
 
     with col1:
 
@@ -7111,6 +7390,14 @@ elif page == "Care Services Explorer":
             selected_district_label
         ]
 
+    with col3:
+
+        selected_explorer_source = st.selectbox(
+            "Data Source",
+            ["All", "Administrative data", "Google API"],
+            key="explorer_source_filter"
+        )
+
     # Same population-group options as the Climate Layers page's
     # Population dropdown, so the two stay in sync conceptually
     # (kept as a separate dict rather than imported, matching how
@@ -7129,17 +7416,17 @@ elif page == "Care Services Explorer":
         "Domestic workers (registered)": ("domestic_workers", "domestic_workers_total")
     }
 
-    col_toggle1, col_toggle2 = st.columns(2)
+    col_toggle1, col_toggle2, col_toggle3 = st.columns(3)
 
     with col_toggle1:
         selected_density_label = st.selectbox(
-            "Population Density Layer",
+            "Population Layer",
             list(POP_DENSITY_OPTIONS.keys()),
             index=0,
             key="explorer_density_filter",
             help=(
-                "Overlay population density on the map to visualize demand for care services. "
-                "Darker areas indicate higher density for the selected population group."
+                "Overlay population density or raw count on the map to visualize demand for care services. "
+                "Darker areas indicate higher values for the selected population group."
             )
         )
 
@@ -7148,6 +7435,21 @@ elif page == "Care Services Explorer":
         )
 
     with col_toggle2:
+        selected_density_metric_label = st.radio(
+            "Show as",
+            ["Density (per km²)", "Raw Count"],
+            index=0,
+            key="explorer_density_metric",
+            horizontal=True
+        )
+
+        selected_density_metric = (
+            "density"
+            if selected_density_metric_label == "Density (per km²)"
+            else "count"
+        )
+
+    with col_toggle3:
         show_flood_risk_only = st.checkbox(
             "Show At-Flood-Risk Facilities Only",
             value=False,
@@ -7187,6 +7489,12 @@ elif page == "Care Services Explorer":
                     ]
                     .astype(int)
                     == selected_district
+                ]
+
+            if selected_explorer_source != "All" and "data_source" in layer_df.columns:
+
+                layer_df = layer_df[
+                    layer_df["data_source"] == selected_explorer_source
                 ]
 
             total_n = len(layer_df)
@@ -7248,20 +7556,22 @@ elif page == "Care Services Explorer":
         show_risk_rings=False,
         demand_pop_col=selected_density_col,
         demand_pop_label=selected_density_label,
-        demand_pop_source=selected_density_source
+        demand_pop_source=selected_density_source,
+        demand_metric=selected_density_metric,
+        selected_source=selected_explorer_source
     )
 
     if demand_legend_info is not None:
 
-        _density_vmin, _density_vmax, _density_label = demand_legend_info
+        _density_vmin, _density_vmax, _density_label, _density_colormap = demand_legend_info
 
         st.markdown(
             render_colormap_legend_html(
-                colormap="Greens",
+                colormap=_density_colormap,
                 vmin=_density_vmin,
                 vmax=_density_vmax,
-                unit="/km²",
-                label=f"{_density_label} Density"
+                unit="" if selected_density_metric == "count" else "/km²",
+                label=_density_label
             ),
             unsafe_allow_html=True
         )
@@ -7369,16 +7679,16 @@ elif page == "Accessibility Analysis":
 
     selected_ratio = ratio_indicators[selected_ratio_label]
 
-    tab1, tab2, tab3 = st.tabs(
+    tab_barangay, tab_district, tab_socio = st.tabs(
         [
-            "District Analysis",
             "Barangay Analysis",
+            "District Analysis",
             "Socio-Economic Indicators"
         ]
     )
 
 
-    with tab1:
+    with tab_district:
 
         # ==================================================
         # DISTRICT AGGREGATION (from demographics_by_barangay.csv)
@@ -7448,287 +7758,67 @@ elif page == "Accessibility Analysis":
         access = district_access
 
         # ==================================================
-        # DISTRICT GEOMETRY
-        # ==================================================
-
-        district_geo = gpd.read_file(
-            "processed/qc_districts.geojson"
-        )
-
-        district_geo["district"] = (
-            district_geo["district"]
-            .astype(str)
-            .str.extract(r"(\d+)")[0]
-            .astype(int)
-        )
-
-        district_geo = district_geo.rename(
-            columns={"district": "District"}
-        )
-
-        district_geo = district_geo.merge(
-            access[
-                [
-                    "District",
-                    "Facilities",
-                    "Total",
-                    "Facilities per 10k Population",
-                    "Care Demand per Facility",
-                    selected_ratio_label
-                ]
-            ],
-            on="District",
-            how="left"
-        )
-
-        # ==================================================
-        # MAP, driven by the selected facility-specific ratio
+        # DISTRICT SUMMARY TABLE, driven by the selected
+        # facility-specific ratio
+        #
+        # District-level choropleths and the barangay-level
+        # choropleth on the next tab were computed two different
+        # ways (a district-wide total vs. per-barangay values),
+        # so they read as inconsistent when shown as two separate
+        # colored maps next to each other — one is always a
+        # smoothed-out aggregate of the other. The reference GIS
+        # maps only ever color barangays (districts appear as an
+        # outline for context, not their own choropleth), so this
+        # tab shows the same district-level numbers as a ranked
+        # table instead of a second, disagreeing map.
         # ==================================================
 
         st.subheader(
-            f"District Map, {selected_ratio_label}"
+            f"District Summary, {selected_ratio_label}"
         )
 
         st.caption(
-            "Darker = lower ratio = fewer facilities of this "
-            "type relative to the population they serve "
-            "(more underserved)."
+            "Ranked by lowest ratio first (most underserved). "
+            "For a spatial view, see the Barangay Analysis tab — "
+            "district boundaries are drawn there for context."
         )
 
-        # ------------------------------------------
-        # Color ramp (PuRd-style) for the selected ratio
-        # ------------------------------------------
-
-        def purd_color(value, vmin, vmax):
-
-            if pd.isna(value) or vmax == vmin:
-                return [217, 217, 217, 120]
-
-            t = (value - vmin) / (vmax - vmin)
-            t = min(max(t, 0), 1)
-
-            # Inverted so darker shading marks the *lower* end of
-            # the ratio (fewer facilities per capita = more
-            # underserved), matching the "darker = underserved"
-            # convention used elsewhere in this dashboard (e.g.
-            # the Priority Investment Map) rather than "darker =
-            # better served".
-            t = 1 - t
-
-            # Light lavender -> deep magenta/purple, approximating
-            # the matplotlib "PuRd" colormap used by folium.Choropleth
-            stops = [
-                (0.00, (247, 244, 249)),
-                (0.25, (215, 181, 216)),
-                (0.50, (223, 101, 176)),
-                (0.75, (174, 1, 126)),
-                (1.00, (103, 0, 31))
+        district_table = (
+            district_access[
+                [
+                    "District",
+                    selected_ratio_label,
+                    "Facility_Type_Count",
+                    "Relevant_Population",
+                    "Total"
+                ]
             ]
-
-            for i in range(len(stops) - 1):
-
-                t0, c0 = stops[i]
-                t1, c1 = stops[i + 1]
-
-                if t0 <= t <= t1:
-
-                    local_t = (
-                        (t - t0) / (t1 - t0)
-                        if t1 > t0 else 0
-                    )
-
-                    r = c0[0] + (c1[0] - c0[0]) * local_t
-                    g = c0[1] + (c1[1] - c0[1]) * local_t
-                    b = c0[2] + (c1[2] - c0[2]) * local_t
-
-                    return [int(r), int(g), int(b), 200]
-
-            return [103, 0, 31, 200]
-
-        ratio_min = district_geo[selected_ratio_label].min()
-        ratio_max = district_geo[selected_ratio_label].max()
-
-        district_geo["fill_color"] = district_geo[selected_ratio_label].apply(
-            lambda v: purd_color(v, ratio_min, ratio_max)
+            .rename(
+                columns={
+                    "Facility_Type_Count": "Facilities (this type)",
+                    "Relevant_Population": "Relevant Population",
+                    "Total": "Total Population"
+                }
+            )
+            .dropna(subset=[selected_ratio_label])
+            .sort_values(
+                [selected_ratio_label, "Relevant Population"],
+                ascending=[True, False]
+            )
         )
 
-        district_geojson = json.loads(
-            district_geo.to_json()
-        )
-
-        # ------------------------------------------
-        # District label points (centroids)
-        # ------------------------------------------
-
-        district_labels = district_geo.copy()
-
-        # Reproject to a metric CRS before computing centroids,         # centroids computed directly on geographic (lat/lon)
-        # coordinates can be skewed for irregular polygons, since
-        # degrees of longitude aren't constant-width distances.
-        # Same EPSG:32651 (UTM Zone 51N) convention used for the
-        # area_km2 calculation on the Barangay Clusters page.
-        district_labels_metric = district_labels.to_crs("EPSG:32651")
-        district_centroids_metric = district_labels_metric.geometry.centroid
-
-        district_centroids = (
-            gpd.GeoSeries(district_centroids_metric, crs="EPSG:32651")
-            .to_crs(district_labels.crs)
-        )
-
-        district_labels["lon"] = district_centroids.x
-        district_labels["lat"] = district_centroids.y
-        district_labels["label"] = (
-            "District " + district_labels["District"].astype(str)
-        )
-
-        # ------------------------------------------
-        # VIEW STATE
-        # ------------------------------------------
-
-        view_state = pdk.ViewState(
-            latitude=center_lat,
-            longitude=center_lon,
-            zoom=11,
-            pitch=0,
-            min_zoom=11,
-            max_zoom=17,
-        )
-
-        # ------------------------------------------
-        # Barangay boundaries (background)
-        # ------------------------------------------
-
-        barangay_layer = pdk.Layer(
-            "GeoJsonLayer",
-            data=geo,
-            stroked=True,
-            filled=False,
-            get_line_color=[136, 136, 136],
-            line_width_min_pixels=0.5,
-            pickable=False
-        )
-
-        # ------------------------------------------
-        # District choropleth
-        # ------------------------------------------
-
-        district_layer = pdk.Layer(
-            "GeoJsonLayer",
-            data=district_geojson,
-            stroked=True,
-            filled=True,
-            get_fill_color="properties.fill_color",
-            get_line_color=[55, 65, 81],
-            line_width_min_pixels=2.5,
-            pickable=True,
-            auto_highlight=True
-        )
-
-        # ------------------------------------------
-        # District labels
-        # ------------------------------------------
-
-        label_layer = pdk.Layer(
-            "TextLayer",
-            data=district_labels,
-            get_position="[lon, lat]",
-            get_text="label",
-            get_size=14,
-            get_color=[17, 24, 39],
-            get_background_color=[255, 255, 255, 180],
-            background=True,
-            get_alignment_baseline=String("center"),
-            pickable=False
-        )
-
-        # ------------------------------------------
-        # TOOLTIP
-        # ------------------------------------------
-
-        tooltip = {
-            "html": f"""
-            <b>District {{District}}</b><br/>
-            {selected_ratio_label}: {{{selected_ratio_label}}}<br/>
-            Facilities (any type): {{Facilities}}<br/>
-            Population: {{Total}}
-            """,
-            "style": {
-                "backgroundColor": "white",
-                "color": "black",
-                "fontSize": "12px"
-            }
-        }
-
-        # ------------------------------------------
-        # MAP
-        # ------------------------------------------
-
-        deck = pdk.Deck(
-            layers=[
-                barangay_layer,
-                district_layer,
-                label_layer
-            ],
-            initial_view_state=view_state,
-            tooltip=tooltip,
-            map_style="light"
+        district_table["District"] = format_district(
+            district_table["District"]
         )
 
         with st.container(border=True, key="qcd-chart-55"):
-            st.markdown(
-                render_colormap_legend_html(
-                    colormap="Purples",
-                    vmin=ratio_min,
-                    vmax=ratio_max,
-                    unit="per 10,000 population",
-                    label=f"{selected_ratio_label} by District (darker = higher)"
-                ),
-                unsafe_allow_html=True
-            )
-            st.pydeck_chart(
-                deck,
-                height=700
+            st.dataframe(
+                district_table,
+                width="stretch",
+                hide_index=True
             )
 
         st.divider()
-
-        # ==================================================
-        # METHODOLOGY BOX
-        # ==================================================
-
-        with st.expander("How is Accessibility Measured?"):
-            st.markdown("""
-            **Accessibility Analysis** measures how well care services are distributed
-            across Quezon City by comparing facility availability to population needs,
-            across three tabs:
-
-            - **District Analysis** (this tab): a ranked bar chart and map of the
-              selected facility-per-1,000 ratio by district, plus a **Facility
-              Saturation Risk** scatter comparing population demand against facility
-              supply per district.
-            - **Barangay Analysis**: the same ratio at barangay level, including the
-              **Priority Barangays** table — barangays ranked by the lowest ratio,
-              weighted toward larger populations so the gap affects the most people.
-            - **Socio-Economic Indicators**: household, food insecurity, and housing
-              context (2024 CBMS) to flag barangays facing compounding need alongside
-              low accessibility.
-
-            **Key Metrics:**
-            - **Facilities per Population**: The number of care facilities per 1,000 people
-              in a selected care category (e.g., childcare, elder care)
-            - **Care Demand per Facility**: Population served per facility (total
-              population ÷ facility count), higher values indicate facilities are
-              serving larger populations
-
-            **How to Use This:**
-            - **Darker areas** on the District/Barangay maps mean fewer facilities
-              per capita relative to population, more underserved
-            - **Priority Barangays** (Barangay Analysis tab) show where investment
-              is most needed first
-            - **Policy action**: Target new facility placement in low-ratio areas, or
-              explore existing facilities' service capacity in well-served ones
-            """)
-
 
         # ==================================================
         # CHARTS (STACKED VERTICAL LAYOUT)
@@ -7845,7 +7935,7 @@ elif page == "Accessibility Analysis":
                 fig
             )
 
-    with tab2:
+    with tab_barangay:
 
         # ==================================================
         # BARANGAY DATA (from demographics_by_barangay.csv directly,         # facility counts, population, and pre-computed
@@ -7867,12 +7957,53 @@ elif page == "Accessibility Analysis":
         # SELECTED RATIO (already pre-computed in
         # demographics_by_barangay.csv; pulled in directly rather than
         # recalculated, since barangay-level ratios don't
-        # need re-aggregation the way district ones do)
+        # need re-aggregation the way district ones do).
+        #
+        # Falls back to computing it from facility_col/pop_col
+        # (same formula as the District tab) when ratio_col isn't
+        # actually a column in demographics_by_barangay.csv — e.g.
+        # "All Care Facilities per 1,000 PWDs" references
+        # "ratio_pwd_all", which the source CSV doesn't carry, and
+        # would otherwise crash this tab with a KeyError.
         # ==================================================
 
-        barangay_access[selected_ratio_label] = (
-            barangay_access[selected_ratio["ratio_col"]]
-        )
+        if selected_ratio["ratio_col"] in barangay_access.columns:
+
+            barangay_access[selected_ratio_label] = (
+                barangay_access[selected_ratio["ratio_col"]]
+            )
+
+        else:
+
+            # facility_col/pop_col name columns as they exist in
+            # demographics_by_barangay.csv, but the rename above
+            # already turned that CSV's "Total" (facility count)
+            # into "Facilities" and "pop_census" into "Total"
+            # (population) on this frame — so "Total" now means
+            # population here, not facilities. Remap before using
+            # either name, or this would silently divide by the
+            # wrong column for any indicator whose facility_col is
+            # "Total" (e.g. "All Care Facilities per 1,000 PWDs").
+            _fallback_col_renames = {
+                "Total": "Facilities",
+                "pop_census": "Total"
+            }
+
+            _facility_col = _fallback_col_renames.get(
+                selected_ratio["facility_col"],
+                selected_ratio["facility_col"]
+            )
+
+            _pop_col = _fallback_col_renames.get(
+                selected_ratio["pop_col"],
+                selected_ratio["pop_col"]
+            )
+
+            barangay_access[selected_ratio_label] = (
+                barangay_access[_facility_col]
+                / barangay_access[_pop_col]
+                * 1000
+            ).replace([np.inf, -np.inf], np.nan)
 
         # ==================================================
         # FACILITY SUPPLY METRICS (all facility types)
@@ -7899,36 +8030,6 @@ elif page == "Accessibility Analysis":
         barangay_access = (
             barangay_access
             .round(2)
-        )
-
-        # ==================================================
-        # CHILDREN / ELDERLY SERVING FACILITIES
-        # ==================================================
-        barangay_access["Child-Serving Facilities"] = (
-            barangay_access["Childcare"]
-            +
-            barangay_access["Schools"]
-        )
-
-        barangay_access["Older Persons-Serving Facilities"] = (
-            barangay_access["Older persons care"]
-            +
-            barangay_access["Long-term care and rehabilitation services"]
-        )
-
-        # Calculate Children and Older Persons per Facility ratios
-        barangay_access["Children per Facility"] = np.where(
-            barangay_access["Child-Serving Facilities"] != 0,
-            barangay_access["age_0_5"]
-            / barangay_access["Child-Serving Facilities"],
-            np.nan
-        )
-
-        barangay_access["Older Persons per Facility"] = np.where(
-            barangay_access["Older Persons-Serving Facilities"] != 0,
-            barangay_access["age_60plus"]
-            / barangay_access["Older Persons-Serving Facilities"],
-            np.nan
         )
 
         # ==================================================
@@ -7974,62 +8075,47 @@ elif page == "Accessibility Analysis":
         )
 
         st.caption(
-            "Darker = lower ratio = fewer facilities of this "
-            "type relative to the population they serve "
-            "(more underserved)."
+            "Lighter = fewer facilities of this type relative to "
+            "the population they serve (more underserved), darker "
+            "= more (better served). Barangays with zero facilities "
+            "of this type are shown in grey. District boundaries "
+            "are drawn in black for context."
         )
 
-        def purd_color(value, vmin, vmax):
+        # ------------------------------------------
+        # DISCRETE BINS (matches the reference GIS maps' style —
+        # see compute_quantile_bins / discrete_bin_color_and_label
+        # in functions.py for why these are computed from
+        # quantiles rather than hand-picked per indicator).
+        # ------------------------------------------
 
-            if pd.isna(value) or vmax == vmin:
-                return [217, 217, 217, 120]
+        bin_edges = compute_quantile_bins(
+            barangay_geo[selected_ratio_label],
+            n_bins=6
+        )
 
-            t = (value - vmin) / (vmax - vmin)
-            t = min(max(t, 0), 1)
+        _n_colors = max(len(bin_edges) - 1, 1)
+        _color_idx = np.linspace(0, len(QCD_SEQUENTIAL) - 1, _n_colors)
 
-            # Inverted so darker shading marks the *lower* end of
-            # the ratio (fewer facilities per capita = more
-            # underserved), matching the "darker = underserved"
-            # convention used elsewhere in this dashboard (e.g.
-            # the Priority Investment Map) rather than "darker =
-            # better served".
-            t = 1 - t
+        bin_colors = [
+            hex_to_rgb(QCD_SEQUENTIAL[int(round(i))])
+            for i in _color_idx
+        ]
 
-            # Light lavender -> deep magenta/purple, approximating
-            # the matplotlib "PuRd" colormap used by folium.Choropleth
-            stops = [
-                (0.00, (247, 244, 249)),
-                (0.25, (215, 181, 216)),
-                (0.50, (223, 101, 176)),
-                (0.75, (174, 1, 126)),
-                (1.00, (103, 0, 31))
-            ]
+        ZERO_FACILITY_COLOR = [225, 225, 225]
 
-            for i in range(len(stops) - 1):
+        def _bin_color_label(value):
+            return discrete_bin_color_and_label(
+                value, bin_edges, bin_colors, ZERO_FACILITY_COLOR
+            )
 
-                t0, c0 = stops[i]
-                t1, c1 = stops[i + 1]
+        _bin_results = barangay_geo[selected_ratio_label].apply(_bin_color_label)
 
-                if t0 <= t <= t1:
-
-                    local_t = (
-                        (t - t0) / (t1 - t0)
-                        if t1 > t0 else 0
-                    )
-
-                    r = c0[0] + (c1[0] - c0[0]) * local_t
-                    g = c0[1] + (c1[1] - c0[1]) * local_t
-                    b = c0[2] + (c1[2] - c0[2]) * local_t
-
-                    return [int(r), int(g), int(b), 215]
-
-            return [103, 0, 31, 215]
-
-        ratio_min = barangay_geo[selected_ratio_label].min()
-        ratio_max = barangay_geo[selected_ratio_label].max()
-
-        barangay_geo["fill_color"] = barangay_geo[selected_ratio_label].apply(
-            lambda v: purd_color(v, ratio_min, ratio_max)
+        barangay_geo["fill_color"] = _bin_results.apply(
+            lambda pair: pair[0] + [215]
+        )
+        barangay_geo["bin_label"] = _bin_results.apply(
+            lambda pair: pair[1]
         )
 
         barangay_choropleth_geojson = json.loads(
@@ -8065,6 +8151,19 @@ elif page == "Accessibility Analysis":
             auto_highlight=True
         )
 
+        # District boundaries drawn as a bold outline on top, for
+        # context only, not a second choropleth — matching the
+        # reference maps, which never color districts separately.
+        district_boundary_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=json.loads(district_map.to_json()),
+            stroked=True,
+            filled=False,
+            get_line_color=[20, 20, 20, 220],
+            line_width_min_pixels=2.5,
+            pickable=False
+        )
+
         # ------------------------------------------
         # TOOLTIP
         # ------------------------------------------
@@ -8072,7 +8171,7 @@ elif page == "Accessibility Analysis":
         tooltip = {
             "html": f"""
             <b>{{Barangay}}</b><br/>
-            {selected_ratio_label}: {{{selected_ratio_label}}}<br/>
+            {selected_ratio_label}: {{{selected_ratio_label}}} ({{bin_label}})<br/>
             Facilities (any type): {{Facilities}}<br/>
             Population: {{Total}}
             """,
@@ -8089,7 +8188,8 @@ elif page == "Accessibility Analysis":
 
         deck = pdk.Deck(
             layers=[
-                barangay_choropleth_layer
+                barangay_choropleth_layer,
+                district_boundary_layer
             ],
             initial_view_state=view_state,
             tooltip=tooltip,
@@ -8098,12 +8198,11 @@ elif page == "Accessibility Analysis":
 
         with st.container(border=True, key="qcd-chart-61"):
             st.markdown(
-                render_colormap_legend_html(
-                    colormap="Purples",
-                    vmin=ratio_min,
-                    vmax=ratio_max,
-                    unit="per 10,000 population",
-                    label=f"{selected_ratio_label} by Barangay (darker = higher)"
+                render_discrete_legend_html(
+                    list(zip(bin_edges_to_labels(bin_edges), bin_colors)),
+                    zero_label="No facility",
+                    zero_color=ZERO_FACILITY_COLOR,
+                    label=f"{selected_ratio_label} by Barangay"
                 ),
                 unsafe_allow_html=True
             )
@@ -8196,69 +8295,7 @@ elif page == "Accessibility Analysis":
                 width="stretch"
             )
 
-        st.divider()
-
-        # ==================================================
-        # DEMAND ANALYSIS BY VULNERABLE GROUPS
-        # ==================================================
-
-        # Charts for Children and Elderly
-        cpf_left, cpf_right = st.columns(2)
-
-        with cpf_left:
-
-            top_children = (
-                barangay_access
-                .dropna(subset=["Children per Facility"])
-                .sort_values("Children per Facility", ascending=False)
-                .head(15)
-            )
-
-            fig = px.bar(
-                top_children,
-                x="Children per Facility",
-                y="Barangay",
-                orientation="h",
-                color="Children per Facility",
-                color_continuous_scale="Purples",
-                title="Highest Children per Facility (0-5 yrs)"
-            )
-
-            fig.update_layout(height=450)
-
-            with st.container(border=True, key="qcd-chart-73"):
-                st.plotly_chart(
-                    fig
-                )
-
-        with cpf_right:
-
-            top_elderly = (
-                barangay_access
-                .dropna(subset=["Older Persons per Facility"])
-                .sort_values("Older Persons per Facility", ascending=False)
-                .head(15)
-            )
-
-            fig = px.bar(
-                top_elderly,
-                x="Older Persons per Facility",
-                y="Barangay",
-                orientation="h",
-                color="Older Persons per Facility",
-                color_continuous_scale="Purples",
-                title="Highest Senior Citizens per Facility (60+ yrs)"
-            )
-
-            fig.update_layout(height=450)
-
-            with st.container(border=True, key="qcd-chart-74"):
-                st.plotly_chart(
-                    fig
-                )
-
-
-    with tab3:
+    with tab_socio:
 
         st.markdown("""
         Contextual socio-economic indicators at the barangay
@@ -8304,35 +8341,12 @@ elif page == "Accessibility Analysis":
         # MAP DATA
         # ---------------------------------------------------
 
-        # Domestic worker counts live in a separate source
-        # (domestic_workers_barangay, from
-        # load_domestic_workers() in functions.py) rather than
-        # demographics_by_barangay.csv, so they're merged in here, once,
-        # before the indicator dict below, everything
-        # downstream (KPIs, map, top-15 table) just sees three
-        # more plain numeric columns and treats them exactly
-        # like every other socio-economic indicator.
+        # Domestic worker counts (domestic_workers_female/male/total)
+        # are already plain columns on `demographics` — see
+        # load_domestic_workers() in functions.py for how they got
+        # there — so no separate merge is needed here anymore, just
+        # the per-1,000 ratios below.
         demographics_with_dw = demographics.copy()
-
-        demographics_with_dw["barangay_key"] = (
-            demographics_with_dw["barangay"]
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
-
-        demographics_with_dw = demographics_with_dw.merge(
-            domestic_workers_barangay[
-                [
-                    "barangay_key",
-                    "domestic_workers_female",
-                    "domestic_workers_male",
-                    "domestic_workers_total"
-                ]
-            ],
-            on="barangay_key",
-            how="left"
-        )
 
         demographics_with_dw["domestic_workers_per_1000_total"] = (
             demographics_with_dw["domestic_workers_total"]
@@ -8439,7 +8453,7 @@ elif page == "Accessibility Analysis":
                     "Total registered domestic workers, by "
                     "barangay (raw count, not a rate). "
                     "Source: processed/indicators/"
-                    "domestic_workers.csv."
+                    "demographics_by_barangay.csv."
                 )
             },
             "Female Domestic Workers (Count)": {
@@ -8456,29 +8470,6 @@ elif page == "Accessibility Analysis":
                     "barangay (raw count, not a rate)."
                 )
             },
-            "Population Distribution vs. Total Domestic Workers": {
-                "col": "domestic_workers_per_1000_total",
-                "description": (
-                    "Registered domestic workers per 1,000 "
-                    "residents, by barangay. Source: "
-                    "processed/indicators/domestic_workers.csv "
-                    "(separate from the CBMS indicators below)."
-                )
-            },
-            "Population Distribution vs. Female Domestic Workers": {
-                "col": "domestic_workers_per_1000_female",
-                "description": (
-                    "Registered female domestic workers per "
-                    "1,000 female residents, by barangay."
-                )
-            },
-            "Population Distribution vs. Male Domestic Workers": {
-                "col": "domestic_workers_per_1000_male",
-                "description": (
-                    "Registered male domestic workers per "
-                    "1,000 male residents, by barangay."
-                )
-            }
         }
 
         selected_socio_label = st.selectbox(
@@ -8697,65 +8688,16 @@ elif page == "Care Planning & Investment Priorities":
     )
 
     # ==================================================
-    # LOAD AND MERGE PWD DATA
+    # PWD DATA
     # ==================================================
-    # PWDs are in a separate CSV, need to merge them in
-    pwd_loaded = False
-
-    # Try multiple possible file paths
-    possible_paths = [
-        "processed/persons_with_disability_by_barangay.csv",
-    ]
-
-    for pwd_path in possible_paths:
-        try:
-            pwd_data = pd.read_csv(pwd_path)
-
-            # Clean PWD column: remove commas and convert to numeric
-            if "PWDs" in pwd_data.columns:
-                pwd_data["PWDs"] = (
-                    pwd_data["PWDs"]
-                    .astype(str)
-                    .str.replace(",", "")
-                    .apply(pd.to_numeric, errors="coerce")
-                    .fillna(0)
-                    .astype(int)
-                )
-
-                # Standardize barangay names: strip whitespace, uppercase for matching
-                pwd_data["Barangay_Clean"] = pwd_data["Barangay"].str.strip().str.upper()
-                barangay_access["Barangay_Clean"] = barangay_access["Barangay"].str.strip().str.upper()
-
-                # Merge PWD data with main dataframe using cleaned names
-                barangay_access = barangay_access.merge(
-                    pwd_data[["Barangay_Clean", "PWDs"]].rename(
-                        columns={"PWDs": "Persons with Disabilities"}
-                    ),
-                    on="Barangay_Clean",
-                    how="left"
-                )
-
-                # Fill any missing PWD values with 0
-                barangay_access["Persons with Disabilities"] = (
-                    barangay_access["Persons with Disabilities"].fillna(0).astype(int)
-                )
-                barangay_access = barangay_access.drop("Barangay_Clean", axis=1)
-
-                pwd_loaded = True
-                break
-        except FileNotFoundError:
-            continue
-        except Exception as e:
-            continue
-
-    # If PWD data wasn't loaded from any path, set to 0
-    if not pwd_loaded:
-        barangay_access["Persons with Disabilities"] = 0
-        st.error(
-            "WARNING: Persons with disabilities data file not found. Checked paths: "
-            + ", ".join(possible_paths)
-            + ". Disability priority rankings will be incomplete."
-        )
+    # pwd_registered (verified identical to the old standalone
+    # processed/persons_with_disability_by_barangay.csv's "PWDs"
+    # column before that file was retired) is already on
+    # `demographics`/barangay_access — no separate file or merge
+    # needed.
+    barangay_access["Persons with Disabilities"] = (
+        barangay_access["pwd_registered"]
+    )
 
     # ==================================================
     # FACILITY TYPES - SEPARATED BY CARE DOMAIN
@@ -10247,7 +10189,8 @@ elif page == "Climate Layers":
         "Older persons care": older_person_care,
         "Long-term care & rehabilitation": long_term_care,
         "Action offices": action_offices,
-        "Migration resource centers": migration_centers
+        "Migration resource centers": migration_centers,
+        "Bus stops": bus_stops
     }
 
     # Each value is (source, column): "demographics" columns are
@@ -10291,7 +10234,7 @@ elif page == "Climate Layers":
     # rather than as a page-wide filter. The population
     # choropleth map itself still renders in its usual place
     # further down the page.
-    fac_filter_col, _ = st.columns(2)
+    fac_filter_col, fac_source_col = st.columns(2)
 
     with fac_filter_col:
         selected_fac_label = st.selectbox(
@@ -10309,6 +10252,15 @@ elif page == "Climate Layers":
                 key="climate_school_subcat_filter"
             )
 
+    with fac_source_col:
+        selected_climate_fac_source = st.radio(
+            "Data Source",
+            ["All", "Administrative data", "Google API"],
+            index=0,
+            key="climate_fac_source",
+            horizontal=True
+        )
+
     selected_fac_df = CLIMATE_FACILITY_OPTIONS[selected_fac_label]
 
     _school_cats = SCHOOL_SUBCATEGORY_OPTIONS[selected_school_subcat]
@@ -10316,6 +10268,11 @@ elif page == "Climate Layers":
     if selected_fac_label == "Schools" and _school_cats is not None:
         selected_fac_df = selected_fac_df[
             selected_fac_df["Category"].isin(_school_cats)
+        ]
+
+    if selected_climate_fac_source != "All" and "data_source" in selected_fac_df.columns:
+        selected_fac_df = selected_fac_df[
+            selected_fac_df["data_source"] == selected_climate_fac_source
         ]
 
     # --------------------------------------------------
@@ -10338,7 +10295,7 @@ elif page == "Climate Layers":
 
     _FAC_TOOLTIP_COLS = [
         "Name", "Category", "District", "Address",
-        "open_hours", "close_hours"
+        "open_hours", "close_hours", "data_source", "bus_route"
     ]
 
     facility_points = selected_fac_df[
@@ -10348,11 +10305,30 @@ elif page == "Climate Layers":
 
     for col in _FAC_TOOLTIP_COLS:
         if col in facility_points.columns:
+            # str(v).strip().lower() == "nan" catches columns that
+            # were cast to string dtype upstream (see clean_dataframe
+            # in functions.py), which turns a real NaN into the
+            # literal text "nan" rather than leaving it as a value
+            # pd.isna() would still catch here.
             facility_points[col] = facility_points[col].map(
-                lambda v: "Not available" if pd.isna(v) else str(v)
+                lambda v: (
+                    "Not available"
+                    if pd.isna(v) or str(v).strip().lower() == "nan"
+                    else str(v)
+                )
             )
         else:
             facility_points[col] = "Not available"
+
+    # Bus stops have no Category value in the source data — the
+    # bus route number/name is the closer equivalent, so it fills
+    # in for Category on this one facility type rather than
+    # showing "Not available" for every bus stop.
+    if "bus_route" in facility_points.columns:
+        facility_points["Category"] = facility_points["Category"].where(
+            facility_points["Category"] != "Not available",
+            "Bus Route " + facility_points["bus_route"]
+        )
 
     facility_points["Line1"] = (
         facility_points["Category"] + " · District " + facility_points["District"]
@@ -10362,6 +10338,7 @@ elif page == "Climate Layers":
         "Open " + facility_points["open_hours"]
         + " – Close " + facility_points["close_hours"]
     )
+    facility_points["Line4"] = "Source: " + facility_points["data_source"]
 
     # Light purple, the same "generic facility" color used for
     # markers elsewhere in the app (e.g. Migration Resource Centers,
@@ -10391,7 +10368,8 @@ elif page == "Climate Layers":
     <b>{Name}</b><br/>
     {Line1}<br/>
     {Line2}<br/>
-    {Line3}
+    {Line3}<br/>
+    {Line4}
     """
 
     FACILITY_TOOLTIP_STYLE = {
@@ -10564,12 +10542,30 @@ elif page == "Climate Layers":
     flood_tab, lst_tab, veg_tab = st.tabs(list(climate_layers.keys()))
 
     with flood_tab:
-        selected_pop_label = st.selectbox(
-            "Population Density Layer",
-            list(CLIMATE_POP_OPTIONS.keys()),
-            index=0,
-            key="climate_pop_filter"
-        )
+        _pop_filter_col, _pop_metric_col = st.columns(2)
+
+        with _pop_filter_col:
+            selected_pop_label = st.selectbox(
+                "Population Layer",
+                list(CLIMATE_POP_OPTIONS.keys()),
+                index=0,
+                key="climate_pop_filter"
+            )
+
+        with _pop_metric_col:
+            selected_pop_metric_label = st.radio(
+                "Show as",
+                ["Density (per km²)", "Raw Count"],
+                index=0,
+                key="climate_pop_metric",
+                horizontal=True
+            )
+
+            selected_pop_metric = (
+                "density"
+                if selected_pop_metric_label == "Density (per km²)"
+                else "count"
+            )
 
         selected_pop_source, selected_pop_col = (
             CLIMATE_POP_OPTIONS[selected_pop_label]
@@ -10626,30 +10622,47 @@ elif page == "Climate Layers":
             how="left"
         )
 
-        # Same area/density calculation as the Care Services
-        # Explorer's Population Density Layer (build_explorer_map
-        # in app.py): reproject to EPSG:3123 for accurate area,
-        # then count / area_km2.
-        clim_barangay_proj = clim_barangay.to_crs("EPSG:3123")
+        if selected_pop_metric == "count":
 
-        clim_barangay["area_km2"] = (
-            clim_barangay_proj.geometry.area / 1_000_000
-        )
+            # Raw population count for the selected group, no
+            # area division — Oranges ramp so it reads as visibly
+            # distinct from the density view and from the flood
+            # layer's blue (rather than competing with it, as an
+            # orange-adjacent green would).
+            clim_barangay["population_metric"] = clim_barangay[selected_pop_col]
 
-        clim_barangay["population_density"] = (
-            clim_barangay[selected_pop_col]
-            / clim_barangay["area_km2"]
-        )
+            _pop_colormap = "Oranges"
+            _pop_unit = ""
 
-        # CONTINUOUS scale (value_to_rgba + the "Greens" colormap
-        # from functions.py), not discrete quantile bins. Density
-        # is heavily right-skewed here, same rationale as the
-        # other choropleths on this page, so the color range is
-        # clipped to the 2nd-98th percentile rather than the raw
-        # min/max, to keep a handful of extreme barangays from
-        # flattening everyone else to the light end.
+        else:
+
+            # Same area/density calculation as the Care Services
+            # Explorer's Population Density Layer (build_explorer_map
+            # in app.py): reproject to EPSG:3123 for accurate area,
+            # then count / area_km2.
+            clim_barangay_proj = clim_barangay.to_crs("EPSG:3123")
+
+            clim_barangay["area_km2"] = (
+                clim_barangay_proj.geometry.area / 1_000_000
+            )
+
+            clim_barangay["population_metric"] = (
+                clim_barangay[selected_pop_col]
+                / clim_barangay["area_km2"]
+            )
+
+            _pop_colormap = "Greens"
+            _pop_unit = "/km²"
+
+        # CONTINUOUS scale (value_to_rgba + the Greens/Oranges
+        # colormap from functions.py), not discrete quantile bins.
+        # Density and count are both heavily right-skewed here,
+        # same rationale as the other choropleths on this page, so
+        # the color range is clipped to the 2nd-98th percentile
+        # rather than the raw min/max, to keep a handful of extreme
+        # barangays from flattening everyone else to the light end.
         pop_values = (
-            clim_barangay["population_density"]
+            clim_barangay["population_metric"]
             .replace([np.inf, -np.inf], np.nan)
             .dropna()
         )
@@ -10665,19 +10678,19 @@ elif page == "Climate Layers":
                 value,
                 pop_vmin,
                 pop_vmax,
-                colormap="Greens",
+                colormap=_pop_colormap,
                 alpha=190
             )
 
         clim_barangay["fill_color"] = (
-            clim_barangay["population_density"].apply(pop_color_for_value)
+            clim_barangay["population_metric"].apply(pop_color_for_value)
         )
 
         # Pre-formatted tooltip value (raw column may be NaN for
         # unmatched polygons, which would render as a blank).
         clim_barangay["pop_display"] = (
-            clim_barangay["population_density"]
-            .map(lambda v: f"{v:,.1f}/km²" if pd.notna(v) else "No data")
+            clim_barangay["population_metric"]
+            .map(lambda v: f"{v:,.1f}{_pop_unit}" if pd.notna(v) else "No data")
         )
 
         clim_barangay["district_display"] = (
@@ -10690,10 +10703,15 @@ elif page == "Climate Layers":
         # template works for both layers in the deck built below.
         clim_barangay["Name"] = clim_barangay["barangay_name"]
         clim_barangay["Line1"] = "District " + clim_barangay["district_display"]
+        _pop_line2_label = (
+            "count" if selected_pop_metric == "count" else "density"
+        )
+
         clim_barangay["Line2"] = (
-            f"{selected_pop_label} density: " + clim_barangay["pop_display"]
+            f"{selected_pop_label} {_pop_line2_label}: " + clim_barangay["pop_display"]
         )
         clim_barangay["Line3"] = ""
+        clim_barangay["Line4"] = ""
 
         clim_geojson = json.loads(
             clim_barangay.to_json()
@@ -10828,11 +10846,15 @@ elif page == "Climate Layers":
             st.markdown(legend_html, unsafe_allow_html=True)
             st.markdown(
                 render_colormap_legend_html(
-                    colormap="Greens",
+                    colormap=_pop_colormap,
                     vmin=pop_vmin,
                     vmax=pop_vmax,
-                    unit="/km²",
-                    label=f"{selected_pop_label} Density"
+                    unit=_pop_unit,
+                    label=(
+                        f"{selected_pop_label} Density"
+                        if selected_pop_metric == "density"
+                        else f"{selected_pop_label} (Count)"
+                    )
                 ),
                 unsafe_allow_html=True
             )
