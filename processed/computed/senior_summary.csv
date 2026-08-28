@@ -1,0 +1,6 @@
+metric,value,source
+registered_seniors,397630,OSCA registration (demographics_by_barangay.csv)
+female,136479,2020 Census
+male,98196,2020 Census
+age_60_79,213384,2020 Census
+age_80_plus,21291,2020 Census
