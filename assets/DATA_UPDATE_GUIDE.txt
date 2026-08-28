@@ -1,0 +1,171 @@
+UPDATING THE DASHBOARD'S DATA
+==============================
+
+The dashboard reads from CSV and GeoJSON files under processed/. That
+folder is organized into three parts:
+
+  - processed/editable/  -- the files to update when new data becomes
+    available.
+  - processed/reference/ -- fixed data (boundaries, climate rasters,
+    zoning). These files are not edited by hand.
+  - processed/computed/  -- derived figures that are not edited either.
+    The application computes these live from the files in editable/
+    every time it loads, so they always reflect the current source
+    data. This folder holds a verification snapshot only -- see
+    processed/computed/README.txt and assets/COMPUTED_DATA_FORMULAS.txt
+    for the regeneration procedure and the formula behind each figure.
+
+
+WHAT'S IN processed/editable/
+------------------------------
+
+care_supply_facilities.csv
+    Update when a facility is added, removed, or its details change,
+    covering every care/service type: childcare, schools, health
+    centers, eldercare, long-term care, action offices, migration
+    centers, and bus stops. Facility counts and every accessibility
+    ratio are computed live from this file -- see the column reference
+    below.
+
+demographics_by_barangay.csv
+    Update when new census or registration figures are published:
+    population, seniors, PWD, CBMS, and migrant/domestic worker counts.
+    One row per barangay; the file must contain exactly 142 rows.
+
+demand_city_context.csv
+    City-wide senior and PWD breakdowns from OSCA/PDAO administrative
+    tables. These figures are independently sourced and are not expected
+    to match sums derived from the barangay file; see the file's own
+    "note" column for the basis of each figure.
+
+seniors_per_year.csv
+    Cumulative senior registrations, one row per year. Add a new row
+    each year; this is the dataset's only historical time series and
+    cannot be derived from any other file.
+
+health_centers_and_doctors_per_district.csv
+    Per-district health center and doctor counts.
+
+
+THE TWO FILES UPDATED MOST OFTEN
+-----------------------------------
+
+New facility opened, closed, or changed:
+  -> Update processed/editable/care_supply_facilities.csv. One row per
+     facility, with name, address, barangay, district, category, and
+     coordinates.
+
+New population, senior, PWD, or CBMS figures published:
+  -> Update processed/editable/demographics_by_barangay.csv. One row per
+     barangay.
+
+See processed/editable/README.txt for a summary of every file in that
+folder.
+
+
+HOW TO EDIT A FILE
+---------------------
+
+- Open the file in Excel, Google Sheets, or Numbers.
+- Add a new row for a new facility or barangay, edit an existing row,
+  or delete a row to remove one.
+- Save the file back as a CSV, not a spreadsheet workbook format --
+  see rule 4 below for the exact save format. Do not save as .xlsx or
+  .xls; the dashboard only reads .csv files.
+- Keep the file name exactly as it is now, and keep the file inside
+  processed/editable/. A renamed or moved file will not be found.
+- Leave the column headers in row 1 untouched -- see rule 1 below.
+
+
+RULES THAT KEEP THE DASHBOARD FROM BREAKING
+---------------------------------------------
+
+1. Do not rename columns. The application reads files by exact column
+   name. New columns may be added; existing ones should not be renamed
+   or removed without also updating the code that reads them.
+
+2. Barangay and district names must match exactly the spelling used in
+   processed/reference/qc_barangays.geojson (the barangay_name field) or
+   processed/reference/qc_districts.geojson, or that row will not join
+   to the map. When in doubt, copy the spelling from an existing row in
+   demographics_by_barangay.csv for that barangay.
+
+3. demographics_by_barangay.csv must contain exactly 142 rows -- Quezon
+   City's 142 barangays, no more and no less.
+
+4. Keep the CSV encoding as UTF-8. Barangays containing an n-tilde
+   character (e.g. "Doña Aurora", "Sto. Niño") will display incorrectly
+   otherwise. When editing in Excel, use "Save As -> CSV UTF-8", not
+   plain "CSV".
+
+5. Do not hand-edit processed/reference/. Those files are boundaries and
+   satellite-derived rasters; updating them requires re-running the
+   GIS/data pipeline that produced them.
+
+
+COLUMN REFERENCE FOR demographics_by_barangay.csv
+----------------------------------------------------
+
+Sourced from the demand-side data pipeline and its accompanying
+codebook.
+
+  Identifiers
+    psgc_code    Official PSA geographic identifier            [PSA]
+    barangay     Canonical barangay name (must match             [PSA 2020 CPH]
+                 qc_barangays.geojson's barangay_name)
+    district     Congressional district, 1-6                    [PSA]
+    area_km2     Barangay land area, computed from barangay
+                 polygons (EPSG:3123)
+
+  Demographic (2020 Census, PSA CPH Table 30)
+  -- every age band also has _m/_f sex-split columns:
+    pop_census, pop_male, pop_female  = sum of all single-year ages
+    age_0_2                           = sum of ages 0, 1, 2
+    age_3_5                           = sum of ages 3, 4, 5
+    age_0_5                           = age_0_2 + age_3_5
+    age_6_17                          = sum of ages 6-17
+    age_18_59                         = sum of ages 18-59
+    age_60plus                        = sum of ages 60 and over
+    age_80plus                        = sum of ages 80 and over
+    age_0_4                           = sum of ages 0-4
+    women_15_49                       = sum of female ages 15-49
+    children_0_5_childcare            = alias of age_0_5
+    children_0_17_total               = age_0_2 + age_3_5 + age_6_17
+    pop_density_km2                   = pop_census / area_km2
+
+  Administrative care groups (PDAO/OSCA registries)
+    seniors_registered          Direct from OSCA/PDAO registry.
+                                 A cumulative administrative count,
+                                 distinct from age_60plus by design.
+    seniors_density_km2         = seniors_registered / area_km2
+    seniors_per_1000_census     = seniors_registered / pop_census * 1000
+    pwd_registered               Direct from PDAO registry
+    pwd_density_km2             = pwd_registered / area_km2
+    pwd_per_1000_census         = pwd_registered / pop_census * 1000
+    disability_prevalence_rate_pct = pwd_registered / pop_census * 100
+
+  Socio-economic (census-derived)
+    sex_ratio_m_per_100f     = pop_male / pop_female * 100
+    share_women_18_59_pct    = age_18_59_f / pop_census * 100
+    child_woman_ratio        = age_0_4 / women_15_49 * 1000
+
+  Socio-economic (CBMS 2024)
+    See assets/COMPUTED_DATA_FORMULAS.txt for the full formula table.
+
+  Migrant workers (QC registry)
+    migrant_workers_total, migrant_workers_male, migrant_workers_female
+      A small number of barangays may be blank (not zero) where the
+      source registry recorded no entry. Blank values should not be
+      filled with 0.
+
+  Barangay naming
+    "Doña Aurora" (with n-tilde) is the canonical spelling used across
+    every output, matching the join key used by the boundary/GIS layer.
+
+
+AFTER UPDATING A FILE
+------------------------
+
+Restart the Streamlit application (or wait for it to redeploy) so it
+picks up the new data -- file contents are cached in memory while the
+application is running.

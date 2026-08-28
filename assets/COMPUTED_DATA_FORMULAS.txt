@@ -1,0 +1,197 @@
+COMPUTED DATA -- FORMULAS REFERENCE
+=====================================
+
+This document describes every value in processed/computed/: what it
+means, exactly how it is calculated, and which source file it comes
+from. Every number in processed/computed/*.csv traces back to a formula
+listed here.
+
+Each formula is implemented as a function in functions.py, so the
+formula documented here and the code that produces it are the same
+thing.
+
+
+childcare_summary.csv
+------------------------
+
+child_development_centers -- compute_childcare_summary()
+
+Count of rows in care_supply_facilities.csv where major_division equals
+"Childcare", the facility has valid coordinates, and category contains
+"Child Development" (case-insensitive) -- the same match used to color
+Child Development Center markers on the map.
+
+This figure counts facilities present in care_supply_facilities.csv with
+mappable coordinates. It is not necessarily identical to any external
+DSWD licensing roster.
+
+
+senior_summary.csv
+---------------------
+
+compute_senior_summary() draws on two different sources, one row each,
+identified in the "source" column:
+
+  metric               formula                                source
+  ------               -------                                ------
+  registered_seniors   sum(seniors_registered) across all     OSCA administrative
+                        barangays                              registration
+                                                                (demographics_by_barangay.csv)
+  female                sum(age_60plus_f)                     2020 Census
+                                                                (demographics_by_barangay.csv)
+  male                  sum(age_60plus_m)                     2020 Census
+  age_60_79             sum(age_60plus) - sum(age_80plus)      2020 Census
+  age_80_plus            sum(age_80plus)                       2020 Census
+
+These figures do not sum to the same total by design. OSCA's registry is
+cumulative -- a senior who has since died or moved away remains on the
+count -- and reflects a different reference year than the 2020 Census.
+The two figures are complementary, not reconcilable: registration data
+describes administrative enrollment, while census data describes the
+resident population. See the note on the dashboard's Older Persons &
+Senior Citizens page for the same explanation shown to dashboard users.
+
+
+demand_district_context.csv
+-------------------------------
+
+load_demand_context() -- district, seniors_registered, and pwd_registered
+are read directly from demographics_by_district.csv, ensuring the two
+figures always agree.
+
+demand_city_context.csv is a separate, manually-maintained file. It
+contains city-level-only administrative data (OSCA seniors-with
+-disability overlap, PWD counts by disability type) with no barangay or
+district breakdown to derive it from.
+
+
+facility_counts_and_ratios.csv
+----------------------------------
+
+FACILITY COUNTS -- compute_facility_counts_by_barangay(). Counts rows in
+care_supply_facilities.csv by barangay, using the file's own "barangay"
+column rather than the coordinate-filtered dataframes used for map
+rendering, since a facility's barangay assignment does not depend on
+whether it has mappable coordinates.
+
+  Column                                          major_division counted
+  ------                                          -----------------------
+  Childcare                                       Childcare
+  Health centers                                  Health centers
+  Long-term care and rehabilitation services       Long-term care and rehabilitation services
+  Older persons care                              Older persons care
+  Quezon City satellite offices for services       Quezon City satellite offices for services
+  Schools                                          Schools, deduplicated by (barangay, name) --
+                                                    see note below
+  Trainings                                        No corresponding division in care_supply_facilities.csv; fixed at 0
+  Bus stops                                        See "Bus stop counts" below
+  Total                                            Sum of the above, excluding Bus stops
+
+Schools are recorded in care_supply_facilities.csv as one row per grade
+level offered -- a school running Preschool, Elementary, and Junior High
+programs appears as three rows sharing the same name and location.
+Counting rows directly would count that school three times, so School
+rows are deduplicated by (barangay, name) before counting, giving one
+count per physical school regardless of how many grade levels it offers.
+
+RATIOS -- compute_facility_ratios(). For every entry in
+ACCESSIBILITY_RATIO_INDICATORS (functions.py):
+
+    ratio_col = facility_count[facility_col] / demographics[pop_col] * 1000
+
+ACCESSIBILITY_RATIO_INDICATORS is the single source of truth for every
+ratio's formula. The table below is a readable rendering of that
+definition.
+
+  ratio_col                          facility_col                     pop_col
+  ---------                          ------------                     -------
+  ratio_childcare (+_f/_m)           Childcare                        age_0_5 (+_f/_m)
+  ratio_school_3_5 (+_f/_m)          Schools                          age_3_5 (+_f/_m)
+  ratio_school_6_17 (+_f/_m)         Schools                          age_6_17 (+_f/_m)
+  ratio_old_60 (+_f/_m)              Older persons care               age_60plus (+_f/_m)
+  ratio_old_80 (+_f/_m)              Older persons care               age_80plus (+_f/_m)
+  ratio_pwd                          Long-term care and               pwd_registered
+                                      rehabilitation services
+  ratio_pop_health (+_f/_m)          Health centers                   pop_census (+ pop_female/pop_male)
+  ratio_child_health (+_f/_m)        Health centers                   age_0_5 (+_f/_m)
+  ratio_old_health (+_f/_m)          Health centers                   age_60plus (+_f/_m)
+  ratio_pwd_health                   Health centers                   pwd_registered
+  ratio_pwd_all                      Total                            pwd_registered
+  ratio_bus_stops (+_f/_m)           Bus stops                        pop_census (+ pop_female/pop_male)
+
+
+Bus stop counts
+-------------------
+
+compute_bus_stop_counts_by_barangay(). Uses care_supply_facilities.csv's
+own "barangay" value for a bus stop where one is present. For any row
+without one, barangay is assigned via a point-in-polygon spatial join of
+its coordinates against qc_barangays.geojson.
+
+
+demographics_by_district.csv
+--------------------------------
+
+compute_demographics_by_district(). Aggregates
+demographics_by_barangay.csv to district level using two methods,
+depending on the column:
+
+  1. Summable columns (population, age bands, seniors/PWD registrations,
+     migrant workers, CBMS coverage) are summed directly across each
+     district's barangays.
+
+  2. Derived columns (density, ratios, rates, shares, CBMS percentages)
+     are recomputed from the district-level sums, not averaged from
+     barangay-level values.
+
+CBMS indicators are computed under two weighting schemes:
+_hhw (weighted by cbms_responding_hh, so each barangay contributes in
+proportion to the amount of CBMS data it reported) and _popw (weighted
+by pop_census, so each resident contributes equally, consistent with
+every other derived variable in this table).
+
+
+Socio-economic (CBMS) indicators -- methodology
+----------------------------------------------------
+
+Sourced from the demand-side data pipeline and its accompanying
+codebook. CBMS 2024 is a secondary source -- household-reported,
+covering approximately 71% of the census population citywide -- and its
+indicators are calculated only against CBMS's own reporting base, never
+against a census denominator.
+
+  Column                                  Formula
+  ------                                  -------
+  cbms_avg_household_size                 Total population covered by
+                                           CBMS-responding households /
+                                           number of responding households.
+  cbms_avg_nuclear_families_per_hh        Total nuclear families reported
+                                           by responding households / number
+                                           of responding households. Values
+                                           above 1 indicate multiple families
+                                           sharing one household.
+  cbms_food_insecurity_prevalence_pct     Households worried about food /
+                                           total responding households * 100.
+  cbms_food_severe_wholeday_pct           Households reporting a whole day
+                                           without eating / total responding
+                                           households * 100 -- the most
+                                           severe food-insecurity band.
+  cbms_food_intensity_score               sum(item_count * severity_rank) /
+                                           sum(item_counts), rank 1 (worried)
+                                           to 8 (whole day without eating).
+                                           Bounded 1-8 by construction.
+  cbms_housing_inadequacy_index_pct       Mean of unimproved-roof,
+                                           unimproved-wall, and
+                                           unimproved-floor percentages.
+  cbms_housing_makeshift_severe_pct       Maximum of makeshift/salvaged
+                                           -material percentage across
+                                           roof, wall, and floor.
+  pop_cbms_secondary                      Total population covered by
+                                           CBMS-responding households in
+                                           the barangay. A secondary
+                                           population figure, not used as
+                                           a ratio denominator.
+
+Damar (District 1) has no CBMS 2024 data; it is absent from the raw CBMS
+source table rather than recorded as zero. It remains fully represented
+in every census-based and administrative indicator.

@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import folium
-from streamlit_folium import st_folium
 import geopandas as gpd
 import numpy as np
 import math
@@ -23,6 +21,32 @@ st.set_page_config(
     page_title="Quezon Caring City Dashboard",
     layout="wide"
 )
+
+# --------------------------------------------------
+# RESERVOIR LANDMARK LAYER
+# (La Mesa Reservoir isn't one of the 142 barangays and carries no
+# demographic/facility data — shown on every barangay-boundary map
+# purely as a geographic landmark, name-only on hover, never part
+# of any barangay count or list. Kept non-pickable by default since
+# most pages build their own custom tooltip template keyed to their
+# own data columns, which the reservoir feature doesn't have.)
+# --------------------------------------------------
+
+@st.cache_data(show_spinner=False)
+def load_reservoir_layer(pickable=False):
+    reservoir_gdf = gpd.read_file(
+        "processed/reference/qc_reservoir.geojson",
+        engine="pyogrio"
+    )
+    return pdk.Layer(
+        "GeoJsonLayer",
+        data=json.loads(reservoir_gdf.to_json()),
+        stroked=True,
+        filled=False,
+        get_line_color=[80, 80, 80, 200],
+        line_width_min_pixels=1.2,
+        pickable=pickable,
+    )
 
 st.markdown("""
 <style>
@@ -421,11 +445,11 @@ domestic_workers_barangay, domestic_workers_district = (
 # --------------------------------------------------
 
 barangay_map = gpd.read_file(
-        "processed/qc_barangays.geojson"
+        "processed/reference/qc_barangays.geojson"
     )
 
 district_map = gpd.read_file(
-        "processed/qc_districts.geojson"
+        "processed/reference/qc_districts.geojson"
     )
 # Normalize join keys
 barangay_map["barangay_name"] = (
@@ -634,25 +658,30 @@ def build_explorer_map(
     selected_source="All"
 ):
     """
-    Builds the full Care Services Explorer folium map and
-    returns (html, climate_legend_info).
+    Builds the full Care Services Explorer map and returns
+    (deck, climate_legend_info, demand_legend_info).
+
+    Built on pydeck rather than folium — folium's rendered HTML
+    pulls in Leaflet.js, jQuery, Bootstrap, and Leaflet.awesome-markers
+    from 4 separate external CDNs (folium's default boilerplate;
+    this map never actually used the jQuery/Bootstrap/awesome-marker
+    pieces). If any one of those is blocked by the viewer's network
+    or an ad-blocker, the whole map renders blank with no error —
+    every other map in this app is pydeck-based (bundled with
+    Streamlit, no external JS CDN dependency beyond the tile
+    images themselves) and none of those are reported blank.
 
     Cached on (selected_layers, selected_district,
-    selected_climate_layers, flood_risk_only, show_risk_rings)
-    only, these are the only things that actually change what's
-    drawn. Streamlit reruns this whole script on every widget
-    interaction, which would otherwise rebuild the map (re-encode
-    every raster overlay to PNG, rebuild every marker) from
-    scratch each time even though the underlying data and raster
-    renders are already cached individually. Caching the
-    finished map means a rerun that doesn't change any of these
-    arguments returns the previously-built HTML immediately
-    instead of reconstructing and re-serializing the whole map.
+    selected_climate_layers, flood_risk_only, show_risk_rings, ...)
+    so a rerun that doesn't change any of these arguments returns
+    the previously-built Deck immediately instead of re-encoding
+    every raster overlay and rebuilding every marker from scratch.
 
     flood_risk_only, when True, only facilities flagged by
     flag_facilities_at_risk (i.e. df["flood_risk"] == True) are
     drawn as markers. This is the supply-side exposure filter:
-    "which facilities sit inside the 100-yr flood footprint?",     computed once for every facility type up top (see
+    "which facilities sit inside the 100-yr flood footprint?",
+    computed once for every facility type up top (see
     flag_facilities_at_risk calls near DATA LOADING), not
     recomputed here. Only offered as a UI control on the Care
     Services Explorer tab inside Climate, Hazard and Population
@@ -660,35 +689,18 @@ def build_explorer_map(
     False, since that page is meant to stay a plain facility map
     with no flood-risk framing.
 
-    show_risk_rings, when True (used by the Care Services
-    Explorer tab inside Climate, Hazard and Population
-    Analysis), flood-exposed
-    facilities get an extra red ring around their marker and a
-    " flood risk" tag on the tooltip, so they stand out even
-    with flood_risk_only off and the climate overlay off. When
-    False (used by the main Care Services Explorer page), markers
-    render with their normal symbol/color only, no ring, no
-    tooltip tag, since that page is meant to read as a plain
-    facility map, with flood-risk framing left to the
-    Vulnerability Index tab next to the duplicated map. The
-    flood-risk note inside each marker's popup is unaffected
-    either way; it's behind a click, not a default-visible cue.
+    show_risk_rings, when True, gives flood-exposed facilities a
+    thicker red outline so they stand out even with
+    flood_risk_only off and the climate overlay off. When False
+    (used by the main Care Services Explorer page), markers render
+    with their normal outline only.
 
-    html is the rendered map (via m._repr_html_()) rather than
-    the live folium.Map object, so the cached value is a plain,
-    easily hashable/picklable string, st_folium can render a
-    Map object directly, but caching the HTML avoids any
-    ambiguity about whether a cached Map object's internal state
-    could be accidentally mutated by a caller between cache hits.
-
-    climate_legend_info is a dict of
-    {layer_name: (vmin, vmax)} for every selected *non-binary*
-    climate layer (Land-Surface Temperature, NDVI), used by the
-    caller to render a color-scale legend outside this function,
-    since folium's rendered HTML is opaque to Streamlit and can't
-    host a native st widget itself. Binary layers (Flood
-    Inundation) are intentionally excluded since they're a
-    flooded/not-flooded mask, not a continuous scale.
+    climate_legend_info is a dict of {layer_name: (vmin, vmax)}
+    for every selected *non-binary* climate layer (Land-Surface
+    Temperature, NDVI), used by the caller to render a color-scale
+    legend outside this function. Binary layers (Flood Inundation)
+    are intentionally excluded since they're a flooded/not-flooded
+    mask, not a continuous scale.
 
     demand_pop_col/demand_pop_label pick which demographic column
     drives the population-density choropleth (e.g. "age_0_5" /
@@ -700,25 +712,27 @@ def build_explorer_map(
     load_domestic_workers() in functions.py) — needed because
     registered domestic worker counts aren't part of `demographics`.
     demand_legend_info is either None or (vmin, vmax, label,
-    colormap), same rationale as climate_legend_info: a separate
-    value the caller renders as an external legend, clipped to
-    the 2nd-98th percentile of the computed density/count
-    values. colormap is "Greens" for demand_metric="density" or
-    "Oranges" for "count", so the caller's legend always matches
-    what's actually drawn on the map.
+    colormap), same rationale as climate_legend_info.
 
     demand_metric switches the population layer between
-    "density" (default — people per km², "Greens" ramp, same
-    convention as before) and "count" (raw population for the
-    selected group, no area division, "Oranges" ramp so it reads
-    as visually distinct from density and doesn't compete with
-    the Blues flood layer or green boundary fill it sits under).
+    "density" (default — people per km², "Greens" ramp) and
+    "count" (raw population for the selected group, "Oranges" ramp
+    so it reads as visually distinct from density and doesn't
+    compete with the Blues flood layer or green boundary fill it
+    sits under).
 
     selected_source filters every service layer's facilities to
-    just "Administrative data" or "Google API" rows (the
-    data_source column from care_v6.csv) when not "All".
+    just one data_source value (from care_supply_facilities.csv —
+    "Administrative data", "Google API - Validated", or
+    "Google API - For Validation") when not "All".
     """
 
+    # Each service type is drawn as one color-coded dot (no
+    # per-type symbol shapes in pydeck's ScatterplotLayer, unlike
+    # folium's DivIcon markers) — colors picked to all be clearly
+    # distinct from each other at a glance, since color is now the
+    # only way to tell types apart on the map itself (the legend
+    # above the map and each point's tooltip still name the type).
     service_layers = {
 
         "Childcare Centers": {
@@ -726,11 +740,6 @@ def build_explorer_map(
             "color": "#4C1D95",
             "symbol": "◆",
             "source": "Childcare Center",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
         },
 
         "Schools": {
@@ -738,11 +747,6 @@ def build_explorer_map(
             "color": "#4472C4",
             "symbol": "▲",
             "source": "School",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
         },
 
         "Health Centers": {
@@ -750,11 +754,6 @@ def build_explorer_map(
             "color": "#4C1D95",
             "symbol": "✚",
             "source": "Health Facility",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
         },
 
         "Older Persons Facilities": {
@@ -762,11 +761,6 @@ def build_explorer_map(
             "color": "#055B52",
             "symbol": "●",
             "source": "Older Persons Facility",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
         },
 
         "Long-Term Care & Rehabilitation": {
@@ -774,11 +768,6 @@ def build_explorer_map(
             "color": "#4C1D95",
             "symbol": "✦",
             "source": "Rehabilitation Facility",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
         },
 
         "Action Offices": {
@@ -786,11 +775,6 @@ def build_explorer_map(
             "color": "#055B52",
             "symbol": "■",
             "source": "Action Office",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
         },
 
         "Migration Resource Centers": {
@@ -798,11 +782,6 @@ def build_explorer_map(
             "color": "#C4B5FD",
             "symbol": "✈",
             "source": "Migration Resource Center",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
         },
 
         "Bus Stops": {
@@ -810,92 +789,57 @@ def build_explorer_map(
             "color": "#F97316",
             "symbol": "⊙",
             "source": "Bus Stop",
-            "name_col": "Name",
-            "district_col": "District",
-            "address_col": "Address",
-            "lat_col": "latitude",
-            "lon_col": "longitude"
         },
     }
 
     climate_overlay_layers = {
         "Land-Surface Temperature": {
-            "path": "processed/climate/landsat_lst_summer_avg_7yr_EPSG3123_filled.tif",
+            "path": "processed/reference/climate/landsat_lst_summer_avg_7yr_EPSG3123_filled.tif",
             "colormap": "YlOrRd",
             "binary": False
         },
         "Vegetation (NDVI)": {
-            "path": "processed/climate/ndvi_mean_2025_EPSG3123.tif",
+            "path": "processed/reference/climate/ndvi_mean_2025_EPSG3123.tif",
             "colormap": "Greens",
             "binary": False
         },
         "Flood Inundation (100-yr)": {
-            "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
+            "path": "processed/reference/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
             "colormap": "Blues",
             "binary": True
         }
     }
 
-    # A small padding around the QC extent (in degrees) so the
-    # city boundary doesn't sit flush against the edge of the
-    # area the user can pan/zoom into.
-    bounds_padding = 0.03
+    layers = []
 
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        min_zoom=12,
-        max_zoom=18,
-        tiles="CartoDB positron",
-        max_bounds=True,
-        min_lat=miny - bounds_padding,
-        max_lat=maxy + bounds_padding,
-        min_lon=minx - bounds_padding,
-        max_lon=maxx + bounds_padding
-    )
+    # ------------------------------------------
+    # BARANGAY BOUNDARIES (context only, not interactive — see
+    # the note on the facility ScatterplotLayer below for why
+    # only one layer per deck carries the tooltip)
+    # ------------------------------------------
 
-    geo_json, _ = load_geo_explorer()
-
-    folium.GeoJson(
-        geo_json,
-        style_function=lambda x: {
-            "fillColor": "#A6CFC1",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.10,
-        },
-        tooltip=folium.GeoJsonTooltip(
-            fields=["barangay_name"],
-            aliases=["Barangay:"],
-            sticky=True
+    layers.append(
+        pdk.Layer(
+            "GeoJsonLayer",
+            data=geo,
+            stroked=True,
+            filled=True,
+            get_fill_color=[127, 191, 127, 38],
+            get_line_color=[102, 102, 102],
+            line_width_min_pixels=1,
+            pickable=False
         )
-    ).add_to(m)
+    )
 
     # ------------------------------------------
     # POPULATION DENSITY / COUNT CHOROPLETH (Demand Layer)
-    # demand_pop_col selects *which* demographic group is shown
-    # (e.g. children 0-5, older persons, total population) —
-    # driven by a dropdown on the calling page rather than a
-    # fixed always-pop_census toggle. demand_metric switches
-    # between "density" (people per km², Greens ramp) and
-    # "count" (raw population for the group, Oranges ramp) — see
-    # docstring above. Built as a manual GeoJson + per-feature
-    # style_function (rather than folium.Choropleth) so a
-    # GeoJsonTooltip can show the barangay name and value on
-    # hover, matching the interactivity of the pydeck-based maps
-    # elsewhere in the app (folium.Choropleth has no tooltip
-    # hook). demand_legend_info is returned alongside the map
-    # HTML (mirroring climate_legend_info below) so the caller
-    # can render an external gradient-bar legend, since folium's
-    # rendered HTML is opaque to Streamlit.
     # ------------------------------------------
 
     demand_legend_info = None
 
     if demand_pop_col is not None:
 
-        # Create a GeoDataFrame with population density at barangay level
-        barangay_map_gdf = gpd.read_file("processed/qc_barangays.geojson")
+        barangay_map_gdf = gpd.read_file("processed/reference/qc_barangays.geojson")
         barangay_map_gdf["barangay_name"] = (
             barangay_map_gdf["barangay_name"]
             .astype(str)
@@ -903,10 +847,6 @@ def build_explorer_map(
             .str.upper()
         )
 
-        # Get barangay population from the demographics data, or
-        # from the separate domestic_workers_barangay table when
-        # demand_pop_source says so (see demand_pop_source in the
-        # docstring above).
         _demand_source_df = (
             demographics if demand_pop_source == "demographics"
             else domestic_workers_barangay
@@ -923,7 +863,6 @@ def build_explorer_map(
             .str.upper()
         )
 
-        # Merge population onto the map geometry
         barangay_map_gdf = barangay_map_gdf.merge(
             barangay_pop,
             left_on="barangay_name",
@@ -943,15 +882,12 @@ def build_explorer_map(
 
         else:
 
-            # Reproject to projected CRS (EPSG:3123 - Philippine Zone 3) for accurate area calculation
             barangay_map_gdf_proj = barangay_map_gdf.to_crs("EPSG:3123")
 
-            # Calculate area in km² from projected geometry
             barangay_map_gdf["area_km2"] = (
                 barangay_map_gdf_proj.geometry.area / 1_000_000
             )
 
-            # Calculate population density
             barangay_map_gdf["demand_value"] = (
                 barangay_map_gdf[demand_pop_col] /
                 barangay_map_gdf["area_km2"]
@@ -961,10 +897,6 @@ def build_explorer_map(
             _demand_unit = "/km²"
             _demand_legend_suffix = " Density (per km²)"
 
-        # Clipped to the 2nd-98th percentile, matching the
-        # clip_percentiles convention used for the raster layers
-        # elsewhere in this app, so a handful of extreme
-        # barangays don't flatten the external legend's scale.
         _density_vmin, _density_vmax = (
             barangay_map_gdf["demand_value"]
             .replace([np.inf, -np.inf], np.nan)
@@ -977,34 +909,22 @@ def build_explorer_map(
             .map(lambda v: f"{v:,.1f}{_demand_unit}")
         )
 
-        def _demand_fill_hex(value):
-            r, g, b, _a = value_to_rgba(
-                value,
-                _density_vmin,
-                _density_vmax,
-                colormap=_demand_colormap
-            )
-            return "#{:02X}{:02X}{:02X}".format(r, g, b)
-
-        barangay_map_gdf["fill_hex"] = (
-            barangay_map_gdf["demand_value"].apply(_demand_fill_hex)
+        barangay_map_gdf["fill_color"] = barangay_map_gdf["demand_value"].apply(
+            lambda v: value_to_rgba(v, _density_vmin, _density_vmax, colormap=_demand_colormap)
         )
 
-        folium.GeoJson(
-            barangay_map_gdf.__geo_interface__,
-            name="Population Layer",
-            style_function=lambda x: {
-                "fillColor": x["properties"]["fill_hex"],
-                "color": "#999999",
-                "weight": 0.5,
-                "fillOpacity": 0.6,
-            },
-            tooltip=folium.GeoJsonTooltip(
-                fields=["barangay_name", "demand_display"],
-                aliases=["Barangay:", f"{demand_pop_label}:"],
-                sticky=True
+        layers.append(
+            pdk.Layer(
+                "GeoJsonLayer",
+                data=json.loads(barangay_map_gdf.to_json()),
+                stroked=True,
+                filled=True,
+                get_fill_color="properties.fill_color",
+                get_line_color=[153, 153, 153, 150],
+                line_width_min_pixels=0.5,
+                pickable=False
             )
-        ).add_to(m)
+        )
 
         demand_legend_info = (
             _density_vmin,
@@ -1029,8 +949,8 @@ def build_explorer_map(
 
             try:
 
-                rgba, folium_bounds, layer_vmin, layer_vmax = (
-                    raster_to_image_overlay(
+                png_data_uri, bounds_corners, layer_vmin, layer_vmax = (
+                    raster_to_bitmap_layer(
                         climate_layer["path"],
                         colormap=climate_layer["colormap"],
                         binary=climate_layer["binary"],
@@ -1044,13 +964,14 @@ def build_explorer_map(
                         layer_vmax
                     )
 
-                folium.raster_layers.ImageOverlay(
-                    image=rgba,
-                    bounds=folium_bounds,
-                    origin="upper",
-                    opacity=1.0,
-                    name=climate_layer_name
-                ).add_to(m)
+                layers.append(
+                    pdk.Layer(
+                        "BitmapLayer",
+                        image=png_data_uri,
+                        bounds=bounds_corners,
+                        opacity=0.7
+                    )
+                )
 
             except Exception:
                 # Surfaced to the user outside this cached function
@@ -1060,192 +981,188 @@ def build_explorer_map(
                 pass
 
     # ------------------------------------------
-    # ADD MARKERS
+    # RESERVOIR LANDMARK
     # ------------------------------------------
+
+    layers.append(load_reservoir_layer())
+
+    # ------------------------------------------
+    # FACILITY MARKERS
+    # (one combined ScatterplotLayer across every selected service
+    # type, each row carrying its own precomputed tooltip_html —
+    # pydeck has one shared tooltip template per deck, not
+    # per-layer, so every row needs the same field name regardless
+    # of which service type it came from. All 8 service dataframes
+    # share the same column schema after load_data()/
+    # clean_dataframe(), so one field list covers all of them.)
+    # ------------------------------------------
+
+    all_points = []
+    at_risk_points = []
+
+    # Per-category marker color, restoring the original per-row
+    # shading (a childcare marker's exact shade of purple depends on
+    # whether it's a Child Development Center, Learning Center, or
+    # Day Care Center, etc.) rather than one flat color per service
+    # type — the same color functions used on each type's own
+    # dedicated map page.
+    ROW_COLOR_FN = {
+        "Childcare Centers": lambda row: childcare_color(row["Category"]),
+        "Schools": lambda row: school_color(row["Category"]),
+        "Health Centers": lambda row: marker_color(row["Category"]),
+        "Older Persons Facilities": lambda row: opc_color(row["Category"]),
+        "Long-Term Care & Rehabilitation": lambda row: ltc_color(row["Category"]),
+        "Action Offices": lambda row: district_color(row["District"]),
+    }
 
     for layer_name in selected_layers:
 
         layer = service_layers[layer_name]
 
-        df = layer["df"]
+        df = layer["df"].copy()
 
         if selected_district != "All":
 
             df = df[
-                df[layer["district_col"]]
-                .astype(int)
-                == selected_district
+                df["District"].astype(int) == selected_district
             ]
 
         if flood_risk_only:
 
             df = df[
-                df.get(
-                    "flood_risk",
-                    pd.Series(False, index=df.index)
-                )
+                df.get("flood_risk", pd.Series(False, index=df.index))
             ]
 
         if selected_source != "All" and "data_source" in df.columns:
 
             df = df[df["data_source"] == selected_source]
 
-        df = df.dropna(
-            subset=[
-                layer["lat_col"],
-                layer["lon_col"]
+        df = df.dropna(subset=["latitude", "longitude"])
+
+        if df.empty:
+            continue
+
+        df["Type"] = layer_name
+
+        df["tooltip_html"] = build_tooltip_html(
+            df, "Name",
+            [
+                ("Type", "Type"),
+                ("Category", "Category"),
+                ("Provider Type", "Sector"),
+                ("District", "District"),
+                ("Barangay", "barangay"),
+                ("Address", "Address"),
+                ("Open", "open_hours"),
+                ("Close", "close_hours"),
+                ("Source", "data_source"),
             ]
         )
 
-        has_sector = "Sector" in df.columns
-        has_category = "Category" in df.columns
-        has_barangay = "barangay" in df.columns
-        has_open = "open_hours" in df.columns
-        has_close = "close_hours" in df.columns
-        has_district = layer["district_col"] in df.columns
-        has_address = layer["address_col"] in df.columns
-        has_source = "data_source" in df.columns
+        color_fn = ROW_COLOR_FN.get(layer_name)
+        row_hex = df.apply(color_fn, axis=1) if color_fn else layer["color"]
+        colors = row_hex.apply(hex_to_rgb) if color_fn else [hex_to_rgb(layer["color"])] * len(df)
 
-        records = df.to_dict("records")
+        df["r"] = [c[0] for c in colors]
+        df["g"] = [c[1] for c in colors]
+        df["b"] = [c[2] for c in colors]
+        df["symbol"] = layer["symbol"]
 
-        for row_dict in records:
-            popup_html = f"""
-            <b>{row_dict[layer['name_col']]}</b><br>
-            Type: {layer['source']}
-            """
+        all_points.append(
+            df[["latitude", "longitude", "r", "g", "b", "symbol", "tooltip_html"]]
+        )
 
-            if has_sector and pd.notna(row_dict["Sector"]):
-                popup_html += f"<br>Sector: {row_dict['Sector']}"
+        if show_risk_rings:
+            at_risk_points.append(
+                df[df.get("flood_risk", pd.Series(False, index=df.index))]
+                [["latitude", "longitude"]]
+            )
 
-            if has_category and pd.notna(row_dict["Category"]):
-                popup_html += f"<br>Category: {row_dict['Category']}"
+    if at_risk_points:
 
-            if has_district and pd.notna(row_dict[layer["district_col"]]):
-                popup_html += (
-                    f"<br>District: "
-                    f"{int(row_dict[layer['district_col']])}"
+        at_risk_combined = pd.concat(at_risk_points, ignore_index=True)
+
+        if not at_risk_combined.empty:
+            layers.append(
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=at_risk_combined,
+                    get_position="[longitude, latitude]",
+                    get_fill_color=[0, 0, 0, 0],
+                    get_line_color=[185, 28, 28, 220],
+                    stroked=True,
+                    filled=True,
+                    line_width_min_pixels=2.5,
+                    get_radius=60,
+                    radius_min_pixels=10,
+                    radius_max_pixels=10,
+                    pickable=False
                 )
+            )
 
-            if (
-                has_barangay
-                and pd.notna(row_dict["barangay"])
-                and str(row_dict["barangay"]).strip() != ""
-            ):
-                popup_html += f"<br>Barangay: {row_dict['barangay']}"
+    if all_points:
 
-            if has_address and pd.notna(row_dict[layer["address_col"]]):
-                popup_html += (
-                    f"<br>Address: "
-                    f"{row_dict[layer['address_col']]}"
-                )
+        combined = pd.concat(all_points, ignore_index=True)
 
-            if has_open and pd.notna(row_dict["open_hours"]):
-                popup_html += f"<br>Open: {row_dict['open_hours']}"
+        # deck.gl's TextLayer only pre-renders its default character
+        # set — printable ASCII — into the font atlas it builds; any
+        # character outside that range (every symbol here) rendered
+        # as nothing, with no error, regardless of whether the
+        # viewer's font actually has a glyph for it. character_set
+        # explicitly tells it to also render these 8 symbols into
+        # the atlas, restoring the original icons instead of falling
+        # back to plain letters.
+        _explorer_symbols = "".join(
+            layer["symbol"] for layer in service_layers.values()
+        )
 
-            if has_close and pd.notna(row_dict["close_hours"]):
-                popup_html += f"<br>Close: {row_dict['close_hours']}"
+        layers.append(
+            pdk.Layer(
+                "TextLayer",
+                data=combined,
+                get_position="[longitude, latitude]",
+                get_text="symbol",
+                get_color="[r, g, b]",
+                get_size=18,
+                size_min_pixels=14,
+                size_max_pixels=22,
+                get_angle=0,
+                get_text_anchor='"middle"',
+                get_alignment_baseline='"center"',
+                character_set='"' + _explorer_symbols + '"',
+                font_weight=700,
+                pickable=True
+            )
+        )
 
-            if has_source and pd.notna(row_dict["data_source"]):
-                popup_html += f"<br>Source: {row_dict['data_source']}"
+    # ------------------------------------------
+    # VIEW STATE + DECK
+    # ------------------------------------------
 
-            is_flood_risk = bool(row_dict.get("flood_risk", False))
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=12,
+        pitch=0,
+        min_zoom=11,
+        max_zoom=18,
+    )
 
-            if is_flood_risk:
-                popup_html += (
-                    "<br><span style=\"color:#B91C1C;"
-                    "font-weight:600;\">"
-                    " In 100-yr flood inundation zone"
-                    "</span>"
-                )
+    deck = pdk.Deck(
+        layers=layers,
+        initial_view_state=view_state,
+        tooltip={
+            "html": "{tooltip_html}",
+            "style": {
+                "backgroundColor": "white",
+                "color": "black",
+                "fontSize": "12px"
+            }
+        },
+        map_style="light"
+    )
 
-            category = row_dict.get("Category")
-            district = row_dict.get("District")
-
-            if layer_name == "Childcare Centers":
-                marker_color_value = childcare_color(category)
-
-            elif layer_name == "Schools":
-                marker_color_value = school_color(category)
-
-            elif layer_name == "Health Centers":
-                marker_color_value = marker_color(category)
-
-            elif layer_name == "Older Persons Facilities":
-                marker_color_value = opc_color(category)
-
-            elif layer_name == "Long-Term Care & Rehabilitation":
-                marker_color_value = ltc_color(category)
-
-            elif layer_name == "Action Offices":
-                marker_color_value = district_color(district)
-
-            elif layer_name == "Migration Resource Centers":
-                marker_color_value = "#C4B5FD"
-
-            else:
-                marker_color_value = "#7F47ED"
-
-            if is_flood_risk and show_risk_rings:
-                risk_ring_html = (
-                    '<div style="'
-                    "position:absolute;"
-                    "width:24px;"
-                    "height:24px;"
-                    "border:2.5px solid #B91C1C;"
-                    "border-radius:50%;"
-                    "box-sizing:border-box;"
-                    '"></div>'
-                )
-            else:
-                risk_ring_html = ""
-
-            folium.Marker(
-                location=[
-                    row_dict[layer["lat_col"]],
-                    row_dict[layer["lon_col"]]
-                ],
-                icon=folium.DivIcon(
-                    html=f"""
-                    <div style="
-                        position:relative;
-                        width:26px;
-                        height:26px;
-                        display:flex;
-                        align-items:center;
-                        justify-content:center;
-                    ">
-                        {risk_ring_html}
-                        <div style="
-                            color:{marker_color_value};
-                            font-size:16px;
-                            font-weight:bold;
-                            text-align:center;
-                            text-shadow:
-                                -1px -1px 0 white,
-                                1px -1px 0 white,
-                                -1px  1px 0 white,
-                                1px  1px 0 white;
-                        ">
-                            {layer['symbol']}
-                        </div>
-                    </div>
-                    """
-                ),
-                tooltip=str(
-                    row_dict[layer["name_col"]]
-                ) + (
-                    "  flood risk"
-                    if is_flood_risk and show_risk_rings
-                    else ""
-                ),
-                popup=folium.Popup(
-                    popup_html,
-                    max_width=350,
-                    lazy=True
-                )
-            ).add_to(m)
-
-    return m._repr_html_(), climate_legend_info, demand_legend_info
+    return deck, climate_legend_info, demand_legend_info
 
 # Default values so variables always exist
 selected_category = "All"
@@ -1303,25 +1220,27 @@ if st.session_state.page == "Childcare Centers":
 
     st.sidebar.markdown("##### Filters")
 
+    # Derived from the data rather than hardcoded — a new Category
+    # value added to care_supply_facilities.csv shows up here
+    # automatically next time the data is refreshed, no code
+    # change needed. (The source data only ever records the
+    # combined "Child development center and supervised
+    # neighborhood play" as one category — there is no row where
+    # either half stands alone — so that's the only childcare-
+    # center-type option, not a bug.)
     selected_childcare_category = st.sidebar.radio(
         "Facility Category",
-        [
-            "All",
-            "Child Development Center",
-            "Child Learning Center",
-            "Day Care Center",
-            "Supervised Neighborhood Play"
-        ],
+        ["All"] + sorted(childcare_centers["Category"].dropna().unique()),
         key="childcare_category"
     )
 
+    # Derived from the data rather than hardcoded — data_source now
+    # splits "Google API" into "Google API - Validated" and
+    # "Google API - For Validation" (see load_data() in functions.py),
+    # and a hardcoded list here would silently exclude both.
     selected_childcare_source = st.sidebar.radio(
         "Data Source",
-        [
-            "All",
-            "Administrative data",
-            "Google API"
-        ],
+        ["All"] + sorted(childcare_centers["data_source"].dropna().unique()),
         key="childcare_source"
     )
 
@@ -1350,39 +1269,21 @@ if st.session_state.page == "Schools":
         key="school_sector"
     )
 
-    # School category options (school types). Was hardcoded to
-    # only 4 of the 7 categories actually present in the data —
-    # missing "Junior high school", "Private school", and
-    # "Special Education Program" — which meant that data was
-    # always visible on the map/table under "All" but could never
-    # be filtered to on its own. Order matches
-    # SCHOOL_TYPE_COLORS_MAP in functions.py and
-    # SCHOOL_SUBCATEGORY_OPTIONS on the Climate Layers page, the
-    # two other places this same category list is spelled out.
-    category_options = [
-        "All",
-        "Preschool",
-        "Elementary school",
-        "Junior high school",
-        "Senior high school",
-        "High school",
-        "Private school",
-        "Special Education Program"
-    ]
-
+    # Derived from the data rather than hardcoded — was previously
+    # a fixed list that silently went stale whenever a new school
+    # Category value appeared in the source data (e.g. it once
+    # missed "Junior high school", "Private school", and "Special
+    # Education Program" for months). A new category now shows up
+    # here automatically next time the data is refreshed.
     selected_school_category = st.sidebar.radio(
         "School Category",
-        category_options,
+        ["All"] + sorted(schools["Category"].dropna().unique()),
         key="school_category"
     )
 
     selected_school_source = st.sidebar.radio(
         "Data Source",
-        [
-            "All",
-            "Administrative data",
-            "Google API"
-        ],
+        ["All"] + sorted(schools["data_source"].dropna().unique()),
         key="school_source"
     )
 
@@ -1403,25 +1304,13 @@ if st.session_state.page == "Health Centers Map":
 
     selected_category = st.sidebar.radio(
         "Facility Type",
-        [
-            "All",
-            "QC LGU",
-            "National",
-            "Super Health",
-            "Health Center",
-            "Pharmacy",
-            "Milk Bank"
-        ],
+        ["All"] + list(HEALTH_CATEGORY_COLORS.keys()),
         key="health_category"
     )
 
     selected_health_source = st.sidebar.radio(
         "Data Source",
-        [
-            "All",
-            "Administrative data",
-            "Google API"
-        ],
+        ["All"] + sorted(health_centers["data_source"].dropna().unique()),
         key="health_source"
     )
 
@@ -1471,11 +1360,7 @@ if st.session_state.page == "Older Persons Center Map":
 
     selected_opc_source = st.sidebar.radio(
         "Data Source",
-        [
-            "All",
-            "Administrative data",
-            "Google API"
-        ],
+        ["All"] + sorted(older_person_care["data_source"].dropna().unique()),
         key="opc_source"
     )
 
@@ -1508,11 +1393,7 @@ if st.session_state.page == "Long-Term Care & Rehabilitation":
 
     selected_ltc_source = st.sidebar.radio(
         "Data Source",
-        [
-            "All",
-            "Administrative data",
-            "Google API"
-        ],
+        ["All"] + sorted(long_term_care["data_source"].dropna().unique()),
         key="ltc_source"
     )
 
@@ -1597,54 +1478,38 @@ if page == "Care Services Explorer":
     st.sidebar.markdown("---")
     st.sidebar.markdown("## Child Care")
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#4C1D95;font-size:22px;">◆</span>
-        <b>Child Development Center</b><br>
-        <span style="color:#8869C9;font-size:22px;">◆</span>
-        <b>Child Learning Center</b><br>
-        <span style="color:#C4B5FD;font-size:22px;">◆</span>
-        <b>Day Care Center</b><br>
-        <span style="color:#E0D4FD;font-size:22px;">◆</span>
-        <b>Supervised Neighborhood Play</b>
-        """,
-        unsafe_allow_html=True
-    )
+    # Derived from the data (like Health Services below) rather
+    # than hardcoded — the raw data only ever has one combined
+    # "Child Development Center And Supervised Neighborhood Play"
+    # category, never either half alone, so a fixed 4-option list
+    # here would show two categories that don't exist.
+    for cat in sorted(childcare_centers["Category"].dropna().unique()):
+
+        st.sidebar.markdown(
+            f"""
+            <span style="color:{childcare_color(cat)};font-size:22px;">◆</span>
+            <b>{cat}</b>
+            """,
+            unsafe_allow_html=True
+        )
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("## Schools")
 
-    st.sidebar.markdown(
-        """
-        <span style="color:#2E5090;font-size:22px;">▲</span>
-        <b>Preschool</b><br>
-        <span style="color:#4472C4;font-size:22px;">▲</span>
-        <b>Elementary school</b><br>
-        <span style="color:#6B8FD4;font-size:22px;">▲</span>
-        <b>Junior high school</b><br>
-        <span style="color:#8FA8E0;font-size:22px;">▲</span>
-        <b>Senior high school</b><br>
-        <span style="color:#B5CBEE;font-size:22px;">▲</span>
-        <b>High school</b><br>
-        <span style="color:#4C1D95;font-size:22px;">▲</span>
-        <b>Private school</b><br>
-        <span style="color:#D9E6F7;font-size:22px;">▲</span>
-        <b>Special Education Program</b>
-        """,
-        unsafe_allow_html=True
-    )
+    for cat in sorted(schools["Category"].dropna().unique()):
+
+        st.sidebar.markdown(
+            f"""
+            <span style="color:{school_color(cat)};font-size:22px;">▲</span>
+            <b>{cat}</b>
+            """,
+            unsafe_allow_html=True
+        )
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("## Health Services")
 
-    ordered_categories = [
-        "QC LGU",
-        "National",
-        "Super Health",
-        "Health Center",
-        "Pharmacy",
-        "Milk Bank"
-    ]
+    ordered_categories = list(HEALTH_CATEGORY_COLORS.keys())
 
     for cat in ordered_categories:
 
@@ -1804,7 +1669,7 @@ if page == "Home":
     )
 
     # Total barangays and districts
-    total_barangays = len(barangay_df) - 1
+    total_barangays = len(barangay_df)
     total_districts = len(district_pop)
 
     k4.metric(
@@ -2022,11 +1887,11 @@ elif page == "Population Overview":
     # =====================================================
 
     barangay_map = gpd.read_file(
-        "processed/qc_barangays.geojson"
+        "processed/reference/qc_barangays.geojson"
     )
 
     district_map = gpd.read_file(
-        "processed/qc_districts.geojson"
+        "processed/reference/qc_districts.geojson"
     )
 
     # =====================================================
@@ -2469,7 +2334,7 @@ elif page == "Population Overview":
                 "and service delivery points.",
             "Domestic Workers Population":
                 "Registered domestic workers, by barangay (raw count). "
-                "Source: processed/indicators/demographics_by_barangay.csv.",
+                "Source: processed/editable/demographics_by_barangay.csv.",
             "Domestic Workers per 1,000 Children (0-5)":
                 "Registered domestic workers per 1,000 children (aged "
                 "0-5) in the barangay, a rough proxy for how much "
@@ -2543,7 +2408,8 @@ elif page == "Population Overview":
 
         deck = pdk.Deck(
             layers=[
-                choropleth_layer
+                choropleth_layer,
+                load_reservoir_layer()
             ],
             initial_view_state=view_state,
             tooltip=tooltip,
@@ -2849,7 +2715,8 @@ elif page == "Population Overview":
 
         deck = pdk.Deck(
             layers=[
-                district_choropleth_layer
+                district_choropleth_layer,
+                load_reservoir_layer()
             ],
             initial_view_state=view_state,
             tooltip=tooltip,
@@ -3262,22 +3129,12 @@ if page == "Childcare Centers":
     # CHILDCARE KPIs
     # --------------------------------------------------
 
-    childcare_summary = pd.read_csv(
-        "processed/childcare_summary.csv"
-    )
+    childcare_summary = compute_childcare_summary(childcare_centers)
 
     total_centers = int(
         childcare_summary.loc[
             childcare_summary["metric"]
             == "child_development_centers",
-            "value"
-        ].iloc[0]
-    )
-
-    eccd_enrollees = int(
-        childcare_summary.loc[
-            childcare_summary["metric"]
-            == "eccd_enrollees",
             "value"
         ].iloc[0]
     )
@@ -3304,8 +3161,12 @@ if page == "Childcare Centers":
         .sum()
     )
 
+    # normalize_barangay_names() first — raw ALL-CAPS/abbreviated
+    # spellings (e.g. "MARIANA" vs "Mariana") otherwise double-count
+    # the same barangay, which can push this past the real 142-
+    # barangay ceiling.
     covered_barangays = (
-        childcare_centers["barangay"]
+        normalize_barangay_names(childcare_centers["barangay"])
         .nunique()
     )
 
@@ -3314,7 +3175,7 @@ if page == "Childcare Centers":
         .nunique()
     )
 
-    k1, k2, k3, k4, k5, k6 = st.columns(6)
+    k1, k2, k3, k4, k5 = st.columns(5)
 
     kpi_card(
         k1,
@@ -3332,37 +3193,24 @@ if page == "Childcare Centers":
 
     kpi_card(
         k3,
-        "ECCD Enrollees",
-        f"{eccd_enrollees:,}",
-        "up_good"
-    )
-
-    kpi_card(
-        k4,
         "CDCs",
         f"{total_centers:,}",
         "up_good"
     )
 
     kpi_card(
-        k5,
+        k4,
         "Day Care Centers",
         f"{day_care_centers:,}"
     )
 
     kpi_card(
-        k6,
+        k5,
         "Supervised Neighborhood Play",
         f"{supervised_play_centers:,}"
     )
 
     st.divider()
-
-    st.caption(
-        "**Note on CDC Count:** The CDC count (303) reflects all registered Child Development Centers in the city registry, "
-        "while the Facilities count (242) shows only those with confirmed geographic coordinates for mapping. "
-        "Some CDCs are registered but lack precise location data."
-    )
 
     # --------------------------------------------------
     # DISTRICT FILTER
@@ -3523,7 +3371,8 @@ if page == "Childcare Centers":
     deck = pdk.Deck(
         layers=[
             polygon_layer,
-            childcare_layer
+            childcare_layer,
+            load_reservoir_layer()
         ],
         initial_view_state=view_state,
         tooltip=tooltip,
@@ -3627,9 +3476,16 @@ if page == "Childcare Centers":
         / total_centers
     )
 
-    enrollment_rate = (
-        eccd_enrollees
-        / early_childhood_population
+    # % of barangays with at least one childcare facility (CDC,
+    # child learning center, or day care center) — matches the
+    # "ECCD Coverage" definition given in this page's intro text
+    # above. total_barangays is read from population_age rather
+    # than hardcoded, so this stays correct at exactly 142.
+    total_barangays = population_age["Barangay"].nunique()
+
+    eccd_coverage_pct = (
+        covered_barangays
+        / total_barangays
         * 100
     )
 
@@ -3651,7 +3507,7 @@ if page == "Childcare Centers":
     kpi_card(
         c3,
         "ECCD Coverage",
-        f"{enrollment_rate:.1f}%",
+        f"{eccd_coverage_pct:.1f}%",
         "up_good"
     )
 
@@ -3678,10 +3534,29 @@ elif page == "Schools":
     """)
 
     # KPIS
-    total_schools = len(schools)
+    # care_supply_facilities.csv lists one row per grade level a
+    # school offers (a school running Preschool through Junior
+    # High appears as up to 4 rows sharing the same name and
+    # location) — deduplicated here the same way as
+    # compute_facility_counts_by_barangay(), so these KPIs count
+    # physical schools rather than grade-level program rows.
+    #
+    # Sourced from load_all_schools() rather than the page's own
+    # `schools` variable: `schools` (from load_data()) only
+    # includes rows with mappable coordinates, since that's what
+    # the map on this page needs — but barangay/district
+    # assignment doesn't depend on having coordinates, so these
+    # KPIs would undercount otherwise. load_all_schools() includes
+    # every school on file.
+    schools_deduped = (
+        load_all_schools()
+        .drop_duplicates(subset=["barangay", "Name"])
+    )
+
+    total_schools = len(schools_deduped)
 
     public_schools = (
-        schools["Sector"]
+        schools_deduped["Sector"]
         .str.contains(
             "Public",
             case=False,
@@ -3691,7 +3566,7 @@ elif page == "Schools":
     )
 
     private_schools = (
-        schools["Sector"]
+        schools_deduped["Sector"]
         .str.contains(
             "Private",
             case=False,
@@ -3700,8 +3575,10 @@ elif page == "Schools":
         .sum()
     )
 
+    # normalize_barangay_names() first — see the same fix on the
+    # Childcare page for why raw casing double-counts barangays.
     covered_barangays = (
-        schools["barangay"]
+        normalize_barangay_names(schools["barangay"])
         .nunique()
     )
 
@@ -3944,6 +3821,19 @@ elif page == "Schools":
     # SCHOOL POINTS
     # --------------------------------------------------
 
+    sch["tooltip_html"] = build_tooltip_html(
+        sch, "Name",
+        [
+            ("Provider Type", "Sector"),
+            ("Category", "Category"),
+            ("District", "District"),
+            ("Address", "Address"),
+            ("Open", "open_hours"),
+            ("Close", "close_hours"),
+            ("Source", "data_source"),
+        ]
+    )
+
     # get_line_color used to match get_fill_color exactly (no
     # border contrast at all). That's invisible in practice for
     # "Special Education Program", whose color (#D9E6F7) is a
@@ -3975,16 +3865,7 @@ elif page == "Schools":
     
 
     tooltip = {
-        "html": """
-        <b>{Name}</b><br/>
-        Sector: {Sector}<br/>
-        Category: {Category}<br/>
-        District: {District}<br/>
-        Address: {Address}<br/>
-        Open: {open_hours}<br/>
-        Close: {close_hours}<br/>
-        Source: {data_source}
-        """,
+        "html": "{tooltip_html}",
         "style": {
             "backgroundColor": "white",
             "color": "black",
@@ -3999,7 +3880,8 @@ elif page == "Schools":
     deck = pdk.Deck(
         layers=[
             polygon_layer,
-            school_layer
+            school_layer,
+            load_reservoir_layer()
         ],
         initial_view_state=view_state,
         tooltip=tooltip,
@@ -4034,9 +3916,13 @@ elif page == "Schools":
 
     with col1:
 
-        # Provider Type Distribution (using Sector column)
+        # Provider Type Distribution (using Sector column) —
+        # deduplicated: Sector is a school-level attribute (a
+        # school doesn't change Public/Private status by grade
+        # level), so this should reflect physical schools, not
+        # one row per grade-level program.
         provider_counts = (
-            schools["Sector"]
+            schools_deduped["Sector"]
             .value_counts()
             .reset_index()
         )
@@ -4081,7 +3967,7 @@ elif page == "Schools":
 
         # District Distribution
         district_counts = (
-            schools
+            schools_deduped
             .groupby("District")
             .size()
             .reset_index(name="Schools")
@@ -4190,7 +4076,7 @@ elif page == "Schools":
  
 
     district_schools = (
-        schools
+        schools_deduped
         .groupby("District")
         .size()
         .reset_index(name="Schools")
@@ -4245,7 +4131,7 @@ elif page == "Schools":
         )
 
     barangay_counts = (
-        schools
+        schools_deduped
         .groupby("barangay")
         .size()
         .reset_index(name="Schools")
@@ -4294,7 +4180,7 @@ elif page == "Health Centers Map":
     # --------------------------------------------------
 
     health_capacity = pd.read_csv(
-        "processed/health_centers_and_doctors_per_district.csv"
+        "processed/editable/health_centers_and_doctors_per_district.csv"
     )
 
     # The district column in this CSV has inconsistent spacing
@@ -4324,21 +4210,31 @@ elif page == "Health Centers Map":
         .sum()
     )
 
-    health_centers_count = (
-        (health_centers["Category"] == "Health Center").sum()
-    )
+    # All four KPIs below compare against the mapped tier names from
+    # HEALTH_CATEGORY_COLORS ("Health Centers", "Super Health
+    # Centers", etc.), not the raw Category values ("Health center",
+    # "Super health care center", etc.) — comparing the raw column
+    # directly against these tier names always returned 0 for every
+    # one of them. Mapped through health_category_mapper() first,
+    # the same function the sidebar filter and marker colors use, so
+    # all three stay in agreement about what belongs in each tier.
+    _health_tiers = health_centers["Category"].apply(health_category_mapper)
 
-    super_health_centers = (
-        (health_centers["Category"] == "Super Health").sum()
-    )
+    health_centers_count = (_health_tiers == "Health Centers").sum()
 
-    pharmacies = (
-        (health_centers["Category"] == "Pharmacy").sum()
-    )
+    super_health_centers = (_health_tiers == "Super Health Centers").sum()
 
-    hospitals = (
-        health_centers["Category"].isin(["National", "QC LGU"]).sum()
-    )
+    pharmacies = (_health_tiers == "Health Centers with Pharmacy").sum()
+
+    # All three hospital tiers combined — previously this only
+    # counted "National"/"QC LGU", which silently included
+    # LGU-run lying-in clinics (not hospitals) while excluding the
+    # generic, unqualified "Private Hospitals" rows entirely.
+    hospitals = _health_tiers.isin([
+        "QC LGU-run Hospitals",
+        "National Government Hospitals",
+        "Private Hospitals",
+    ]).sum()
 
     k1, k2, k3, k4, k5, k6 = st.columns(6)
 
@@ -4426,13 +4322,17 @@ elif page == "Health Centers Map":
 
     if selected_category != "All":
 
+        # Filter options are the mapped tier names from
+        # HEALTH_CATEGORY_COLORS ("QC LGU-run Hospitals", etc.), not
+        # the raw Category values ("LGU-run hospital", "Super health
+        # care center", etc.) — comparing directly against the raw
+        # column always returned zero rows for every option except
+        # "All". Map each row's Category through
+        # health_category_mapper() first, the same function that
+        # already assigns marker colors, so this filter and the map
+        # legend agree on what belongs in each tier.
         hc = hc[
-            hc["Category"]
-            .str.contains(
-                selected_category,
-                case=False,
-                na=False
-            )
+            hc["Category"].apply(health_category_mapper) == selected_category
         ]
 
     if selected_health_source != "All":
@@ -4448,38 +4348,6 @@ elif page == "Health Centers Map":
     hc = hc.dropna(
         subset=["latitude", "longitude"]
     )
-
-    # --------------------------------------------------
-    # HOURS DISPLAY
-    # --------------------------------------------------
-
-    if "open_hours" in hc.columns:
-        hc["open_display"] = (
-            hc["open_hours"]
-            .fillna("Not available")
-        )
-    else:
-        hc["open_display"] = "Not available"
-
-    if "close_hours" in hc.columns:
-        hc["close_display"] = (
-            hc["close_hours"]
-            .fillna("Not available")
-        )
-    else:
-        hc["close_display"] = "Not available"
-
-    # --------------------------------------------------
-    # BARANGAY DISPLAY
-    # --------------------------------------------------
-
-    if "barangay" in hc.columns:
-        hc["barangay_display"] = (
-            hc["barangay"]
-            .fillna("Not available")
-        )
-    else:
-        hc["barangay_display"] = "Not available"
 
     # --------------------------------------------------
     # COLOR CONVERSION
@@ -4538,6 +4406,20 @@ elif page == "Health Centers Map":
     # HEALTH FACILITIES
     # --------------------------------------------------
 
+    hc["tooltip_html"] = build_tooltip_html(
+        hc, "Name",
+        [
+            ("Category", "Category"),
+            ("Provider Type", "Sector"),
+            ("District", "District"),
+            ("Barangay", "barangay"),
+            ("Address", "Address"),
+            ("Open", "open_hours"),
+            ("Close", "close_hours"),
+            ("Source", "data_source"),
+        ]
+    )
+
     health_layer = pdk.Layer(
         "ScatterplotLayer",
         data=hc,
@@ -4559,16 +4441,7 @@ elif page == "Health Centers Map":
     # --------------------------------------------------
 
     tooltip = {
-        "html": """
-        <b>{Name}</b><br/>
-        Category: {Category}<br/>
-        District: {District}<br/>
-        Barangay: {barangay_display}<br/>
-        Address: {Address}<br/>
-        Open: {open_display}<br/>
-        Close: {close_display}<br/>
-        Source: {data_source}
-        """,
+        "html": "{tooltip_html}",
         "style": {
             "backgroundColor": "white",
             "color": "black",
@@ -4583,7 +4456,8 @@ elif page == "Health Centers Map":
     deck = pdk.Deck(
         layers=[
             polygon_layer,
-            health_layer
+            health_layer,
+            load_reservoir_layer()
         ],
         initial_view_state=view_state,
         tooltip=tooltip,
@@ -4856,103 +4730,58 @@ elif page == "Older Persons Center Map":
     # SENIOR CITIZEN KPIs
     # --------------------------------------------------
 
-    senior_summary = pd.read_csv(
-        "processed/senior_summary.csv"
-    )
+    # See compute_senior_summary()'s docstring and the "Why don't
+    # these figures add up?" note below for why registered_seniors
+    # (OSCA) and the rest (2020 Census) are expected to disagree.
+    senior_summary = compute_senior_summary(demographics)
 
-    registered_seniors = int(
-        senior_summary.loc[
-            senior_summary["metric"] ==
-            "registered_seniors_2026",
-            "value"
-        ].iloc[0]
-    )
+    def _senior_metric(metric):
+        return int(
+            senior_summary.loc[
+                senior_summary["metric"] == metric,
+                "value"
+            ].iloc[0]
+        )
 
-    female_seniors = int(
-        senior_summary.loc[
-            senior_summary["metric"] ==
-            "female",
-            "value"
-        ].iloc[0]
-    )
-
-    male_seniors = int(
-        senior_summary.loc[
-            senior_summary["metric"] ==
-            "male",
-            "value"
-        ].iloc[0]
-    )
-
-    age_60_79 = int(
-        senior_summary.loc[
-            senior_summary["metric"] ==
-            "age_60_79",
-            "value"
-        ].iloc[0]
-    )
-
-    age_80_plus = int(
-        senior_summary.loc[
-            senior_summary["metric"] ==
-            "age_80_plus",
-            "value"
-        ].iloc[0]
-    )
+    registered_seniors = _senior_metric("registered_seniors")
+    female_seniors = _senior_metric("female")
+    male_seniors = _senior_metric("male")
+    age_60_79 = _senior_metric("age_60_79")
+    age_80_plus = _senior_metric("age_80_plus")
 
     total_facilities = len(
         older_person_care
-    )
-
-    nursing_centers = (
-        older_person_care["Category"]
-        .str.contains(
-            "Nursing",
-            case=False,
-            na=False
-        )
-        .sum()
-    )
-
-    bahay_aruga = (
-        older_person_care["Category"]
-        .str.contains(
-            "Bahay",
-            case=False,
-            na=False
-        )
-        .sum()
     )
 
     k1, k2, k3, k4, k5, k6 = st.columns(6)
 
     kpi_card(
         k1,
-        "Registered Seniors",
+        "Registered Seniors (OSCA)",
         f"{registered_seniors:,}"
     )
 
     kpi_card(
         k2,
-        "Female",
+        "Female (Census)",
         f"{female_seniors:,}"
     )
 
     kpi_card(
         k3,
-        "Male",
+        "Male (Census)",
         f"{male_seniors:,}"
     )
 
     kpi_card(
         k4,
-        "Age 60-79",
+        "Age 60-79 (Census)",
         f"{age_60_79:,}"
     )
 
     kpi_card(
         k5,
-        "Age 80+",
+        "Age 80+ (Census)",
         f"{age_80_plus:,}"
     )
 
@@ -4961,6 +4790,18 @@ elif page == "Older Persons Center Map":
         "Care Facilities",
         f"{total_facilities:,}",
         "up_good"
+    )
+
+    st.info(
+        "**Why don't these figures add up?** \"Registered Seniors\" comes from "
+        "OSCA's administrative registry; the sex and age breakdown comes from "
+        "the 2020 Census. These are two different sources collected in "
+        "different years, so they won't sum to the same total — OSCA's "
+        "registry is also cumulative, so seniors who have since passed away "
+        "or moved away stay on the count, which is part of why it can run "
+        "higher than the Census figure. Both update independently as new "
+        "data comes in, so the gap between them will narrow or widen over "
+        "time."
     )
 
     st.divider()
@@ -5065,67 +4906,6 @@ elif page == "Older Persons Center Map":
     )
 
     # --------------------------------------------------
-    # DISPLAY COLUMNS
-    # --------------------------------------------------
-
-    if "barangay" in opc.columns:
-
-        opc["barangay_display"] = (
-            opc["barangay"]
-            .fillna("Not available")
-        )
-
-    else:
-
-        opc["barangay_display"] = (
-            "Not available"
-        )
-
-    # Two facilities (CGNH Nursing Care Facility Services, Wellness
-    # Place & Care Homes) weren't part of the eldercare data review
-    # that assigned Sector (Public/Private) to every other facility,
-    # so they still carry no provider type — shown as "Not
-    # available" rather than a blank tooltip line.
-    if "Sector" in opc.columns:
-
-        opc["sector_display"] = (
-            opc["Sector"]
-            .fillna("Not available")
-        )
-
-    else:
-
-        opc["sector_display"] = (
-            "Not available"
-        )
-
-    if "open_hours" in opc.columns:
-
-        opc["open_display"] = (
-            opc["open_hours"]
-            .fillna("Not available")
-        )
-
-    else:
-
-        opc["open_display"] = (
-            "Not available"
-        )
-
-    if "close_hours" in opc.columns:
-
-        opc["close_display"] = (
-            opc["close_hours"]
-            .fillna("Not available")
-        )
-
-    else:
-
-        opc["close_display"] = (
-            "Not available"
-        )
-
-    # --------------------------------------------------
     # COLORS
     # --------------------------------------------------
 
@@ -5139,6 +4919,25 @@ elif page == "Older Persons Center Map":
     opc["r"] = [c[0] for c in colors]
     opc["g"] = [c[1] for c in colors]
     opc["b"] = [c[2] for c in colors]
+
+    # Two facilities (CGNH Nursing Care Facility Services, Wellness
+    # Place & Care Homes) weren't part of the eldercare data review
+    # that assigned Sector (Public/Private) to every other facility,
+    # so they still carry no provider type — the Provider Type
+    # line is simply omitted for those two rather than shown blank.
+    opc["tooltip_html"] = build_tooltip_html(
+        opc, "Name",
+        [
+            ("Category", "Category"),
+            ("Provider Type", "Sector"),
+            ("District", "District"),
+            ("Barangay", "barangay"),
+            ("Address", "Address"),
+            ("Open", "open_hours"),
+            ("Close", "close_hours"),
+            ("Source", "data_source"),
+        ]
+    )
 
     # --------------------------------------------------
     # VIEW STATE
@@ -5193,17 +4992,7 @@ elif page == "Older Persons Center Map":
     # --------------------------------------------------
 
     tooltip = {
-        "html": """
-        <b>{Name}</b><br/>
-        Category: {Category}<br/>
-        Provider Type: {sector_display}<br/>
-        District: {District}<br/>
-        Barangay: {barangay_display}<br/>
-        Address: {Address}<br/>
-        Open: {open_display}<br/>
-        Close: {close_display}<br/>
-        Source: {data_source}
-        """,
+        "html": "{tooltip_html}",
         "style": {
             "backgroundColor": "white",
             "color": "black",
@@ -5218,7 +5007,8 @@ elif page == "Older Persons Center Map":
     deck = pdk.Deck(
         layers=[
             polygon_layer,
-            facility_layer
+            facility_layer,
+            load_reservoir_layer()
         ],
         initial_view_state=view_state,
         tooltip=tooltip,
@@ -5292,7 +5082,7 @@ elif page == "Older Persons Center Map":
             )
 
     seniors_per_year = pd.read_csv(
-        "processed/seniors_per_year.csv"
+        "processed/editable/seniors_per_year.csv"
     )
 
     seniors_per_year[
@@ -5682,7 +5472,7 @@ elif page == "Long-Term Care & Rehabilitation":
             margin-bottom:10px;
             padding-top:0px;
         ">
-            Long-Term Care & Rehabilitation Services
+            Long-Term Care and Rehabilitation Facilities
         </h2>
         """,
         unsafe_allow_html=True
@@ -5705,8 +5495,10 @@ elif page == "Long-Term Care & Rehabilitation":
         .nunique()
     )
 
+    # normalize_barangay_names() first — see the same fix on the
+    # Childcare page for why raw casing double-counts barangays.
     covered_barangays = (
-        long_term_care["barangay"]
+        normalize_barangay_names(long_term_care["barangay"])
         .nunique()
     )
 
@@ -5822,49 +5614,6 @@ elif page == "Long-Term Care & Rehabilitation":
     )
 
     # --------------------------------------------------
-    # DISPLAY COLUMNS
-    # --------------------------------------------------
-
-    if "barangay" in ltc.columns:
-
-        ltc["barangay_display"] = (
-            ltc["barangay"]
-            .fillna("Not available")
-        )
-
-    else:
-
-        ltc["barangay_display"] = (
-            "Not available"
-        )
-
-    if "open_hours" in ltc.columns:
-
-        ltc["open_display"] = (
-            ltc["open_hours"]
-            .fillna("Not available")
-        )
-
-    else:
-
-        ltc["open_display"] = (
-            "Not available"
-        )
-
-    if "close_hours" in ltc.columns:
-
-        ltc["close_display"] = (
-            ltc["close_hours"]
-            .fillna("Not available")
-        )
-
-    else:
-
-        ltc["close_display"] = (
-            "Not available"
-        )
-
-    # --------------------------------------------------
     # COLORS
     # --------------------------------------------------
 
@@ -5911,6 +5660,24 @@ elif page == "Long-Term Care & Rehabilitation":
     # FACILITIES
     # --------------------------------------------------
 
+    # Provider Type is unknown for nearly all Long-Term Care
+    # facilities (155/156 rows have no Sector value in
+    # care_supply_facilities.csv) — the line is omitted for those
+    # rows rather than shown blank.
+    ltc["tooltip_html"] = build_tooltip_html(
+        ltc, "Name",
+        [
+            ("Category", "Category"),
+            ("Provider Type", "Sector"),
+            ("Source", "data_source"),
+            ("District", "District"),
+            ("Barangay", "barangay"),
+            ("Address", "Address"),
+            ("Open", "open_hours"),
+            ("Close", "close_hours"),
+        ]
+    )
+
     facility_layer = pdk.Layer(
         "ScatterplotLayer",
         data=ltc,
@@ -5932,16 +5699,7 @@ elif page == "Long-Term Care & Rehabilitation":
     # --------------------------------------------------
 
     tooltip = {
-        "html": """
-        <b>{Name}</b><br/>
-        Category: {Category}<br/>
-        Source: {data_source}<br/>
-        District: {District}<br/>
-        Barangay: {barangay_display}<br/>
-        Address: {Address}<br/>
-        Open: {open_display}<br/>
-        Close: {close_display}
-        """,
+        "html": "{tooltip_html}",
         "style": {
             "backgroundColor": "white",
             "color": "black",
@@ -5956,7 +5714,8 @@ elif page == "Long-Term Care & Rehabilitation":
     deck = pdk.Deck(
         layers=[
             polygon_layer,
-            facility_layer
+            facility_layer,
+            load_reservoir_layer()
         ],
         initial_view_state=view_state,
         tooltip=tooltip,
@@ -6197,7 +5956,7 @@ elif page == "Persons with Disabilities":
     # demographics, demand_city_context, and
     # demand_district_context are loaded once at app
     # startup (see top of file) from
-    # processed/indicators/demographics_by_barangay.csv,
+    # processed/editable/demographics_by_barangay.csv,
     # demand_city_context.csv, and
     # demand_district_context.csv.
     # --------------------------------------------------
@@ -6710,49 +6469,6 @@ elif page == "Action Offices":
     )
 
     # --------------------------------------------------
-    # DISPLAY COLUMNS
-    # --------------------------------------------------
-
-    if "barangay" in sat.columns:
-
-        sat["barangay_display"] = (
-            sat["barangay"]
-            .fillna("Not available")
-        )
-
-    else:
-
-        sat["barangay_display"] = (
-            "Not available"
-        )
-
-    if "open_hours" in sat.columns:
-
-        sat["open_display"] = (
-            sat["open_hours"]
-            .fillna("Not available")
-        )
-
-    else:
-
-        sat["open_display"] = (
-            "Not available"
-        )
-
-    if "close_hours" in sat.columns:
-
-        sat["close_display"] = (
-            sat["close_hours"]
-            .fillna("Not available")
-        )
-
-    else:
-
-        sat["close_display"] = (
-            "Not available"
-        )
-
-    # --------------------------------------------------
     # COLORS BY DISTRICT
     # --------------------------------------------------
 
@@ -6766,6 +6482,19 @@ elif page == "Action Offices":
     sat["r"] = [c[0] for c in colors]
     sat["g"] = [c[1] for c in colors]
     sat["b"] = [c[2] for c in colors]
+
+    # No "District" field here — Category is the office's title
+    # ("District 4", etc.), so a "District: 4" line right underneath
+    # would just repeat what the title already says.
+    sat["tooltip_html"] = build_tooltip_html(
+        sat, "Category",
+        [
+            ("Barangay", "barangay"),
+            ("Address", "Address"),
+            ("Open", "open_hours"),
+            ("Close", "close_hours"),
+        ]
+    )
 
     # --------------------------------------------------
     # VIEW STATE
@@ -6821,12 +6550,13 @@ elif page == "Action Offices":
 
     tooltip = {
         "html": """
-        <b>{Category}</b><br/>
-        District: {District}<br/>
-        Barangay: {barangay_display}<br/>
-        Address: {Address}<br/>
-        Open: {open_display}<br/>
-        Close: {close_display}
+        {tooltip_html}
+        <br/><br/>
+        <b>Services:</b><br/>
+        • PDAO Satellite Office: ID services for persons with disabilities; purchase &amp; free movie booklets<br/>
+        • OSCA Satellite Office: Senior Citizen ID; medicine, grocery &amp; movie booklets; centenarian recognition; death benefits; social pension<br/>
+        • PESO Satellite Office: Job referral; employer accreditation; workers' association registration; OFW &amp; Kasambahay assistance<br/>
+        • SSDD Satellite Office: Social case studies; medical &amp; burial assistance, persons with disabilities case studies, women's case management, elderly/persons with disabilities intake, training, and livelihood &amp; capital assistance
         """,
         "style": {
             "backgroundColor": "white",
@@ -6842,7 +6572,8 @@ elif page == "Action Offices":
     deck = pdk.Deck(
         layers=[
             polygon_layer,
-            office_layer
+            office_layer,
+            load_reservoir_layer()
         ],
         initial_view_state=view_state,
         tooltip=tooltip,
@@ -6994,49 +6725,6 @@ elif page == "Migration Resource Center":
     )
 
     # --------------------------------------------------
-    # DISPLAY COLUMNS
-    # --------------------------------------------------
-
-    if "barangay" in mig.columns:
-
-        mig["barangay_display"] = (
-            mig["barangay"]
-            .fillna("Not available")
-        )
-
-    else:
-
-        mig["barangay_display"] = (
-            "Not available"
-        )
-
-    if "open_hours" in mig.columns:
-
-        mig["open_display"] = (
-            mig["open_hours"]
-            .fillna("Not available")
-        )
-
-    else:
-
-        mig["open_display"] = (
-            "Not available"
-        )
-
-    if "close_hours" in mig.columns:
-
-        mig["close_display"] = (
-            mig["close_hours"]
-            .fillna("Not available")
-        )
-
-    else:
-
-        mig["close_display"] = (
-            "Not available"
-        )
-
-    # --------------------------------------------------
     # COLORS
     # --------------------------------------------------
 
@@ -7076,6 +6764,18 @@ elif page == "Migration Resource Center":
     # FACILITIES
     # --------------------------------------------------
 
+    mig["tooltip_html"] = build_tooltip_html(
+        mig, "Name",
+        [
+            ("Provider Type", "Sector"),
+            ("District", "District"),
+            ("Barangay", "barangay"),
+            ("Address", "Address"),
+            ("Open", "open_hours"),
+            ("Close", "close_hours"),
+        ]
+    )
+
     facility_layer = pdk.Layer(
         "ScatterplotLayer",
         data=mig,
@@ -7098,14 +6798,8 @@ elif page == "Migration Resource Center":
 
     tooltip = {
         "html": """
-        <b>{Name}</b><br/>
-        Category: {Category}<br/>
-        District: {District}<br/>
-        Barangay: {barangay_display}<br/>
-        Address: {Address}<br/>
-        Open: {open_display}<br/>
-        Close: {close_display}<br/>
-        <br/>
+        {tooltip_html}
+        <br/><br/>
         <b>Services:</b><br/>
         1. Pre-Migration and Pre-Employment Trainings<br/>
         2. Pre-Departure Trainings<br/>
@@ -7126,7 +6820,8 @@ elif page == "Migration Resource Center":
     deck = pdk.Deck(
         layers=[
             polygon_layer,
-            facility_layer
+            facility_layer,
+            load_reservoir_layer()
         ],
         initial_view_state=view_state,
         tooltip=tooltip,
@@ -7331,17 +7026,17 @@ elif page == "Care Services Explorer":
 
     climate_overlay_layers = {
         "Land-Surface Temperature": {
-            "path": "processed/climate/landsat_lst_summer_avg_7yr_EPSG3123_filled.tif",
+            "path": "processed/reference/climate/landsat_lst_summer_avg_7yr_EPSG3123_filled.tif",
             "colormap": "YlOrRd",
             "binary": False
         },
         "Vegetation (NDVI)": {
-            "path": "processed/climate/ndvi_mean_2025_EPSG3123.tif",
+            "path": "processed/reference/climate/ndvi_mean_2025_EPSG3123.tif",
             "colormap": "Greens",
             "binary": False
         },
         "Flood Inundation (100-yr)": {
-            "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
+            "path": "processed/reference/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
             "colormap": "Blues",
             "binary": True
         }
@@ -7392,9 +7087,25 @@ elif page == "Care Services Explorer":
 
     with col3:
 
+        # Derived from the data (union across every facility type
+        # shown on this page) rather than hardcoded — see the
+        # Childcare Centers filter above for why.
+        _explorer_sources = sorted(
+            pd.concat([
+                childcare_centers["data_source"],
+                schools["data_source"],
+                health_centers["data_source"],
+                older_person_care["data_source"],
+                long_term_care["data_source"],
+                action_offices["data_source"],
+                migration_centers["data_source"],
+                bus_stops["data_source"],
+            ]).dropna().unique()
+        )
+
         selected_explorer_source = st.selectbox(
             "Data Source",
-            ["All", "Administrative data", "Google API"],
+            ["All"] + _explorer_sources,
             key="explorer_source_filter"
         )
 
@@ -7548,7 +7259,7 @@ elif page == "Care Services Explorer":
     # MAP DISPLAY
     # --------------------------------------------------
 
-    map_html, climate_legend_info, demand_legend_info = build_explorer_map(
+    explorer_deck, climate_legend_info, demand_legend_info = build_explorer_map(
         tuple(selected_layers),
         selected_district,
         selected_climate_layers=(),
@@ -7576,8 +7287,8 @@ elif page == "Care Services Explorer":
             unsafe_allow_html=True
         )
 
-    st.components.v1.html(
-        map_html,
+    st.pydeck_chart(
+        explorer_deck,
         height=850
     )
 
@@ -7653,7 +7364,7 @@ elif page == "Accessibility Analysis":
     # LOAD MAPS (for Socio-Economic Indicators tab)
     # ==================================================
     barangay_map = gpd.read_file(
-        "processed/qc_barangays.geojson"
+        "processed/reference/qc_barangays.geojson"
     )
 
     # Normalize barangay_name for matching with demographics data
@@ -8037,7 +7748,7 @@ elif page == "Accessibility Analysis":
         # ==================================================
 
         barangay_geo = gpd.read_file(
-            "processed/qc_barangays.geojson"
+            "processed/reference/qc_barangays.geojson"
         )
 
         barangay_geo["barangay_name"] = (
@@ -8189,7 +7900,8 @@ elif page == "Accessibility Analysis":
         deck = pdk.Deck(
             layers=[
                 barangay_choropleth_layer,
-                district_boundary_layer
+                district_boundary_layer,
+                load_reservoir_layer()
             ],
             initial_view_state=view_state,
             tooltip=tooltip,
@@ -8246,7 +7958,7 @@ elif page == "Accessibility Analysis":
         #  Enrich with dominant zone 
         try:
             _zs_p = pd.read_csv(
-                "processed/zoning/qc_zoning_summary.csv"
+                "processed/reference/zoning/qc_zoning_summary.csv"
             )
             _nlu_p = {"ROAD", "WATER", "X"}
             _zc_p = [
@@ -8602,7 +8314,8 @@ elif page == "Accessibility Analysis":
 
         deck = pdk.Deck(
             layers=[
-                socio_layer
+                socio_layer,
+                load_reservoir_layer()
             ],
             initial_view_state=view_state,
             tooltip=tooltip,
@@ -8708,11 +8421,6 @@ elif page == "Care Planning & Investment Priorities":
     # Eldercare facilities: Use ONLY "Older persons care" (elderly-specific)
     # Exclude "Health centers" and "Long-term care" which serve multiple populations
     eldercare_facility_cols = ["Older persons care"]
-    # NOTE: There are NO disability-specific facilities in the available data.
-    # Setting to empty list means all barangays have 0 disability facilities.
-    # This is CORRECT - disability services gap is universal and unmeasured.
-    # Disability priority ranking will be based 100% on PWD demand after facility weighting.
-    disability_facility_cols = []
 
     barangay_access["Childcare_Facilities"] = (
         barangay_access[childcare_facility_cols].sum(axis=1)
@@ -8722,30 +8430,17 @@ elif page == "Care Planning & Investment Priorities":
         barangay_access[eldercare_facility_cols].sum(axis=1)
     )
 
-    # Disability facilities: All zeros (no disability-specific facilities exist)
-    barangay_access["Disability_Facilities"] = 0
+    # PWD Facilities (see compute_pwd_facility_counts_by_barangay in
+    # functions.py): Long-term care categories with "center" but not
+    # "clinic" in the name, plus Schools' "Special Education
+    # Program" category.
+    barangay_access["Disability_Facilities"] = (
+        barangay_access["PWD Facilities"]
+        if "PWD Facilities" in barangay_access.columns else 0
+    )
 
     # Keep total facilities for display
     barangay_access["Facilities"] = barangay_access["Total_Facilities"]
-
-    # ==================================================
-    # SERVICE DIVERSITY
-    # ==================================================
-
-    facility_type_cols = [
-        "Childcare",
-        "Health centers",
-        "Long-term care and rehabilitation services",
-        "Older persons care",
-        "Quezon City satellite offices for services",
-        "Schools",
-        "Trainings"
-    ]
-
-    barangay_access["Service Diversity"] = (
-        (barangay_access[facility_type_cols] > 0)
-        .sum(axis=1)
-    )
 
     # ==================================================
     # CARE DEMAND - BY POPULATION TYPE
@@ -8968,6 +8663,9 @@ elif page == "Care Planning & Investment Priorities":
         **Disability Priority Score** = 40% × (Persons with Disabilities Rank) + 60% × (Facility Gap Rank)
         - Identifies barangays with many registered persons with disabilities but few disability services
         - Higher weight on facility gap because disability services are nearly absent city-wide
+        - **What counts as a disability facility:** counts only persons-with-disabilities facilities
+          with "center" in the name, excluding "clinics" as these are more health-related. It
+          additionally includes two categories — "Special Education Program" and "Therapy Center."
 
         **Overall Priority Score** = Maximum of the three domains
         - A barangay gets high priority if ANY domain is severely underserved
@@ -8978,8 +8676,8 @@ elif page == "Care Planning & Investment Priorities":
 
         st.markdown("""
         **Scaling Successful Care Ecosystems Across Barangays:**
-        1. **Study "Well-Established" Barangays** → These barangays have high Service Diversity scores
-           because they host multiple facility types (schools, health centers, childcare, etc.).
+        1. **Study "Well-Established" Barangays** → These barangays host multiple facility types
+           (schools, health centers, childcare, etc.).
            Identify one or two flagship barangays in each district and document their care ecosystem model.
 
         2. **Replicate in Peer Clusters** → Use the Barangay Clusters page to find 3–4 peer barangays
@@ -9001,14 +8699,14 @@ elif page == "Care Planning & Investment Priorities":
     # ==================================================
 
     barangay_geo = gpd.read_file(
-        "processed/qc_barangays.geojson"
+        "processed/reference/qc_barangays.geojson"
     )
     # ==================================================
     # MAP
     # ==================================================
 
     barangay_geo = gpd.read_file(
-        "processed/qc_barangays.geojson"
+        "processed/reference/qc_barangays.geojson"
     )
 
     # Normalize join keys defensively, both sides must
@@ -9097,16 +8795,14 @@ elif page == "Care Planning & Investment Priorities":
         "Barangay",
         "Facilities",
         "Care Demand",
-        "Service Diversity",
         "Priority Score"
     ]
 
     # "Barangay" comes from the right side of the left-merge above,
     # so it's NaN for any polygon with no matching row in
-    # barangay_access (e.g. Damar, Reservoir, barangays with no
-    # care_v3 records at all). "barangay_name" comes from the
-    # geometry itself and is always populated, so use it as the
-    # display name whenever "Barangay" is missing.
+    # barangay_access. "barangay_name" comes from the geometry
+    # itself and is always populated, so use it as the display name
+    # whenever "Barangay" is missing.
     priority_map["Barangay"] = (
         priority_map["Barangay"]
         .fillna(priority_map["barangay_name"])
@@ -9114,7 +8810,7 @@ elif page == "Care Planning & Investment Priorities":
 
     # Round numeric fields and substitute a clear placeholder
     # for missing values so the tooltip never shows blank.
-    for col in ["Facilities", "Care Demand", "Service Diversity", "Priority Score"]:
+    for col in ["Facilities", "Care Demand", "Priority Score"]:
         priority_map[col] = priority_map[col].round(1)
 
     priority_map[tooltip_fields] = priority_map[tooltip_fields].fillna("No data")
@@ -9161,7 +8857,6 @@ elif page == "Care Planning & Investment Priorities":
         <b>{Barangay}</b><br/>
         Facilities: {Facilities}<br/>
         Care Demand: {Care Demand}<br/>
-        Service Diversity: {Service Diversity}<br/>
         Priority Score: {Priority Score}
         """,
         "style": {
@@ -9177,7 +8872,8 @@ elif page == "Care Planning & Investment Priorities":
 
     deck = pdk.Deck(
         layers=[
-            priority_layer
+            priority_layer,
+            load_reservoir_layer()
         ],
         initial_view_state=view_state,
         tooltip=tooltip,
@@ -9213,7 +8909,6 @@ elif page == "Care Planning & Investment Priorities":
             "Total": "sum",
             "Facilities": "sum",
             "Care Demand": "sum",
-            "Service Diversity": "mean",
             "Priority Score": "mean",
             "Care Demand per Facility": "mean"
         })
@@ -9237,7 +8932,6 @@ elif page == "Care Planning & Investment Priorities":
         "Total": "Population",
         "Facilities": "Total Facilities",
         "Care Demand": "Care Demand (0-5 & 60+)",
-        "Service Diversity": "Avg. Service Types",
         "Priority Score": "Priority Score (0-100)",
         "Care Demand per Facility": "Avg. Population per Facility"
     })
@@ -9306,7 +9000,6 @@ elif page == "Care Planning & Investment Priorities":
                     "Total",
                     "Facilities",
                     "Care Demand",
-                    "Service Diversity",
                     "Priority Score"
                 ]
             ].head(25),
@@ -9575,7 +9268,7 @@ elif page == "Barangay Clusters":
     # ==================================================
 
     barangay_map = gpd.read_file(
-        "processed/qc_barangays.geojson"
+        "processed/reference/qc_barangays.geojson"
     )
 
     barangay_map["barangay_name"] = (
@@ -9866,7 +9559,8 @@ elif page == "Barangay Clusters":
 
     deck = pdk.Deck(
         layers=[
-            cluster_layer
+            cluster_layer,
+            load_reservoir_layer()
         ],
         initial_view_state=view_state,
         tooltip=tooltip,
@@ -10211,19 +9905,17 @@ elif page == "Climate Layers":
     # School type sub-filter, only shown when "Schools" is the
     # selected facility. "Primary" is a combined bucket (not a
     # value that exists in the source data) covering both
-    # Preschool and Elementary school; every other option maps
-    # 1:1 to an existing Category value.
-    SCHOOL_SUBCATEGORY_OPTIONS = {
-        "All": None,
-        "Primary (Preschool + Elementary)": ["Preschool", "Elementary school"],
-        "Preschool": ["Preschool"],
-        "Elementary school": ["Elementary school"],
-        "Junior high school": ["Junior high school"],
-        "Senior high school": ["Senior high school"],
-        "High school": ["High school"],
-        "Private school": ["Private school"],
-        "Special Education Program": ["Special Education Program"]
-    }
+    # Preschool and Elementary school; every other option maps 1:1
+    # to an existing Category value, derived from the data rather
+    # than hardcoded so a new school Category shows up here
+    # automatically next time the data is refreshed.
+    SCHOOL_SUBCATEGORY_OPTIONS = {"All": None}
+
+    if {"Preschool", "Elementary school"} <= set(schools["Category"].dropna().unique()):
+        SCHOOL_SUBCATEGORY_OPTIONS["Primary (Preschool + Elementary)"] = ["Preschool", "Elementary school"]
+
+    for cat in sorted(schools["Category"].dropna().unique()):
+        SCHOOL_SUBCATEGORY_OPTIONS[cat] = [cat]
 
     selected_school_subcat = "All"
 
@@ -10253,9 +9945,19 @@ elif page == "Climate Layers":
             )
 
     with fac_source_col:
+        # Derived from the data (union across every facility type
+        # in CLIMATE_FACILITY_OPTIONS) rather than hardcoded — see
+        # the Childcare Centers filter for why.
+        _climate_fac_sources = sorted(
+            pd.concat([
+                df["data_source"] for df in CLIMATE_FACILITY_OPTIONS.values()
+                if "data_source" in df.columns
+            ]).dropna().unique()
+        )
+
         selected_climate_fac_source = st.radio(
             "Data Source",
-            ["All", "Administrative data", "Google API"],
+            ["All"] + _climate_fac_sources,
             index=0,
             key="climate_fac_source",
             horizontal=True
@@ -10309,36 +10011,55 @@ elif page == "Climate Layers":
             # were cast to string dtype upstream (see clean_dataframe
             # in functions.py), which turns a real NaN into the
             # literal text "nan" rather than leaving it as a value
-            # pd.isna() would still catch here.
+            # pd.isna() would still catch here. Missing values map
+            # to "" (not "Not available") so the Line1-4 assembly
+            # below can drop a field's label entirely rather than
+            # show e.g. "Open: " with nothing after it.
             facility_points[col] = facility_points[col].map(
                 lambda v: (
-                    "Not available"
+                    ""
                     if pd.isna(v) or str(v).strip().lower() == "nan"
                     else str(v)
                 )
             )
         else:
-            facility_points[col] = "Not available"
+            facility_points[col] = ""
 
     # Bus stops have no Category value in the source data — the
     # bus route number/name is the closer equivalent, so it fills
-    # in for Category on this one facility type rather than
-    # showing "Not available" for every bus stop.
+    # in for Category on this one facility type.
     if "bus_route" in facility_points.columns:
         facility_points["Category"] = facility_points["Category"].where(
-            facility_points["Category"] != "Not available",
+            facility_points["Category"] != "",
             "Bus Route " + facility_points["bus_route"]
         )
 
-    facility_points["Line1"] = (
-        facility_points["Category"] + " · District " + facility_points["District"]
+    def _join_nonempty(parts, sep=" · "):
+        return sep.join(p for p in parts if p)
+
+    facility_points["Line1"] = [
+        _join_nonempty(
+            [cat, f"District {d}" if d else ""]
+        )
+        for cat, d in zip(
+            facility_points["Category"], facility_points["District"]
+        )
+    ]
+    facility_points["Line2"] = facility_points["Address"].map(
+        lambda a: f"Address: {a}" if a else ""
     )
-    facility_points["Line2"] = "Address: " + facility_points["Address"]
-    facility_points["Line3"] = (
-        "Open " + facility_points["open_hours"]
-        + " – Close " + facility_points["close_hours"]
+    facility_points["Line3"] = [
+        _join_nonempty(
+            [f"Open {o}" if o else "", f"Close {c}" if c else ""],
+            sep=" – "
+        )
+        for o, c in zip(
+            facility_points["open_hours"], facility_points["close_hours"]
+        )
+    ]
+    facility_points["Line4"] = facility_points["data_source"].map(
+        lambda s: f"Source: {s}" if s else ""
     )
-    facility_points["Line4"] = "Source: " + facility_points["data_source"]
 
     # Light purple, the same "generic facility" color used for
     # markers elsewhere in the app (e.g. Migration Resource Centers,
@@ -10387,7 +10108,7 @@ elif page == "Climate Layers":
 
     climate_layers = {
         "Flood Inundation (100-yr)": {
-            "path": "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
+            "path": "processed/reference/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
             "colormap": "Blues",
             "binary": True,
             "unit": "flooded / not flooded",
@@ -10400,7 +10121,7 @@ elif page == "Climate Layers":
             )
         },
         "Land-Surface Temperature": {
-            "path": "processed/climate/landsat_lst_summer_avg_7yr_EPSG3123_filled.tif",
+            "path": "processed/reference/climate/landsat_lst_summer_avg_7yr_EPSG3123_filled.tif",
             "colormap": "YlOrRd",
             "binary": False,
             "unit": "°C",
@@ -10416,7 +10137,7 @@ elif page == "Climate Layers":
             )
         },
         "Vegetation (NDVI)": {
-            "path": "processed/climate/ndvi_mean_2025_EPSG3123.tif",
+            "path": "processed/reference/climate/ndvi_mean_2025_EPSG3123.tif",
             "colormap": "Greens",
             "binary": False,
             "unit": "NDVI",
@@ -10489,7 +10210,8 @@ elif page == "Climate Layers":
                 layers=[
                     bitmap_layer,
                     boundary_layer,
-                    facility_layer
+                    facility_layer,
+                    load_reservoir_layer()
                 ],
                 initial_view_state=view_state,
                 tooltip={
@@ -10588,7 +10310,7 @@ elif page == "Climate Layers":
         # --------------------------------------------------
 
         clim_barangay = gpd.read_file(
-            "processed/qc_barangays.geojson"
+            "processed/reference/qc_barangays.geojson"
         )
 
         clim_barangay["barangay_name"] = (
@@ -10727,7 +10449,7 @@ elif page == "Climate Layers":
             qc_boundary = load_qc_boundary()
 
             flood_png, flood_bounds, _, _ = raster_to_bitmap_layer(
-                "processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
+                "processed/reference/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
                 colormap="Blues",
                 binary=True,
                 _mask_geometry=qc_boundary
@@ -10776,6 +10498,7 @@ elif page == "Climate Layers":
 
         map_layers.append(district_boundary_layer)
         map_layers.append(facility_layer)
+        map_layers.append(load_reservoir_layer())
 
         view_state = pdk.ViewState(
             latitude=center_lat,
@@ -10938,8 +10661,13 @@ elif page == "Zoning Map":
     # re-reading from disk on every tab switch)
     @st.cache_data(show_spinner=False)
     def _load_zoning_merged():
-        _zs = pd.read_csv("processed/zoning/qc_zoning_summary.csv")
-        _dm = pd.read_csv("processed/indicators/demographics_by_barangay.csv")
+        _zs = pd.read_csv("processed/reference/zoning/qc_zoning_summary.csv")
+        # load_demographics() rather than a direct read — this tab's
+        # Facility-Zone Gap Analysis below reads ratio_childcare/
+        # ratio_school_6_17/ratio_pop_health/ratio_old_60/ratio_old_80,
+        # which are computed live (see compute_facility_ratios) and
+        # no longer exist in the raw CSV.
+        _dm = load_demographics()
         _nlu = {"ROAD", "WATER", "X"}
         _zcols = [
             c for c in _zs.columns
@@ -10965,10 +10693,15 @@ elif page == "Zoning Map":
 
     _zoning_summary, _demographics, _zoning_merged = _load_zoning_merged()
 
-    #  City-wide KPI summary stats 
+    #  City-wide KPI summary stats
+    # "QMC" (Quezon Memorial Circle) is a landmark polygon in the
+    # zoning source data, not a barangay — excluded here so any
+    # barangay count/list built from _zoning_summary stays at 142,
+    # even though its zone polygons still render on the map.
     _nlu_kpi = {"ROAD", "WATER", "X", "Unknown"}
     _total_brgy = len(_zoning_summary[
-        ~_zoning_summary["Dominant Zone"].isin(_nlu_kpi)
+        (~_zoning_summary["Dominant Zone"].isin(_nlu_kpi))
+        & (_zoning_summary["barangay"] != "QMC")
     ])
 
     _zone_groups = {
@@ -11080,15 +10813,15 @@ elif page == "Zoning Map":
         # up both serialisation and browser rendering.)
         @st.cache_data(show_spinner="Loading zoning data...")
         def load_zoning_data():
-            zoning = gpd.read_file("processed/zoning/qc_zoning.geojson")
-            borders = gpd.read_file("processed/qc_barangays.geojson")
+            zoning = gpd.read_file("processed/reference/zoning/qc_zoning.geojson")
+            borders = gpd.read_file("processed/reference/qc_barangays.geojson")
             zoning["geometry"] = zoning["geometry"].simplify(
                 0.00005, preserve_topology=True
             )
             borders["geometry"] = borders["geometry"].simplify(
                 0.00005, preserve_topology=True
             )
-            summary = pd.read_csv("processed/zoning/qc_zoning_summary.csv")
+            summary = pd.read_csv("processed/reference/zoning/qc_zoning_summary.csv")
             return zoning, borders, summary
 
         try:
@@ -11097,16 +10830,22 @@ elif page == "Zoning Map":
             st.error(
                 f"Could not load zoning data: {e}\n\n"
                 "Make sure the files are at:\n"
-                "- `processed/zoning/qc_zoning.geojson`\n"
-                "- `processed/zoning/qc_zoning_summary.csv`"
+                "- `processed/reference/zoning/qc_zoning.geojson`\n"
+                "- `processed/reference/zoning/qc_zoning_summary.csv`"
             )
             st.stop()
 
         all_zone_types = sorted(
             zoning_gdf["zone_type"].dropna().unique().tolist()
         )
+        # "QMC" (Quezon Memorial Circle) is a landmark polygon in
+        # the zoning source data, not a barangay — excluded from
+        # the barangay picker (but its zone polygons still render
+        # on the map in the "All" view; it's just not selectable
+        # or counted as one of the 142 barangays).
         all_barangays = sorted(
-            zoning_gdf["barangay"].dropna().unique().tolist()
+            b for b in zoning_gdf["barangay"].dropna().unique().tolist()
+            if b != "QMC"
         )
 
         #  Sidebar: colour legend 
@@ -11171,7 +10910,12 @@ elif page == "Zoning Map":
         col_k1, col_k2, col_k3 = st.columns(3)
         with col_k1:
             with st.container(border=True):
-                st.metric("Barangays", gdf_filtered["barangay"].nunique())
+                st.metric(
+                    "Barangays",
+                    gdf_filtered[
+                        gdf_filtered["barangay"] != "QMC"
+                    ]["barangay"].nunique()
+                )
         with col_k2:
             with st.container(border=True):
                 st.metric("Zone polygons", f"{len(gdf_filtered):,}")
@@ -11233,6 +10977,29 @@ elif page == "Zoning Map":
             pickable=False,
         )
 
+        # Reservoir isn't one of the 142 barangays and carries no
+        # zone/demographic data — shown here purely as a geographic
+        # landmark (same treatment as QMC above: visible, but never
+        # part of any barangay count or list). "zone_type" is set to
+        # a plain description rather than left blank so the shared
+        # tooltip template below doesn't show an empty "Zone: " line.
+        _reservoir_gdf = gpd.read_file(
+            "processed/reference/qc_reservoir.geojson",
+            engine="pyogrio"
+        )
+        _reservoir_gdf["barangay"] = _reservoir_gdf["barangay_name"]
+        _reservoir_gdf["zone_type"] = "Water body"
+
+        reservoir_layer = pdk.Layer(
+            "GeoJsonLayer",
+            data=json.loads(_reservoir_gdf.to_json()),
+            stroked=True,
+            filled=False,
+            get_line_color=[80, 80, 80, 200],
+            line_width_min_pixels=1.2,
+            pickable=True,
+        )
+
         view_state = pdk.ViewState(
             latitude=center_lat,
             longitude=center_lon,
@@ -11243,7 +11010,7 @@ elif page == "Zoning Map":
         )
 
         deck = pdk.Deck(
-            layers=[zoning_layer, border_layer],
+            layers=[zoning_layer, border_layer, reservoir_layer],
             initial_view_state=view_state,
             tooltip={
                 "html": "<b>{barangay}</b><br/>Zone: {zone_type}",
@@ -11278,6 +11045,15 @@ elif page == "Zoning Map":
             if c not in ("barangay_id", "barangay", "total_polygons")
         ]
 
+        # Reservoir is a landmark polygon with no zone data at all
+        # (unlike QMC, which has real zone polygons) — leave every
+        # column but the name blank rather than showing a row of
+        # zeros/NaN across every zone type.
+        summary_show.loc[
+            summary_show["barangay"] == "Reservoir",
+            ["total_polygons"] + zone_cols
+        ] = np.nan
+
         display_cols = ["barangay", "total_polygons"] + zone_cols
 
         with st.container(border=True):
@@ -11306,7 +11082,7 @@ elif page == "Zoning Map":
 
         try:
             _zs2 = pd.read_csv(
-                "processed/zoning/qc_zoning_summary.csv"
+                "processed/reference/zoning/qc_zoning_summary.csv"
             )
             _nlu2 = {"ROAD", "WATER", "X"}
             _zcols2 = [
@@ -11401,7 +11177,7 @@ elif page == "Zoning Map":
             with st.container(border=True):
                 st.pydeck_chart(
                     pdk.Deck(
-                        layers=[_choro_layer],
+                        layers=[_choro_layer, load_reservoir_layer()],
                         initial_view_state=pdk.ViewState(
                             latitude=14.676, longitude=121.043,
                             zoom=11, pitch=0, min_zoom=11, max_zoom=17,
@@ -11421,20 +11197,26 @@ elif page == "Zoning Map":
                 "Full list sorted alphabetically. Use alongside "
                 "the Accessibility Analysis to interpret whether "
                 "gaps reflect genuine care deficits or land-use "
-                "constraints. "
-                "**Note:** Unknown = no polygon data in source "
-                "(e.g. Reservoir). Where two zone types tie on "
+                "constraints. Where two zone types tie on "
                 "polygon count, the first alphabetically is used "
                 ",  only Mangga and West Kamias are affected."
             )
+            _dom_per_brgy = (
+                _zs2[["barangay", "Dominant Zone", "total_polygons"]]
+                .rename(columns={
+                    "barangay": "Barangay",
+                    "total_polygons": "Total Polygons"
+                })
+            )
+            # Reservoir is a landmark, not a barangay, and has no
+            # zone data at all — show its name only.
+            _dom_per_brgy.loc[
+                _dom_per_brgy["Barangay"] == "Reservoir",
+                ["Dominant Zone", "Total Polygons"]
+            ] = np.nan
             with st.container(border=True):
                 st.dataframe(
-                    _zs2[["barangay", "Dominant Zone", "total_polygons"]]
-                    .rename(columns={
-                        "barangay": "Barangay",
-                        "total_polygons": "Total Polygons"
-                    })
-                    .sort_values("Barangay"),
+                    _dom_per_brgy.sort_values("Barangay"),
                     width="stretch"
                 )
 

@@ -253,20 +253,35 @@ ACCESSIBILITY_RATIO_INDICATORS = {
         "pop_col": "age_60plus_m",
         "ratio_col": "ratio_old_health_m"
     },
-    "Health Centers per 1,000 PWDs": {
+    "Health Centers per 1,000 People with Disabilities": {
         "facility_col": "Health centers",
         "pop_col": "pwd_registered",
         "ratio_col": "ratio_pwd_health"
     },
-    "Long-Term Care & Rehabilitation per 1,000 PWDs": {
+    "Long-Term Care & Rehabilitation per 1,000 People with Disabilities": {
         "facility_col": "Long-term care and rehabilitation services",
         "pop_col": "pwd_registered",
         "ratio_col": "ratio_pwd"
     },
-    "All Care Facilities per 1,000 PWDs": {
+    "All Care Facilities per 1,000 People with Disabilities": {
         "facility_col": "Total",
         "pop_col": "pwd_registered",
         "ratio_col": "ratio_pwd_all"
+    },
+    "Bus Stops per 1,000 People": {
+        "facility_col": "Bus stops",
+        "pop_col": "pop_census",
+        "ratio_col": "ratio_bus_stops"
+    },
+    "Bus Stops per 1,000 Females": {
+        "facility_col": "Bus stops",
+        "pop_col": "pop_female",
+        "ratio_col": "ratio_bus_stops_f"
+    },
+    "Bus Stops per 1,000 Males": {
+        "facility_col": "Bus stops",
+        "pop_col": "pop_male",
+        "ratio_col": "ratio_bus_stops_m"
     }
 }
 
@@ -405,6 +420,27 @@ def kpi_card(target, label, value, polarity=None, caption=None):
 
 
 # --------------------------------------------------
+# UNMAPPED CATEGORY COLOR
+# (Shared fallback for every category_color-style function below
+# — childcare_color, school_color, ltc_color, opc_color,
+# health_category_mapper. A brand-new raw category value that
+# shows up in a source CSV (the client adds a new Category/type
+# that didn't exist before) will not match any of the specific
+# branches in these functions, and used to silently fall back to
+# the same color as an existing, unrelated category — meaning a
+# new type of facility looked like it belonged to whichever
+# category happened to be the fallback, with no visual sign
+# anything was missing. Returning this distinct gray instead means
+# an unmapped category is immediately visible as "not yet styled"
+# on the map, rather than silently miscounted as something else.
+# Sidebar filters/legends still work for it either way, since
+# those are derived from the data directly, not from this color
+# mapping — only the *color* needs a person to add a real one.)
+# --------------------------------------------------
+
+UNMAPPED_CATEGORY_COLOR = "#9CA3AF"
+
+# --------------------------------------------------
 # CHILDCARE FUNCTIONS
 # --------------------------------------------------
 def childcare_color(category):
@@ -423,7 +459,7 @@ def childcare_color(category):
     elif "SUPERVISED NEIGHBORHOOD PLAY" in category:
         return "#E0D4FD"   # purple gradient — lightest (still visible on map)
 
-    return "#C4B5FD"
+    return UNMAPPED_CATEGORY_COLOR
 
 
 # --------------------------------------------------
@@ -455,8 +491,11 @@ def school_color(category):
                            # purple used for "private/generic" facility
                            # markers elsewhere (e.g. Childcare Centers,
                            # Health Centers on Care Services Explorer)
+    elif "parent" in category and "child" in category:
+        return "#7C5ABF"  # lighter purple, distinct from "Private
+                           # school" — also not a grade level
 
-    return "#4472C4"  # default to UN WOMEN Blue
+    return UNMAPPED_CATEGORY_COLOR
 
 
 def school_provider_type_color(provider_type):
@@ -474,15 +513,14 @@ def school_provider_type_color(provider_type):
     return "#4472C4"  # default UN WOMEN blue
 
 # --------------------------------------------------
-# OLDERS CARE FUCNTIONS
+# OLDER PERSONS CARE FUNCTIONS
 # (categories reassigned from the generic "Nursing care
 # center"/"Bahay Aruga for Abandoned Elderly" split to the
 # facility-type categories in the eldercare data review —
-# see care_v6.csv. Exact-match dict, same convention as
-# SCHOOL_TYPE_COLORS_MAP, since several category names now
-# share substrings like "Residential" and "Care Facility"
-# that a keyword-contains check (the old opc_color logic)
-# would confuse. All shades stay in the same green family
+# see care_supply_facilities.csv. Exact-match dict, since several
+# category names now share substrings like "Residential" and
+# "Care Facility" that a keyword-contains check (the old opc_color
+# logic) would confuse. All shades stay in the same green family
 # used for "Older Persons" everywhere else in the app (e.g.
 # DISTRICT_COLORS_MAP, the Care Services Explorer legend).
 # --------------------------------------------------
@@ -496,56 +534,62 @@ OPC_CATEGORY_COLORS_MAP = {
     "Residential and Assisted Living Facility": "#2FB8A8",
     "Home Care and Respite Care Provider": "#4AC3B4",
     "Assisted Living and Memory Care Facility": "#66CFC0",
-    "Nursing Home and Memory Care Facility": "#83DBCC",
+    "Nursing home and Memory Care Facility": "#83DBCC",
     "Retirement and Residential Care Facility": "#9FE3D6",
     "Clergy Retirement Home": "#B8ECE1",
     "Residential Care Facility and Home Healthcare Service Provider": "#3E8914",
     "Community-based and Specialized Residential Care Home": "#A6CFC1",
+    "Home care": "#5FCDBE",
 }
 
 def opc_color(category):
 
     category = str(category).strip()
 
-    return OPC_CATEGORY_COLORS_MAP.get(category, "#A6CFC1")
+    return OPC_CATEGORY_COLORS_MAP.get(category, UNMAPPED_CATEGORY_COLOR)
 
 
 # --------------------------------------------------
 # HEALTHCARE FUNCTIONS
+# (HEALTH_CATEGORY_COLORS is the single source of truth for
+# health-facility category colors — category_hex/marker_color/
+# category_color all key off it directly by exact mapped-category
+# name (see health_category_mapper below), rather than each
+# re-implementing its own substring matching. That substring
+# matching used to cause two bugs: "Health Centers with Pharmacy"
+# would match the "HEALTH CENTER" branch before ever reaching
+# "PHARMACY", and unmatched categories fell back to the same hex
+# as "Super Health Centers", making them visually indistinguishable
+# on the map. Generic, unqualified "Hospital" rows are all Google
+# API-sourced (validated by the client against BPLD), with no
+# LGU/National owner named — classed as Private Hospitals, kept
+# separate from QC LGU-run and National Government Hospitals per
+# the client's category spec — no catch-all "Other" bucket.)
 # --------------------------------------------------
+
+HEALTH_CATEGORY_COLORS = {
+    "QC LGU-run Hospitals": "#4C1D95",
+    "National Government Hospitals": "#643BAA",
+    "Private Hospitals": "#8B5FBF",
+    "Lying-in Clinics": "#B39DDB",
+    "Super Health Centers": "#7C5ABF",
+    "Health Centers": "#9478D3",
+    "Health Centers with Pharmacy": "#AC97E8",
+    "Milk Bank": "#C4B5FD",
+    # No "Unmapped" entry here on purpose — this dict's keys feed
+    # the sidebar filter and legend directly (see app.py), and the
+    # client doesn't want a non-category option showing there. An
+    # unrecognized raw category (see health_category_mapper below)
+    # still gets a distinct, visibly-uncategorized color via the
+    # UNMAPPED_CATEGORY_COLOR fallback in category_hex/marker_color
+    # just below — it just isn't listed as a selectable category.
+}
+
 def category_hex(cat):
-
-    rgb = category_color(cat)
-
-    return "#{:02X}{:02X}{:02X}".format(
-        rgb[0],
-        rgb[1],
-        rgb[2]
-    )
+    return HEALTH_CATEGORY_COLORS.get(str(cat), UNMAPPED_CATEGORY_COLOR)
 
 def marker_color(category):
-
-    category = str(category).upper()
-
-    if "QC LGU" in category:
-        return "#4C1D95"   # purple gradient — darkest
-
-    elif "NATIONAL" in category:
-        return "#643BAA"   # purple gradient
-
-    elif "SUPER HEALTH" in category:
-        return "#7C5ABF"   # purple gradient
-
-    elif "HEALTH CENTER" in category:
-        return "#9478D3"   # purple gradient
-
-    elif "PHARMACY" in category:
-        return "#AC97E8"   # purple gradient
-
-    elif "MILK BANK" in category:
-        return "#C4B5FD"   # purple gradient — lightest (still visible on map)
-
-    return "#7C5ABF"
+    return HEALTH_CATEGORY_COLORS.get(str(category), UNMAPPED_CATEGORY_COLOR)
 
 # --------------------------------------------------
 # LONGTERM CARE FUNCTIONS
@@ -578,13 +622,20 @@ def ltc_color(category):
     elif "KABAHAGI" in category:
         return "#C4B5FD"   # purple gradient — lightest (still visible on map)
 
-    return "#C4B5FD"
+    # Generic therapy/therapeutic clinic or center (Google API-sourced,
+    # no more specific therapy type named) — "THERAP" catches both
+    # "Therapy center" and "Therapeutic clinic".
+    elif "THERAP" in category:
+        return "#DDD6FE"   # purple gradient — lightest, distinct from
+                            # KABAHAGI's shade
+
+    return UNMAPPED_CATEGORY_COLOR
 
 def ltc_hex(category):
     return ltc_color(category)
 
 # --------------------------------------------------
-# BUS STOPS FUNCTIONS (NEW - care_v6.csv)
+# BUS STOPS FUNCTIONS (NEW - care_supply_facilities.csv)
 # --------------------------------------------------
 def bus_stops_color(category=None):
     """
@@ -614,96 +665,63 @@ def district_color(district):
     except:
         return "#DDD6FE"
 
-# --------------------------------------------------
-# SCHOOL TYPE COLOR MAPPING
-# (New classification system for schools by type:
-# Preschool, Elementary, Junior High, Senior High,
-# High School, Special Education Program.
-# Uses distinct blue gradient to avoid confusion
-# with district colors.)
-# --------------------------------------------------
-
-SCHOOL_TYPE_COLORS_MAP = {
-    "Preschool": "#2E5090",                          # darkest UN WOMEN blue
-    "Elementary school": "#4472C4",                  # UN WOMEN Blue (primary)
-    "Junior high school": "#6B8FD4",                 # medium UN WOMEN blue
-    "Senior high school": "#8FA8E0",                 # light UN WOMEN blue
-    "High school": "#B5CBEE",                        # lighter UN WOMEN blue
-    "Special Education Program": "#D9E6F7",          # lightest UN WOMEN blue
-    "Private school": "#4C1D95"                      # UN WOMEN purple, outside the grade-tier gradient
-}
-
-def school_type_color(school_type):
-    """
-    Returns the color for a given school type.
-    Uses the centralized SCHOOL_TYPE_COLORS_MAP defined above.
-
-    Args:
-        school_type: str, the school type category
-
-    Returns:
-        str: hex color code
-    """
-    try:
-        school_type = str(school_type).strip()
-        return SCHOOL_TYPE_COLORS_MAP.get(school_type, "#E5E7EB")
-    except:
-        return "#E5E7EB"
-
 
 def category_color(cat):
-
-    cat = str(cat).upper()
-
-    if "QC LGU" in cat:
-        return [76, 29, 149]     # #4C1D95 purple gradient — darkest
-
-    elif "NATIONAL" in cat:
-        return [100, 59, 170]    # #643BAA purple gradient
-
-    elif "SUPER HEALTH" in cat:
-        return [124, 90, 191]    # #7C5ABF purple gradient
-
-    elif "HEALTH CENTER" in cat:
-        return [148, 120, 211]   # #9478D3 purple gradient
-
-    elif "PHARMACY" in cat:
-        return [172, 151, 232]   # #AC97E8 purple gradient
-
-    elif "MILK BANK" in cat:
-        return [196, 181, 253]   # #C4B5FD purple gradient — lightest
-
-    return [124, 90, 191]
+    return hex_to_rgb(marker_color(cat))
 
 
 def health_category_mapper(cat):
+    """
+    Maps a raw care_supply_facilities.csv health-facility `category` string to one
+    of the keys in HEALTH_CATEGORY_COLORS. Order matters: "lying"
+    is checked first so "LGU-run lying-in clinic" is classified as
+    a lying-in clinic rather than an LGU hospital; generic
+    "Hospital" (Google API-sourced, validated against BPLD, no
+    LGU/National owner named) is classed as a Private Hospital, per
+    the client's category spec — kept separate from QC LGU-run and
+    National Government Hospitals.
+
+    A raw category that doesn't match any branch below (a brand
+    new Category value the client adds to the source data that
+    isn't yet one of these known health-facility types) maps to
+    "Unmapped" rather than silently being folded into "Health
+    Centers" — keeps it out of every real tier's count, and its
+    marker still gets a distinct gray via category_hex/
+    marker_color's fallback, instead of visually passing as
+    whatever tier it happened to land on. "Unmapped" isn't a key
+    in HEALTH_CATEGORY_COLORS on purpose, so it never shows up as
+    a selectable option in the sidebar filter or legend — this
+    return value is only a signal, in code, that this function
+    needs a new branch for it.
+    """
 
     cat = str(cat).lower().strip()
 
-    # Handle already-mapped values (if raw CSV is already in mapped form)
-    if cat in ["national", "qc lgu", "pharmacy", "super health", "health center", "milk bank"]:
-        return cat.title() if " " not in cat else ("QC LGU" if "qc" in cat else cat.title())
+    if "lying" in cat:
+        return "Lying-in Clinics"
 
-    # Handle raw unmapped values
-    if "national" in cat:
-        return "National"
+    elif "lgu" in cat and "hospital" in cat:
+        return "QC LGU-run Hospitals"
 
-    elif "lgu" in cat or "qc" in cat:
-        return "QC LGU"
+    elif "national" in cat:
+        return "National Government Hospitals"
+
+    elif "hospital" in cat:
+        return "Private Hospitals"
 
     elif "pharmacy" in cat:
-        return "Pharmacy"
+        return "Health Centers with Pharmacy"
 
     elif "super" in cat:
-        return "Super Health"
+        return "Super Health Centers"
 
     elif "health" in cat and "center" in cat:
-        return "Health Center"
+        return "Health Centers"
 
     elif "milk" in cat:
         return "Milk Bank"
 
-    return "Other"
+    return "Unmapped"
 
 
 # --------------------------------------------------
@@ -718,7 +736,7 @@ def clean_health_centers(df) :
     # df["category"] (and therefore the Category column derived
     # from it) is still a pandas `category` dtype at this point
     # — see load_data()'s category_cols loop, which casts
-    # major_division/sub_division/category on the *full* care_v3
+    # major_division/sub_division/category on the *full* care_supply_facilities
     # dataframe before it gets split by major_division. A
     # categorical column remembers every level that ever existed
     # in the unfiltered data, even after rows are filtered out,
@@ -743,6 +761,14 @@ def clean_health_centers(df) :
 
     df["Name"] = df["Name"].str.title()
 
+    # No Provider Type (Public/Private) source data exists for
+    # administrative-source health centers, so Sector is real NaN
+    # there (not the string "nan" or "Not available") so popups can
+    # show a "Provider Type: Not available" fallback consistently.
+    # Google-sourced rows already have sub_division defaulted to
+    # "Private" upstream in load_data() — carried through here
+    # rather than overwritten.
+    df["Sector"] = df["sub_division"] if "sub_division" in df.columns else pd.NA
 
     return df
 
@@ -849,7 +875,7 @@ def spread_overlapping_points(
 
     return result
 
-def clean_dataframe(df) :
+def clean_dataframe(df, require_coordinates=True):
     # Phase 1 Optimization: Address fallback logic
     # Use address_clean if available, fall back to address, then "Not available"
     # (future.no_silent_downcasting keeps fillna from attempting the
@@ -880,7 +906,7 @@ def clean_dataframe(df) :
 
     # Category and Sector are still pandas `category` dtype here
     # — load_data() casts major_division/sub_division/category to
-    # `category` dtype on the full care_v6 dataframe *before*
+    # `category` dtype on the full care_supply_facilities dataframe *before*
     # splitting it by major_division (see load_data() in this
     # file). A categorical column keeps every level that existed
     # in the unfiltered data even after rows are dropped, so any
@@ -890,17 +916,30 @@ def clean_dataframe(df) :
     # listing Childcare/Health Center/District labels at 0%).
     # Casting to plain string drops that stale level list so each
     # facility type only ever reports the categories it actually
-    # has rows for.
+    # has rows for. Done via .where() rather than a plain
+    # .astype(str) so genuinely-missing values stay real NaN
+    # instead of becoming the literal string "nan" — a previous
+    # version used astype(str) directly, which made pd.notna()
+    # checks downstream (e.g. the Sector/Provider Type line in
+    # facility popups) always true and printed "Sector: nan" for
+    # every facility with no Sector value (Bus Stops, Action
+    # Offices, Migration Resource Centers, and any Schools/LTC/OPC
+    # row missing one).
     for col in ("Category", "Sector"):
         if col in df.columns:
-            df[col] = df[col].astype(str)
+            df[col] = df[col].astype(str).where(df[col].notna())
 
-    df = df.dropna(
-        subset=[
-            "latitude",
-            "longitude"
-        ]
-    )
+    # Skippable for callers that need every record regardless of
+    # whether it can be plotted (e.g. KPI/count tables), since
+    # barangay/district assignment doesn't depend on having
+    # coordinates — only map rendering does.
+    if require_coordinates:
+        df = df.dropna(
+            subset=[
+                "latitude",
+                "longitude"
+            ]
+        )
 
     df["Name"] = df["Name"].str.title()
 
@@ -914,7 +953,7 @@ def clean_dataframe(df) :
 @st.cache_data(show_spinner=False)
 def load_geo():
     gdf = gpd.read_file(
-        "processed/qc_barangays.geojson",
+        "processed/reference/qc_barangays.geojson",
         engine="pyogrio"
     )
 
@@ -926,7 +965,7 @@ def load_geo():
 def load_geo_explorer():
 
     gdf = gpd.read_file(
-        "processed/qc_barangays.geojson",
+        "processed/reference/qc_barangays.geojson",
         engine="pyogrio"
     )
 
@@ -953,7 +992,7 @@ def load_qc_boundary():
     """
 
     gdf = gpd.read_file(
-        "processed/qc_barangays.geojson",
+        "processed/reference/qc_barangays.geojson",
         engine="pyogrio"
     )
 
@@ -979,11 +1018,197 @@ def get_boundary_geojson(geo_json):
         }
     )
 
+
+@st.cache_data(show_spinner=False)
+def compute_bus_stop_counts_by_barangay(bus_stops):
+    """
+    Bus stop counts per barangay. As of care_supply_facilities.csv's original
+    version, bus stops carried no barangay or district at all —
+    every column was blank except name, coordinates,
+    frequency/route info, and source — so barangay was assigned
+    via a point-in-polygon spatial join against
+    qc_barangays.geojson, the same boundary file every other
+    barangay-level figure in this dashboard uses.
+
+    Prefers a real "barangay" value where care_supply_facilities.csv has one
+    (rows a human has actually assigned), and only spatially joins
+    the rest — so once care_supply_facilities.csv is updated with real barangay
+    assignments for bus stops, this automatically stops guessing
+    from coordinates for whichever rows now have a real answer.
+
+    Takes any dataframe with "longitude"/"latitude" columns (and
+    optionally "barangay") — the raw care_supply_facilities.csv rows filtered to
+    major_division == "Bus stops" work directly, no cleaning
+    /renaming required.
+
+    Returns one row per barangay with a "Bus stops" count column,
+    ready to left-merge into a demographics_by_barangay.csv-shaped
+    dataframe — see ACCESSIBILITY_RATIO_INDICATORS's "Bus Stops
+    per 1,000..." entries, which read the resulting column through
+    the same facility_col/pop_col ratio logic every other
+    indicator already uses, rather than needing their own special
+    -cased formula.
+
+    Bus stops with no real barangay AND no coordinate match to any
+    barangay polygon are dropped rather than guessed at, so this
+    can slightly undercount relative to the true total — acceptable
+    for a per-1,000-population ratio at barangay scale.
+    """
+
+    has_barangay = (
+        "barangay" in bus_stops.columns
+        and bus_stops["barangay"].notna()
+    )
+
+    assigned = bus_stops[has_barangay].copy() if "barangay" in bus_stops.columns else bus_stops.iloc[0:0]
+    unassigned = bus_stops[~has_barangay] if "barangay" in bus_stops.columns else bus_stops
+
+    if len(assigned):
+        assigned["barangay"] = normalize_barangay_names(assigned["barangay"])
+
+    if len(unassigned):
+
+        barangay_gdf = gpd.read_file(
+            "processed/reference/qc_barangays.geojson",
+            engine="pyogrio"
+        )[["barangay_name", "geometry"]]
+
+        points = gpd.GeoDataFrame(
+            {"_id": range(len(unassigned))},
+            geometry=gpd.points_from_xy(
+                unassigned["longitude"],
+                unassigned["latitude"]
+            ),
+            crs="EPSG:4326"
+        )
+
+        joined = gpd.sjoin(
+            points,
+            barangay_gdf,
+            how="left",
+            predicate="within"
+        )
+
+        spatially_assigned = (
+            joined
+            .dropna(subset=["barangay_name"])
+            ["barangay_name"]
+            .rename("barangay")
+        )
+
+    else:
+        spatially_assigned = pd.Series([], name="barangay", dtype=object)
+
+    all_barangays = pd.concat(
+        [assigned["barangay"], spatially_assigned],
+        ignore_index=True
+    )
+
+    return (
+        all_barangays
+        .value_counts()
+        .rename_axis("barangay")
+        .reset_index(name="Bus stops")
+    )
+
+
+@st.cache_data(show_spinner=False)
+def load_all_schools():
+    """
+    Every school in care_supply_facilities.csv, regardless of whether
+    it has mappable coordinates — unlike load_data()'s `schools`
+    dataframe, which drops any row missing latitude/longitude
+    before it's ever split out by division (needed for map
+    rendering, but not for barangay/district-level counting, since
+    a school's barangay assignment doesn't depend on having
+    coordinates).
+
+    Use this for KPI cards, counts, and tables on the Schools page
+    that should reflect every school on file, not just the subset
+    with plottable coordinates. Still one row per grade level a
+    school offers — deduplicate by (barangay, "Name") for counts of
+    physical schools, same as compute_facility_counts_by_barangay().
+    """
+
+    care = pd.read_csv("processed/editable/care_supply_facilities.csv")
+
+    schools = care[
+        care["major_division"] == "Schools"
+    ].copy()
+
+    return clean_dataframe(schools, require_coordinates=False)
+
+
 @st.cache_data(show_spinner=False)
 def load_data():
 
-    # Updated to load care_v6.csv with latest facility data
-    care = pd.read_csv("processed/care_v6.csv")
+    # Updated to load care_supply_facilities.csv with latest facility data
+    care = pd.read_csv("processed/editable/care_supply_facilities.csv")
+
+    # The source file now records the QC Migrants Resource Center row
+    # as major_division "Trainings" / category "QC Migrants Resource
+    # Center" instead of its own "Migration Resource Centers"
+    # division. Normalized back to the original division here, right
+    # after reading, so every downstream filter in this file and in
+    # app.py that looks for "Migration Resource Centers" keeps working
+    # unchanged.
+    is_migration_center = (
+        (care["major_division"] == "Trainings")
+        & (care["category"] == "QC Migrants Resource Center")
+    )
+    care.loc[is_migration_center, "major_division"] = "Migration Resource Centers"
+
+    # data_source only distinguishes "Administrative data" from
+    # "Google API" in the raw file — whether a Google-sourced row has
+    # actually been field-validated lives instead in source_reference.
+    # Two formats seen so far: the original file spelled this out as
+    # the substring "Google API - Validated"; a later file shortened
+    # it to source_reference being exactly "Google API" (as opposed
+    # to "For Validation") — same 58-row set both times, just a
+    # shorter label. Checking both keeps this working regardless of
+    # which spelling shows up in a given data drop, so the rest of
+    # the app can filter and label by validation status directly
+    # from data_source.
+    is_google = care["data_source"] == "Google API"
+    _source_ref = care["source_reference"].astype(str).str.strip()
+    is_validated = (
+        _source_ref.str.contains("Google API - Validated", na=False)
+        | (_source_ref == "Google API")
+    )
+    care.loc[is_google & is_validated, "data_source"] = "Google API - Validated"
+    care.loc[is_google & ~is_validated, "data_source"] = "Google API - For Validation"
+
+    # district is Roman numerals ("I".."VI") for a large share of
+    # rows now, mixed with plain integers for the rest.
+    # pd.to_numeric() can't parse a Roman numeral, so it silently
+    # became NaN downstream — as of the file that surfaced this,
+    # 166 of 182 Long-Term Care rows and roughly a third of
+    # Childcare/Schools rows lost their district entirely, which
+    # crashes any .astype(int) on the column and breaks every
+    # district-based filter/color for those rows. Converted to
+    # plain integers here before that numeric parsing ever runs.
+    ROMAN_TO_DISTRICT = {
+        "I": "1", "II": "2", "III": "3",
+        "IV": "4", "V": "5", "VI": "6",
+    }
+    care["district"] = (
+        care["district"].astype(str).str.strip().str.upper()
+        .replace(ROMAN_TO_DISTRICT)
+    )
+
+    # Google-sourced facilities essentially never carry a Public/Private
+    # sub_division (they're discovered independently of the official
+    # public/private registries that tag the administrative rows) —
+    # default them to "Private", since a facility findable only via
+    # Google Maps and not an official public-sector roster is, in
+    # practice, privately run. Applies across all facility types.
+    is_google_sourced = (
+        care["sub_division"].isna()
+        & (care["data_source"].isin(
+            ["Google API - Validated", "Google API - For Validation"]
+        ))
+    )
+    care.loc[is_google_sourced, "sub_division"] = "Private"
 
     category_cols = [
         "major_division",
@@ -1064,9 +1289,27 @@ def load_data():
     schools                   = clean_dataframe(schools)
     older_person_care         = clean_dataframe(older_person_care)
     long_term_care            = clean_dataframe(long_term_care)
-    action_offices            = clean_dataframe(action_offices)
-    action_offices["Name"]    = "District " + action_offices["District"].astype(int).astype(str)
-    migration_centers         = clean_dataframe(migration_centers)
+    action_offices             = clean_dataframe(action_offices)
+    action_offices["Name"]     = (
+        "District "
+        + action_offices["District"].astype(int).astype(str)
+        + " Action Office"
+    )
+    action_offices["Category"] = action_offices["Name"]
+    # All District Action Offices keep the same posted hours
+    # regardless of what care_supply_facilities.csv has on file for this row.
+    action_offices["open_hours"]  = "8:00 AM"
+    action_offices["close_hours"] = "5:00 PM"
+
+    migration_centers              = clean_dataframe(migration_centers)
+    migration_centers["Name"]      = "QC Migrants Resource Center"
+    # Category was already correctly-cased in the raw data (Name
+    # wasn't — clean_dataframe()'s str.title() turns "QC" into
+    # "Qc"), so it's left alone rather than reset from Name here.
+    migration_centers["Sector"]    = "Public"
+    migration_centers["open_hours"]  = "8:00 AM"
+    migration_centers["close_hours"] = "5:00 PM"
+
     bus_stops                 = clean_dataframe(bus_stops)
 
     # Spread markers that sit close enough together (same building/
@@ -1097,7 +1340,7 @@ def load_data():
 def load_data_for_kpis():
     """
     Loads the consolidated barangay-level demographics table
-    (processed/indicators/demographics_by_barangay.csv) and reshapes it into
+    (processed/editable/demographics_by_barangay.csv) and reshapes it into
     the same three dataframes this function has always returned
     — population_summary, population_sex, population_age — so
     every downstream page (Population Overview, Schools, Health
@@ -1122,7 +1365,7 @@ def load_data_for_kpis():
     # ==================================================
 
     demographics = pd.read_csv(
-        "processed/indicators/demographics_by_barangay.csv"
+        "processed/editable/demographics_by_barangay.csv"
     )
 
     # ==================================================
@@ -1199,15 +1442,264 @@ def load_data_for_kpis():
     )
 
 
+# Major_division values that count as a "care facility" for
+# demand/accessibility purposes, and the demographics column name
+# each rolls up into. Bus stops is deliberately excluded here — it
+# has no barangay in care_supply_facilities.csv at all and is handled separately
+# by compute_bus_stop_counts_by_barangay's spatial join — and
+# Migration Resource Centers is excluded because it's a single
+# citywide facility, not something meaningfully rated per-barangay.
+FACILITY_COUNT_DIVISIONS = [
+    "Childcare",
+    "Health centers",
+    "Long-term care and rehabilitation services",
+    "Older persons care",
+    "Quezon City satellite offices for services",
+    "Schools",
+]
+
+
+# Bridges barangay-name spellings in care_supply_facilities.csv that
+# don't match qc_barangays.geojson's canonical spelling even after
+# case-insensitive comparison — abbreviations/missing punctuation,
+# not just casing. Keys are UPPERCASE for lookup convenience.
+BARANGAY_NAME_ALIASES = {
+    "STO. DOMINGO": "Sto. Domingo (Matalahib)",
+    "STO DOMINGO": "Sto. Domingo (Matalahib)",
+    "UP CAMPUS": "U. P. Campus",
+    "UP VILLAGE": "U. P. Village",
+    "SIENA": "Sienna",
+    "QUIRINO 2A": "Quirino 2-A",
+    "QUIRINO 2B": "Quirino 2-B",
+    "QUIRINO 2C": "Quirino 2-C",
+    "QUIRINO 3A": "Quirino 3-A",
+}
+
+
+@st.cache_data(show_spinner=False)
+def normalize_barangay_names(barangay_series):
+    """
+    Maps a Series of raw barangay strings to qc_barangays.geojson's
+    canonical spelling wherever possible, so a groupby/merge on
+    "barangay" doesn't silently drop rows whose casing or minor
+    spelling differs from the canonical form (e.g. "SACRED HEART" /
+    "STO. DOMINGO" from care_supply_facilities.csv's administrative
+    -data rows vs. "Sacred Heart" / "Sto. Domingo (Matalahib)" in
+    demographics_by_barangay.csv and the boundary file). Verified
+    necessary: as of the file that surfaced this, 302 of 2292
+    facility rows matched their canonical barangay only after
+    uppercasing both sides, and a further ~18 needed the alias map
+    above (abbreviations, not just casing) — without this, those
+    rows' facility counts silently zero out in every ratio and KPI
+    that depends on them.
+
+    Values with no match at all (including genuinely blank barangay)
+    are left as-is; a normal groupby/merge on "barangay" will then
+    correctly exclude them rather than mis-assign them.
+    """
+
+    barangay_gdf = gpd.read_file(
+        "processed/reference/qc_barangays.geojson",
+        engine="pyogrio"
+    )[["barangay_name"]]
+
+    canonical_by_upper = {
+        name.strip().upper(): name.strip()
+        for name in barangay_gdf["barangay_name"]
+    }
+
+    def _normalize(raw):
+        if pd.isna(raw):
+            return raw
+        cleaned = str(raw).strip()
+        upper = cleaned.upper()
+        if upper in canonical_by_upper:
+            return canonical_by_upper[upper]
+        if upper in BARANGAY_NAME_ALIASES:
+            return BARANGAY_NAME_ALIASES[upper]
+        return cleaned
+
+    return barangay_series.map(_normalize)
+
+
+@st.cache_data(show_spinner=False)
+def compute_facility_counts_by_barangay(care):
+    """
+    Facility counts per barangay, live from care_supply_facilities.csv, replacing
+    the Childcare/Health centers/etc. columns that used to be
+    baked into demographics_by_barangay.csv by hand.
+
+    Grouped from care_supply_facilities.csv's own "barangay" column
+    (normalized via normalize_barangay_names() first — see that
+    function's docstring) directly — NOT from the map's
+    lat/lon-filtered dataframes (see functions.py's
+    clean_dataframe/spread_overlapping_points) — since a facility's
+    barangay assignment doesn't depend on whether it has mappable
+    coordinates: e.g. 75/514 Childcare rows lack lat/lon but still
+    have a real barangay value, and would be undercounted here if
+    coordinate-filtered rows were used instead.
+
+    "Trainings" has no corresponding major_division in care_supply_facilities.csv
+    at all (nothing has ever mapped to it) and is kept at a fixed
+    0 for schema stability with any code still expecting the
+    column. "PWD care" — a facility-count column that existed in a
+    previous version of demographics_by_barangay.csv — has been
+    dropped entirely: it doesn't correspond to any
+    ACCESSIBILITY_RATIO_INDICATORS entry and neither its source
+    nor its definition could be identified, so rather than compute
+    a misleading zero it's simply not reproduced here.
+
+    "Total" is the row-sum of the other facility columns (verified
+    against the old baked-in values to match exactly) — it does
+    NOT include Bus Stops, consistent with that historical
+    behavior.
+
+    Schools rows are deduplicated by (barangay, name_original)
+    before counting — one physical school is listed as a separate
+    row per grade level it offers (e.g. a school with a Preschool,
+    Elementary, and Junior High program appears as 3 rows, all
+    sharing the same name and location), so counting rows directly
+    would count that one school 3 times. Verified this key is safe
+    for schools specifically: only 1 of 683 deduplicated school
+    groups has an inconsistent address across its rows. Other
+    facility types are not deduplicated — none show this
+    one-row-per-category pattern (their row counts already match
+    their number of distinct name+barangay combinations almost
+    exactly).
+    """
+
+    care_for_counts = care.copy()
+    care_for_counts["barangay"] = normalize_barangay_names(
+        care_for_counts["barangay"]
+    )
+
+    is_school = care_for_counts["major_division"] == "Schools"
+    schools_deduped = care_for_counts[is_school].drop_duplicates(
+        subset=["barangay", "name_original"]
+    )
+    care_for_counts = pd.concat(
+        [care_for_counts[~is_school], schools_deduped]
+    )
+
+    counts = (
+        care_for_counts[care_for_counts["major_division"].isin(FACILITY_COUNT_DIVISIONS)]
+        .groupby(["barangay", "major_division"])
+        .size()
+        .unstack(fill_value=0)
+        .reindex(columns=FACILITY_COUNT_DIVISIONS, fill_value=0)
+    )
+
+    counts["Trainings"] = 0
+    counts["Total"] = counts.sum(axis=1)
+
+    counts = counts.reset_index()
+
+    bus_stop_rows = care[care["major_division"] == "Bus stops"]
+    bus_counts = compute_bus_stop_counts_by_barangay(bus_stop_rows)
+
+    counts = counts.merge(bus_counts, on="barangay", how="left")
+    counts["Bus stops"] = counts["Bus stops"].fillna(0)
+
+    return counts
+
+
+@st.cache_data(show_spinner=False)
+def compute_pwd_facility_counts_by_barangay(care):
+    """
+    Facilities considered PWD-relevant care, per barangay. Two rules:
+
+    1. Long-term care and rehabilitation services categories whose
+       name contains "center" but not "clinic" — the client's own
+       definition, on the reasoning that a "clinic" reads as
+       health-related rather than disability-support-specific,
+       while a named "center" reads as the latter. Verified against
+       the current category list: this matches "Psychiatric
+       rehabilitation center", "Therapy center", and "Quezon City
+       Kabahagi Center For Children With Disabilitites" — and
+       excludes every "* clinic" and "* school" category.
+
+    2. Schools rows categorized "Special Education Program" —
+       included explicitly since it's a different major_division
+       and wouldn't be caught by rule 1.
+
+    Used to populate "PWD Facilities" in load_demographics() (and,
+    from there, the Disability Priority Score on the Care Planning
+    page, which previously had no disability-facility count at all
+    and treated every barangay as equally 0).
+    """
+
+    care = care.copy()
+    care["barangay"] = normalize_barangay_names(care["barangay"])
+
+    category_lower = care["category"].astype(str).str.lower()
+
+    is_ltc_center = (
+        (care["major_division"] == "Long-term care and rehabilitation services")
+        & category_lower.str.contains("center", na=False)
+        & ~category_lower.str.contains("clinic", na=False)
+    )
+    is_sped = (
+        (care["major_division"] == "Schools")
+        & (care["category"] == "Special Education Program")
+    )
+
+    pwd_rows = care[is_ltc_center | is_sped]
+
+    return (
+        pwd_rows
+        .groupby("barangay")
+        .size()
+        .reset_index(name="PWD Facilities")
+    )
+
+
+@st.cache_data(show_spinner=False)
+def compute_facility_ratios(demographics, facility_counts):
+    """
+    Merges live facility counts into a demographics_by_barangay
+    -shaped dataframe and computes every ratio_* column defined by
+    ACCESSIBILITY_RATIO_INDICATORS — the same facility_col/pop_col
+    pairs already used to build the accessibility-ratio dropdown,
+    reused here as the single source of truth for the formula
+    rather than duplicating "facility / population * 1000" by
+    hand. Verified against the old baked-in ratio_* columns before
+    this replaced them: exact match (max diff 0.0) on every
+    formula, across every barangay except one with a known,
+    already-flagged source-data issue (Veterans Village).
+    """
+
+    merged = demographics.merge(facility_counts, on="barangay", how="left")
+
+    for col in facility_counts.columns:
+        if col != "barangay":
+            merged[col] = merged[col].fillna(0)
+
+    for spec in ACCESSIBILITY_RATIO_INDICATORS.values():
+
+        facility_col = spec["facility_col"]
+        pop_col = spec["pop_col"]
+        ratio_col = spec["ratio_col"]
+
+        if facility_col in merged.columns and pop_col in merged.columns:
+
+            merged[ratio_col] = (
+                merged[facility_col] / merged[pop_col] * 1000
+            ).replace([np.inf, -np.inf], np.nan)
+
+    return merged
+
+
 @st.cache_data(show_spinner=False)
 def load_demographics():
     """
-    Loads the full consolidated barangay-level indicators table
-    (processed/indicators/demographics_by_barangay.csv) with all 87 columns
-    intact — facility counts, age/sex breakdowns, registered
-    seniors/PWDs, CBMS socio-economic indicators, migrant worker
-    counts, and the pre-computed demand/accessibility ratio
-    columns (ratio_*).
+    Loads the barangay-level population/CBMS/administrative
+    indicators table (processed/editable/demographics_by_barangay.csv),
+    then merges in live-computed facility counts and ratio_*
+    accessibility ratios — see compute_facility_counts_by_barangay
+    and compute_facility_ratios. Those two used to be static
+    columns hand-maintained inside demographics_by_barangay.csv
+    itself; they're computed here instead so they can never go
+    stale relative to care_supply_facilities.csv.
 
     Use this (rather than re-deriving figures from population_age
     /population_sex) wherever a page needs the newer indicators
@@ -1217,7 +1709,7 @@ def load_demographics():
     """
 
     demographics = pd.read_csv(
-        "processed/indicators/demographics_by_barangay.csv"
+        "processed/editable/demographics_by_barangay.csv"
     )
 
     demographics["barangay"] = (
@@ -1231,45 +1723,256 @@ def load_demographics():
         .astype("Int64")
     )
 
+    care = pd.read_csv("processed/editable/care_supply_facilities.csv")
+    facility_counts = compute_facility_counts_by_barangay(care)
+    demographics = compute_facility_ratios(demographics, facility_counts)
+
+    pwd_facility_counts = compute_pwd_facility_counts_by_barangay(care)
+    demographics = demographics.merge(pwd_facility_counts, on="barangay", how="left")
+    demographics["PWD Facilities"] = demographics["PWD Facilities"].fillna(0)
+
     return demographics
+
+
+# --------------------------------------------------
+# AUTO-COMPUTED SUMMARY STATS
+# (replaces the old manually-maintained processed/editable/
+# childcare_summary.csv and senior_summary.csv — every value here
+# is derived live from care_supply_facilities.csv / demographics_by_barangay.csv
+# so it can never go stale. regenerate_computed_data.py calls
+# these same functions to write a verifiable snapshot to
+# processed/computed/, so the on-disk snapshot and what the app
+# displays can never drift apart from each other.)
+# --------------------------------------------------
+
+def compute_childcare_summary(childcare_centers):
+    """
+    One row: count of Child Development Centers among mapped
+    childcare facilities. Uses the same "Child Development" match
+    as childcare_color() above, so this always agrees with what's
+    colored/labeled as a CDC on the map.
+
+    Note: this will generally NOT match any previously-published
+    DSWD registry figure — it counts facilities present in
+    care_supply_facilities.csv with valid coordinates, not DSWD's full licensing
+    roster (some licensed CDCs may not be mapped yet, or vice
+    versa).
+    """
+    child_development_centers = int(
+        childcare_centers["Category"]
+        .str.contains("Child Development", case=False, na=False)
+        .sum()
+    )
+
+    return pd.DataFrame([
+        {
+            "metric": "child_development_centers",
+            "value": child_development_centers,
+            "source": "care_supply_facilities.csv (live count)"
+        }
+    ])
+
+
+def compute_senior_summary(demographics):
+    """
+    Mixes two different sources, tagged per row in the "source"
+    column:
+      - registered_seniors: OSCA administrative registration total
+        (demographics_by_barangay.csv's seniors_registered column).
+      - female / male / age_60_79 / age_80_plus: 2020 Census
+        (age_60plus_f / age_60plus_m / age_80plus).
+
+    These do not sum to the same total on purpose — OSCA's registry
+    is cumulative (seniors who have since died or moved away stay
+    on the count) and was last refreshed in a different year than
+    the 2020 Census, so the two are expected to diverge rather than
+    reconcile. See the "Why don't these figures add up?" note on
+    the Older Persons & Senior Citizens page.
+    """
+    age_80_plus = int(demographics["age_80plus"].sum())
+    age_60_79 = int(demographics["age_60plus"].sum()) - age_80_plus
+
+    return pd.DataFrame([
+        {
+            "metric": "registered_seniors",
+            "value": int(demographics["seniors_registered"].sum()),
+            "source": "OSCA registration (demographics_by_barangay.csv)"
+        },
+        {
+            "metric": "female",
+            "value": int(demographics["age_60plus_f"].sum()),
+            "source": "2020 Census"
+        },
+        {
+            "metric": "male",
+            "value": int(demographics["age_60plus_m"].sum()),
+            "source": "2020 Census"
+        },
+        {
+            "metric": "age_60_79",
+            "value": age_60_79,
+            "source": "2020 Census"
+        },
+        {
+            "metric": "age_80_plus",
+            "value": age_80_plus,
+            "source": "2020 Census"
+        },
+    ])
+
+
+DISTRICT_SUM_COLS = [
+    "area_km2", "pop_census", "pop_male", "pop_female",
+    "age_0_2", "age_0_2_m", "age_0_2_f",
+    "age_3_5", "age_3_5_m", "age_3_5_f",
+    "age_0_5", "age_0_5_m", "age_0_5_f",
+    "age_6_17", "age_6_17_m", "age_6_17_f",
+    "age_18_59", "age_18_59_m", "age_18_59_f",
+    "age_60plus", "age_60plus_m", "age_60plus_f",
+    "age_80plus", "age_80plus_m", "age_80plus_f",
+    "age_0_4", "women_15_49",
+    "children_0_5_childcare", "children_0_17_total",
+    "seniors_registered", "pwd_registered",
+    "migrant_workers_total", "migrant_workers_male", "migrant_workers_female",
+    "pop_cbms_secondary", "cbms_responding_hh",
+]
+
+DISTRICT_CBMS_DUAL_WEIGHTED_COLS = [
+    "cbms_food_insecurity_prevalence_pct",
+    "cbms_food_severe_wholeday_pct",
+    "cbms_food_intensity_score",
+    "cbms_housing_inadequacy_index_pct",
+    "cbms_housing_makeshift_severe_pct",
+    "cbms_avg_household_size",
+    "cbms_avg_nuclear_families_per_hh",
+]
+
+
+@st.cache_data(show_spinner=False)
+def compute_demographics_by_district(demographics):
+    """
+    Aggregates demographics_by_barangay.csv to district level. Two
+    kinds of columns, aggregated differently:
+
+    1. Summable columns (DISTRICT_SUM_COLS) — population, age bands,
+       seniors/PWD registrations, migrant workers, CBMS coverage —
+       simple sum across each district's barangays.
+    2. Derived columns (density, ratios, rates, shares, CBMS
+       percentages) — recomputed from the district-level sums, never
+       averaged from barangay-level values directly (a per-1,000 rate
+       or a percentage doesn't average correctly across barangays of
+       different sizes).
+
+    CBMS indicators are computed under two weighting schemes per
+    barangay: _hhw (weighted by cbms_responding_hh — each barangay
+    counts by how much CBMS data it contributed) and _popw (weighted
+    by pop_census — each resident counts once, consistent with every
+    other derived variable here).
+    """
+
+    work = demographics.copy()
+
+    for col in DISTRICT_SUM_COLS:
+        work[col] = pd.to_numeric(work[col], errors="coerce")
+
+    rows = []
+
+    for district, group in work.groupby("district"):
+
+        row = {"district": district}
+
+        for col in DISTRICT_SUM_COLS:
+            row[col] = (
+                round(group[col].sum(), 4)
+                if col == "area_km2"
+                else group[col].sum()
+            )
+
+        pop = row["pop_census"]
+        area = row["area_km2"]
+
+        row["pop_density_km2"] = round(pop / area, 1) if area else None
+        row["sex_ratio_m_per_100f"] = (
+            round(row["pop_male"] / row["pop_female"] * 100, 1)
+            if row["pop_female"] else None
+        )
+        row["share_women_18_59_pct"] = (
+            round(row["age_18_59_f"] / pop * 100, 2) if pop else None
+        )
+        row["child_woman_ratio"] = (
+            round(row["age_0_4"] / row["women_15_49"] * 1000, 1)
+            if row["women_15_49"] else None
+        )
+        row["seniors_density_km2"] = (
+            round(row["seniors_registered"] / area, 1) if area else None
+        )
+        row["seniors_per_1000_census"] = (
+            round(row["seniors_registered"] / pop * 1000, 1) if pop else None
+        )
+        row["pwd_density_km2"] = (
+            round(row["pwd_registered"] / area, 1) if area else None
+        )
+        row["pwd_per_1000_census"] = (
+            round(row["pwd_registered"] / pop * 1000, 1) if pop else None
+        )
+        row["disability_prevalence_rate_pct"] = (
+            round(row["pwd_registered"] / pop * 100, 2) if pop else None
+        )
+
+        for col in DISTRICT_CBMS_DUAL_WEIGHTED_COLS:
+
+            vals = pd.to_numeric(group[col], errors="coerce")
+            w_hh = pd.to_numeric(group["cbms_responding_hh"], errors="coerce")
+            w_pop = pd.to_numeric(group["pop_census"], errors="coerce")
+
+            mask_hh = vals.notna() & w_hh.notna()
+            mask_pop = vals.notna() & w_pop.notna()
+
+            row[f"{col}_hhw"] = (
+                round((vals[mask_hh] * w_hh[mask_hh]).sum() / w_hh[mask_hh].sum(), 2)
+                if w_hh[mask_hh].sum() else None
+            )
+            row[f"{col}_popw"] = (
+                round((vals[mask_pop] * w_pop[mask_pop]).sum() / w_pop[mask_pop].sum(), 2)
+                if w_pop[mask_pop].sum() else None
+            )
+
+        rows.append(row)
+
+    result = pd.DataFrame(rows)
+    result["district"] = result["district"].astype("Int64")
+
+    return result
 
 
 @st.cache_data(show_spinner=False)
 def load_demographics_by_district():
     """
-    Loads district-level consolidated demographics table
-    (processed/indicators/demographics_by_district.csv).
+    District-level demographics, computed live from
+    demographics_by_barangay.csv — see compute_demographics_by_district.
 
     Returns a DataFrame with one row per district (1-6) containing:
     - Area and population totals
     - Age/sex breakdowns (matches barangay columns for consistency)
     - Socioeconomic indicators (disability, food insecurity, housing)
     - Migrant worker counts
-    - Pre-computed density and ratio metrics
+    - Density and ratio metrics
 
     Use this alongside load_demographics() to provide district context
     when displaying barangay-level data, creating district comparisons,
     or prioritizing resources by district need.
     """
 
-    demographics_district = pd.read_csv(
-        "processed/indicators/demographics_by_district.csv"
-    )
+    demographics = load_demographics()
 
-    # Normalize district to int (1-6) for consistency with barangay data
-    demographics_district["district"] = (
-        pd.to_numeric(demographics_district["district"], errors="coerce")
-        .astype("Int64")
-    )
-
-    return demographics_district
+    return compute_demographics_by_district(demographics)
 
 
 @st.cache_data(show_spinner=False)
 def load_climate_context():
     """
     Loads the city-wide (non-barangay) flood risk indicators
-    from processed/indicators/climate.csv. These figures are
+    from processed/reference/climate/climate.csv. These figures are
     WorldPop-based and only available at the Quezon City total
     level — there is no per-barangay breakdown — so they're
     meant for KPI cards/context on the Climate & Hazard Exposure
@@ -1277,7 +1980,7 @@ def load_climate_context():
     """
 
     climate = pd.read_csv(
-        "processed/indicators/climate.csv"
+        "processed/reference/climate/climate.csv"
     )
 
     return climate
@@ -1286,46 +1989,44 @@ def load_climate_context():
 @st.cache_data(show_spinner=False)
 def load_demand_context():
     """
-    Loads the two city/district-level administrative context
-    tables that sit alongside demographics_by_barangay.csv:
+    Loads city_context and computes district_context, the two
+    district/city-level companions to demographics_by_barangay.csv:
 
-    - processed/indicators/demand_city_context.csv — city-wide
+    - processed/editable/demand_city_context.csv — city-wide
       breakdowns (seniors by sex/age, seniors also registered
       as PWD, PWDs by disability type with male/female splits).
       No barangay or district breakdown; OSCA and PDAO figures
       for "seniors with disability" are kept as two separate
       rows since they use different registration bases and
       disagree (4,677 vs 6,429) — this is documented in the
-      "note" column rather than reconciled.
-    - processed/indicators/demand_district_context.csv —
-      registered seniors and PWDs per district (roman numeral
-      districts I-VI, converted here to integers 1-6 to match
-      the "district" column used elsewhere in the dashboard).
+      "note" column rather than reconciled. Left as its own
+      manually-maintained file — it isn't derivable from anything
+      else (city-level only, no barangay/district breakdown to
+      derive it from).
+    - district_context — registered seniors and PWDs per district.
+      Used to be its own manually-maintained file
+      (demand_district_context.csv), but that file's numbers were
+      just a slightly-stale duplicate of
+      demographics_by_district.csv's own seniors_registered/
+      pwd_registered columns (same OSCA/PDAO source, off by a
+      handful per district from a different pull date) — so this
+      is now read from there instead, live, rather than kept in
+      sync by hand in two places.
 
     Returns (city_context, district_context).
     """
 
     city_context = pd.read_csv(
-        "processed/indicators/demand_city_context.csv"
+        "processed/editable/demand_city_context.csv"
     )
 
-    district_context = pd.read_csv(
-        "processed/indicators/demand_district_context.csv"
-    )
+    demographics_district = load_demographics_by_district()
 
-    roman_to_int = {
-        "I": 1,
-        "II": 2,
-        "III": 3,
-        "IV": 4,
-        "V": 5,
-        "VI": 6
-    }
+    district_context = demographics_district[
+        ["district", "seniors_registered", "pwd_registered"]
+    ].copy()
 
-    district_context["district"] = (
-        district_context["district"]
-        .map(roman_to_int)
-    )
+    district_context["source"] = "demographics_by_district.csv"
 
     return city_context, district_context
 
@@ -1360,7 +2061,7 @@ def load_domestic_workers():
     """
 
     demo = pd.read_csv(
-        "processed/indicators/demographics_by_barangay.csv"
+        "processed/editable/demographics_by_barangay.csv"
     )
 
     demo["barangay_key"] = (
@@ -1482,7 +2183,7 @@ def sample_raster_at_points(path, lats, lons):
 @st.cache_data(show_spinner=False)
 def flag_facilities_at_risk(
     df,
-    raster_path="processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
+    raster_path="processed/reference/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
     lat_col="latitude",
     lon_col="longitude",
     out_col="flood_risk"
@@ -1536,8 +2237,8 @@ def flag_facilities_at_risk(
 
 @st.cache_data(show_spinner=False)
 def compute_barangay_flood_exposure(
-    raster_path="processed/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
-    barangay_path="processed/qc_barangays.geojson",
+    raster_path="processed/reference/climate/flood_inundation_binary_gt50cm_EPSG3123.tif",
+    barangay_path="processed/reference/qc_barangays.geojson",
     name_col="barangay_name"
 ):
     """
@@ -1678,6 +2379,58 @@ def hex_to_rgb(hex_color):
     ]
 
 
+_MISSING_TOOLTIP_VALUES = {"", "not available", "nan", "none", "<na>"}
+
+
+def build_tooltip_html(df, name_col, fields):
+    """
+    Builds a per-row map tooltip HTML string with only the fields
+    that have a real value for that row — a field that's missing,
+    blank, or "Not available" is left out of the tooltip entirely
+    rather than shown with an empty-looking line, since pydeck has
+    no per-row conditional logic of its own: the same static HTML
+    template is substituted for every point, so hiding one point's
+    "Open:" line without hiding every point's requires building the
+    whole HTML string here in Python first, then pointing the
+    pydeck tooltip at this single precomputed column.
+
+    df: the facility dataframe (used only to read values from —
+        returns a new Series, doesn't mutate df).
+    name_col: column holding the bold header line (always shown).
+    fields: list of (label, column) pairs, rendered in order as
+        "<br/>Label: value" — skipped whenever that row's value in
+        `column` is null or one of the recognized missing-value
+        placeholders ("Not available", "", "nan", etc.).
+
+    Returns a pandas Series of HTML strings, aligned to df's index
+    — assign it as a column and reference {that_column} as the
+    entire tooltip "html" template.
+    """
+
+    def _row_html(row):
+
+        html = f"<b>{row[name_col]}</b>"
+
+        for label, col in fields:
+
+            if col not in row:
+                continue
+
+            val = row[col]
+
+            if pd.isna(val):
+                continue
+
+            if str(val).strip().lower() in _MISSING_TOOLTIP_VALUES:
+                continue
+
+            html += f"<br/>{label}: {val}"
+
+        return html
+
+    return df.apply(_row_html, axis=1)
+
+
 # --------------------------------------------------
 # DEMAND-PER-FACILITY INDICATORS
 # (methodology adapted from the supply/cluster
@@ -1705,7 +2458,7 @@ def compute_population_per_facility(
     children_divisions / elderly_divisions let the caller
     decide which major_division values count as serving
     children vs. older persons. Defaults match the QC
-    care_v3.csv major_division values.
+    care_supply_facilities.csv major_division values.
     """
 
     if children_divisions is None:
@@ -1839,7 +2592,7 @@ def build_cluster_features(
     produced on the Population Overview page).
 
     demographics must be the full indicators table loaded by
-    load_demographics() (processed/indicators/demographics_by_barangay.csv).
+    load_demographics() (processed/editable/demographics_by_barangay.csv).
     """
 
     facility_type_cols = [
