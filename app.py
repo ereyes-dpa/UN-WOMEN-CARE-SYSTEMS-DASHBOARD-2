@@ -1156,7 +1156,8 @@ def build_explorer_map(
             "style": {
                 "backgroundColor": "white",
                 "color": "black",
-                "fontSize": "12px"
+                "fontSize": "12px",
+                "whiteSpace": "pre-line"
             }
         },
         map_style="light"
@@ -3869,7 +3870,8 @@ elif page == "Schools":
         "style": {
             "backgroundColor": "white",
             "color": "black",
-            "fontSize": "12px"
+            "fontSize": "12px",
+            "whiteSpace": "pre-line"
         }
     }
 
@@ -4445,7 +4447,8 @@ elif page == "Health Centers Map":
         "style": {
             "backgroundColor": "white",
             "color": "black",
-            "fontSize": "12px"
+            "fontSize": "12px",
+            "whiteSpace": "pre-line"
         }
     }
 
@@ -4996,7 +4999,8 @@ elif page == "Older Persons Center Map":
         "style": {
             "backgroundColor": "white",
             "color": "black",
-            "fontSize": "12px"
+            "fontSize": "12px",
+            "whiteSpace": "pre-line"
         }
     }
 
@@ -5703,7 +5707,8 @@ elif page == "Long-Term Care & Rehabilitation":
         "style": {
             "backgroundColor": "white",
             "color": "black",
-            "fontSize": "12px"
+            "fontSize": "12px",
+            "whiteSpace": "pre-line"
         }
     }
 
@@ -6559,7 +6564,8 @@ SERVICES:
         "style": {
             "backgroundColor": "white",
             "color": "black",
-            "fontSize": "12px"
+            "fontSize": "12px",
+            "whiteSpace": "pre-line"
         }
     }
 
@@ -6805,7 +6811,8 @@ SERVICES:
         "style": {
             "backgroundColor": "white",
             "color": "black",
-            "fontSize": "12px"
+            "fontSize": "12px",
+            "whiteSpace": "pre-line"
         }
     }
 
