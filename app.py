@@ -6549,15 +6549,13 @@ elif page == "Action Offices":
     # --------------------------------------------------
 
     tooltip = {
-        "html": """
-        {tooltip_html}
-        <br/><br/>
-        <b>Services:</b><br/>
-        • PDAO Satellite Office: ID services for persons with disabilities; purchase &amp; free movie booklets<br/>
-        • OSCA Satellite Office: Senior Citizen ID; medicine, grocery &amp; movie booklets; centenarian recognition; death benefits; social pension<br/>
-        • PESO Satellite Office: Job referral; employer accreditation; workers' association registration; OFW &amp; Kasambahay assistance<br/>
-        • SSDD Satellite Office: Social case studies; medical &amp; burial assistance, persons with disabilities case studies, women's case management, elderly/persons with disabilities intake, training, and livelihood &amp; capital assistance
-        """,
+        "html": """{tooltip_html}
+
+SERVICES:
+• PDAO Satellite Office: ID services for persons with disabilities; purchase & free movie booklets
+• OSCA Satellite Office: Senior Citizen ID; medicine, grocery & movie booklets; centenarian recognition; death benefits; social pension
+• PESO Satellite Office: Job referral; employer accreditation; workers' association registration; OFW & Kasambahay assistance
+• SSDD Satellite Office: Social case studies; medical & burial assistance, persons with disabilities case studies, women's case management, elderly/persons with disabilities intake, training, and livelihood & capital assistance""",
         "style": {
             "backgroundColor": "white",
             "color": "black",
@@ -6797,15 +6795,13 @@ elif page == "Migration Resource Center":
     # --------------------------------------------------
 
     tooltip = {
-        "html": """
-        {tooltip_html}
-        <br/><br/>
-        <b>Services:</b><br/>
-        1. Pre-Migration and Pre-Employment Trainings<br/>
-        2. Pre-Departure Trainings<br/>
-        3. On-Site Support and Learning Sessions<br/>
-        4. Reintegration Trainings for OFW Returnees
-        """,
+        "html": """{tooltip_html}
+
+SERVICES:
+1. Pre-Migration and Pre-Employment Trainings
+2. Pre-Departure Trainings
+3. On-Site Support and Learning Sessions
+4. Reintegration Trainings for OFW Returnees""",
         "style": {
             "backgroundColor": "white",
             "color": "black",
