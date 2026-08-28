@@ -1,0 +1,104 @@
+QUEZON CARING CITY DASHBOARD - HOW TO UPDATE THE DATA
+=======================================================
+
+This dashboard reads its facility data from ONE file:
+
+    processed/care.csv
+
+To add, edit, or remove a facility (a school, health center, childcare
+center, etc.), you only need to edit that one file. You do NOT need to
+touch app.py or functions.py.
+
+
+1) HOW TO EDIT THE FILE
+------------------------
+- Open processed/care.csv in Excel, Google Sheets, or Numbers.
+- Add a new row for a new facility, edit an existing row, or delete a
+  row to remove a facility.
+- When you save, make sure to save it back as a CSV file (in Excel:
+  "File > Save As" > choose "CSV UTF-8 (Comma delimited)"). Do NOT save
+  it as .xlsx - the dashboard only reads the .csv file.
+- Keep the file name exactly "care.csv" and keep it inside the
+  "processed" folder.
+- Do NOT rename, delete, or reorder the column headers in row 1. The
+  dashboard matches columns by name, not by position.
+
+
+2) WHAT EACH COLUMN MEANS
+---------------------------
+name_original       Facility name, as you want it to appear.
+address              Street address (free text).
+barangay             Barangay name.
+district             District number: 1, 2, 3, 4, 5, or 6.
+major_division       Which map/page this facility belongs to. Must be
+                      EXACTLY one of the following (spelling and
+                      capitalization matter):
+                        Schools
+                        Childcare
+                        Health centers
+                        Older persons care
+                        Long-term care and rehabilitation services
+                        Quezon City satellite offices for services
+                        Trainings
+                        Bus stops
+                      Any other value will not show up on the
+                      dashboard at all.
+sub_division          Public or Private, where relevant (used for
+                      Schools, Childcare, and Older Persons care).
+                      Leave blank if not applicable.
+category              The facility's type/subtype (e.g. "Preschool",
+                      "Day care center", "Health center pharmacy").
+                      This text is what fills the sidebar filter
+                      dropdowns AND controls marker colors - so try to
+                      keep spelling/casing consistent with existing
+                      rows of the same major_division, otherwise you
+                      may end up with a near-duplicate filter option.
+source_reference      Where the data came from (free text, shown on
+                      some tooltips).
+latitude / longitude   REQUIRED for the facility to appear on the map.
+                      If either is blank, the row is silently dropped
+                      from the map (it still counts elsewhere).
+open_hours / close_hours   Free text (e.g. "8:00 AM"). Leave blank if
+                      unknown - the dashboard will show
+                      "Not available".
+frequency_mon_fri / frequency_saturday / frequency_sunday
+                      Only used for Bus stops.
+bus_route             Only used for Bus stops.
+data_source           Should stay "Administrative data" for facilities
+                      you want treated as verified/official records.
+
+
+3) WHERE CHANGES SHOW UP
+--------------------------
+- Every facility page (Schools, Childcare Facilities, Health Centers,
+  Older Persons Care Facilities, Long-Term Care & Rehabilitation,
+  Action Offices, QC Migrants Resource Center, Bus Stops) and the
+  combined "Care Services Explorer" map all read from this same file,
+  so one edit updates everywhere automatically.
+- The sidebar filter options (e.g. the list of school categories, or
+  health facility types) are generated automatically from whatever
+  values exist in the category column - you do not need to edit any
+  code to add a new filter option, just use a new category value.
+
+
+4) SEEING YOUR CHANGES (IMPORTANT)
+------------------------------------
+The dashboard caches the data for performance, so it will not always
+pick up a saved change immediately:
+- If you are running the app yourself (streamlit run app.py), stop it
+  (Ctrl+C) and run it again.
+- If the app is already open in a browser tab, use the "⋮" menu in the
+  top-right corner of the app and choose "Clear cache", then refresh
+  the page.
+- If the dashboard is hosted online (e.g. Streamlit Community Cloud)
+  and this project is in a Git repository, you will need to push the
+  updated processed/care.csv to that repository for the hosted app to
+  pick it up.
+
+
+5) FILES YOU SHOULDN'T NEED TO TOUCH
+---------------------------------------
+- processed/qc_barangays.geojson - barangay boundary shapes for the
+  map background.
+This is a map reference layer, not a facility record, and doesn't
+need editing when you add or update a facility.

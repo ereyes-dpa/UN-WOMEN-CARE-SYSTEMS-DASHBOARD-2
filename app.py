@@ -1,11 +1,11 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import folium
 import numpy as np
 from functions import *
 import pydeck as pdk
-import geopandas as gpd
 
 # PUBLIC VERSION
 
@@ -81,29 +81,6 @@ h1, h2, h3, h4 {
     max-width: 640px;
     font-size: 0.95rem;
     line-height: 1.5;
-}
-
-.qcd-hero-badge {
-    background: rgba(255, 255, 255, 0.14);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    border-radius: 10px;
-    padding: 12px 22px;
-    text-align: center;
-    flex-shrink: 0;
-}
-
-.qcd-hero-badge .qcd-badge-value {
-    color: #FFFFFF;
-    font-family: 'Montserrat', sans-serif;
-    font-weight: 700;
-    font-size: 1.9rem;
-    line-height: 1.1;
-}
-
-.qcd-hero-badge .qcd-badge-label {
-    color: #E4DEF7;
-    font-size: 0.78rem;
-    line-height: 1.3;
 }
 
 .qcd-card {
@@ -368,129 +345,6 @@ st.divider()
 geo, bounds = load_geo()
 
 # --------------------------------------------------
-# FLAG FACILITIES AT FLOOD RISK
-# --------------------------------------------------
-
-childcare_centers   = flag_facilities_at_risk(childcare_centers)
-schools             = flag_facilities_at_risk(schools)
-health_centers      = flag_facilities_at_risk(health_centers)
-older_person_care   = flag_facilities_at_risk(older_person_care)
-long_term_care      = flag_facilities_at_risk(long_term_care)
-action_offices      = flag_facilities_at_risk(action_offices)
-migration_centers   = flag_facilities_at_risk(migration_centers)
-
-# --------------------------------------------------
-# BARANGAY AND DISTRICT MAPS
-# --------------------------------------------------
-
-barangay_map = gpd.read_file(
-    "processed/qc_barangays.geojson"
-)
-
-district_map = gpd.read_file(
-    "processed/qc_districts.geojson"
-)
-
-# --------------------------------------------------
-# POPULATION DATA
-# (only the citywide total is used on this public build —
-# for the Home page's headline stat badge — since the
-# detailed barangay-level demographic breakdown lives on
-# Population Overview, which isn't part of this version.)
-# --------------------------------------------------
-
-population_summary, population_sex, population_age = load_data_for_kpis()
-
-# --------------------------------------------------
-# BARANGAY AND DISTRICT DATAFRAMES (for KPIs and charts)
-# --------------------------------------------------
-
-# Normalize join keys
-barangay_map["barangay_name"] = (
-    barangay_map["barangay_name"]
-    .astype(str)
-    .str.strip()
-    .str.upper()
-)
-
-population_age["Barangay"] = (
-    population_age["Barangay"]
-    .astype(str)
-    .str.strip()
-    .str.upper()
-)
-
-population_sex["Barangay"] = (
-    population_sex["Barangay"]
-    .astype(str)
-    .str.strip()
-    .str.upper()
-)
-
-barangay_df = barangay_map.merge(
-    population_age,
-    left_on="barangay_name",
-    right_on="Barangay",
-    how="left"
-)
-
-barangay_df = barangay_df.merge(
-    population_sex[
-        [
-            "Barangay",
-            "Male",
-            "Female"
-        ]
-    ],
-    on="Barangay",
-    how="left"
-)
-
-# District population
-district_pop = (
-    population_age[
-        [
-            "District",
-            "0-5 (Early Childhood)",
-            "6-17 (School Age Children)",
-            "18-59 (Working Age Adult)",
-            "60+ (Older Persons)",
-            "Total"
-        ]
-    ]
-    .groupby("District")
-    .sum()
-    .reset_index()
-    .rename(
-        columns={
-            "0-5 (Early Childhood)":
-                "Early Childhood (0-5)",
-            "6-17 (School Age Children)":
-                "School Age (6-17)",
-            "18-59 (Working Age Adult)":
-                "Working Age (18-59)",
-            "60+ (Older Persons)":
-                "Older Persons (60+)"
-        }
-    )
-)
-
-district_pop = district_pop.merge(
-    population_sex[
-        [
-            "District",
-            "Male",
-            "Female"
-        ]
-    ]
-    .groupby("District")
-    .sum()
-    .reset_index(),
-    on="District",
-    how="left"
-)
-
-# --------------------------------------------------
 # QC CENTER
 # --------------------------------------------------
 minx, miny, maxx, maxy = bounds
@@ -582,7 +436,7 @@ def build_explorer_map(
 
     service_layers = {
 
-        "Childcare Centers": {
+        "Childcare Facilities": {
             "df": childcare_centers,
             "color": "#4C1D95",
             "symbol": "●",
@@ -618,7 +472,7 @@ def build_explorer_map(
             "lon_col": "longitude"
         },
 
-        "Older Persons Facilities": {
+        "Older Persons Care Facilities": {
             "df": older_person_care,
             "color": "#055B52",
             "symbol": "◆",
@@ -654,11 +508,11 @@ def build_explorer_map(
             "lon_col": "longitude"
         },
 
-        "Migration Resource Centers": {
+        "QC Migrants Resource Centers": {
             "df": migration_centers,
             "color": "#C4B5FD",
             "symbol": "✦",
-            "source": "Migration Resource Center",
+            "source": "QC Migrants Resource Center",
             "name_col": "Name",
             "district_col": "District",
             "address_col": "Address",
@@ -751,12 +605,16 @@ def build_explorer_map(
             """
 
             if has_sector and pd.notna(row_dict["Sector"]):
-                popup_html += f"<br>Sector: {row_dict['Sector']}"
+                popup_html += f"<br>Provider Type: {row_dict['Sector']}"
 
             if has_category and pd.notna(row_dict["Category"]):
                 popup_html += f"<br>Category: {row_dict['Category']}"
 
-            if has_district and pd.notna(row_dict[layer["district_col"]]):
+            if (
+                has_district
+                and layer_name != "Action Offices"
+                and pd.notna(row_dict[layer["district_col"]])
+            ):
                 popup_html += (
                     f"<br>District: "
                     f"{int(row_dict[layer['district_col']])}"
@@ -784,7 +642,7 @@ def build_explorer_map(
             category = row_dict.get("Category")
             district = row_dict.get("District")
 
-            if layer_name == "Childcare Centers":
+            if layer_name == "Childcare Facilities":
                 marker_color_value = childcare_color(category)
 
             elif layer_name == "Schools":
@@ -793,7 +651,7 @@ def build_explorer_map(
             elif layer_name == "Health Centers":
                 marker_color_value = marker_color(category)
 
-            elif layer_name == "Older Persons Facilities":
+            elif layer_name == "Older Persons Care Facilities":
                 marker_color_value = opc_color(category)
 
             elif layer_name == "Long-Term Care & Rehabilitation":
@@ -802,7 +660,7 @@ def build_explorer_map(
             elif layer_name == "Action Offices":
                 marker_color_value = district_color(district)
 
-            elif layer_name == "Migration Resource Centers":
+            elif layer_name == "QC Migrants Resource Centers":
                 marker_color_value = "#C4B5FD"
 
             else:
@@ -874,25 +732,25 @@ st.sidebar.subheader("Care Maps")
 # --------------------------------------------------
 
 if st.sidebar.button(
-    "Childcare Centers",
+    "Childcare Facilities",
     width='stretch'
 ):
-    st.session_state.page = "Childcare Centers"
+    st.session_state.page = "Childcare Facilities"
     st.rerun()
 
-if st.session_state.page == "Childcare Centers":
+if st.session_state.page == "Childcare Facilities":
 
     st.sidebar.markdown("##### Filters")
 
+    childcare_categories = sorted(
+        childcare_centers["Category"]
+        .dropna()
+        .unique()
+    )
+
     selected_childcare_category = st.sidebar.radio(
         "Facility Category",
-        [
-            "All",
-            "Child Development Center",
-            "Child Learning Center",
-            "Day Care Center",
-            "Supervised Neighborhood Play"
-        ],
+        ["All"] + list(childcare_categories),
         key="childcare_category"
     )
 
@@ -911,28 +769,27 @@ if st.session_state.page == "Schools":
 
     st.sidebar.markdown("##### Filters")
 
+    school_sectors = sorted(
+        schools["Sector"]
+        .dropna()
+        .unique()
+    )
+
     selected_school_sector = st.sidebar.radio(
         "Provider Type",
-        [
-            "All",
-            "Public",
-            "Private"
-        ],
+        ["All"] + list(school_sectors),
         key="school_sector"
     )
 
-    # School category options (school types)
-    category_options = [
-        "All",
-        "Preschool",
-        "Elementary school",
-        "High school",
-        "Senior high school"
-    ]
+    school_categories = sorted(
+        schools["Category"]
+        .dropna()
+        .unique()
+    )
 
     selected_school_category = st.sidebar.radio(
         "School Category",
-        category_options,
+        ["All"] + list(school_categories),
         key="school_category"
     )
 
@@ -941,27 +798,25 @@ if st.session_state.page == "Schools":
 # --------------------------------------------------
 
 if st.sidebar.button(
-    "Health Centers Map",
+    "Health Centers",
     width='stretch'
 ):
-    st.session_state.page = "Health Centers Map"
+    st.session_state.page = "Health Centers"
     st.rerun()
 
-if st.session_state.page == "Health Centers Map":
+if st.session_state.page == "Health Centers":
 
     st.sidebar.markdown("##### Filters")
 
+    health_categories = sorted(
+        health_centers["Category"]
+        .dropna()
+        .unique()
+    )
+
     selected_category = st.sidebar.radio(
         "Facility Type",
-        [
-            "All",
-            "QC LGU",
-            "National",
-            "Super Health",
-            "Health Center",
-            "Pharmacy",
-            "Milk Bank"
-        ],
+        ["All"] + list(health_categories),
         key="health_category"
     )
 
@@ -970,23 +825,25 @@ if st.session_state.page == "Health Centers Map":
 # --------------------------------------------------
 
 if st.sidebar.button(
-    "Older Persons Center Map",
+    "Older Persons Care Facilities",
     width='stretch'
 ):
-    st.session_state.page = "Older Persons Center Map"
+    st.session_state.page = "Older Persons Care Facilities"
     st.rerun()
 
-if st.session_state.page == "Older Persons Center Map":
+if st.session_state.page == "Older Persons Care Facilities":
 
     st.sidebar.markdown("##### Filters")
 
+    opc_categories = sorted(
+        older_person_care["Category"]
+        .dropna()
+        .unique()
+    )
+
     selected_opc_category = st.sidebar.radio(
         "Facility Type",
-        [
-            "All",
-            "Nursing Care Center",
-            "Bahay Aruga for Abandoned Elderly"
-        ],
+        ["All"] + list(opc_categories),
         key="opc_category"
     )
 
@@ -1033,10 +890,10 @@ if st.sidebar.button(
 # --------------------------------------------------
 
 if st.sidebar.button(
-    "Migration Resource Center",
+    "QC Migrants Resource Center",
     width='stretch'
 ):
-    st.session_state.page = "Migration Resource Center"
+    st.session_state.page = "QC Migrants Resource Center"
     st.rerun()
 
 # --------------------------------------------------
@@ -1168,7 +1025,7 @@ if page == "Care Services Explorer":
     st.sidebar.markdown(
         """
         <span style="color:#C4B5FD;font-size:22px;">✦</span>
-        <b>Migration Resource Center</b>
+        <b>QC Migrants Resource Center</b>
         """,
         unsafe_allow_html=True
     )    
@@ -1183,10 +1040,8 @@ if page == "Home":
     # HERO
     # =====================================================
 
-    citywide_population = population_summary["Total"].iloc[0]
-
     st.markdown(
-        f"""
+        """
         <div class="qcd-hero">
             <div>
                 <h2>Quezon Caring City Dashboard</h2>
@@ -1198,14 +1053,6 @@ if page == "Home":
                     migration resource centers.
                 </p>
             </div>
-            <div class="qcd-hero-badge">
-                <div class="qcd-badge-value">
-                    {citywide_population:,.0f}
-                </div>
-                <div class="qcd-badge-label">
-                    residents citywide
-                </div>
-            </div>
         </div>
         """,
         unsafe_allow_html=True
@@ -1216,26 +1063,19 @@ if page == "Home":
     # =====================================================
 
     total_barangays = 142
-    total_districts = len(district_pop)
+    total_districts = 6
 
-    k1, k2, k3 = st.columns(3)
+    k1, k2 = st.columns(2)
 
     kpi_card(
         k1,
-        "Total Population",
-        f"{citywide_population:,.0f}",
-        caption="residents citywide"
-    )
-
-    kpi_card(
-        k2,
         "Total Barangays",
         f"{total_barangays:,}",
         caption="administrative divisions"
     )
 
     kpi_card(
-        k3,
+        k2,
         "Total Districts",
         f"{total_districts}",
         caption="geographic areas"
@@ -1327,7 +1167,7 @@ if page == "Home":
             unsafe_allow_html=True
         )
 
-elif page == "Childcare Centers":
+elif page == "Childcare Facilities":
 
     st.markdown(
         """
@@ -1460,11 +1300,11 @@ elif page == "Childcare Centers":
         data=cc,
         get_position="[longitude, latitude]",
         get_fill_color="[r, g, b]",
-        get_line_color="[r, g, b]",
+        get_line_color=[0, 0, 0],
         stroked=True,
         filled=True,
         opacity=0.9,
-        line_width_min_pixels=2,
+        line_width_min_pixels=1,
         get_radius=40,
         radius_min_pixels=4,
         radius_max_pixels=4,
@@ -1510,7 +1350,7 @@ elif page == "Childcare Centers":
     st.pydeck_chart(
         deck,
         height=700,
-        width='stretch'
+        use_container_width=True
     )
 
 elif page == "Schools":
@@ -1677,11 +1517,11 @@ elif page == "Schools":
         data=sch,
         get_position="[longitude, latitude]",
         get_fill_color="[r, g, b]",
-        get_line_color="[r, g, b]",
+        get_line_color=[0, 0, 0],
         stroked=True,
         filled=True,
         opacity=0.9,
-        line_width_min_pixels=2,
+        line_width_min_pixels=1,
         get_radius=40,
         radius_min_pixels=4,
         radius_max_pixels=4,
@@ -1697,7 +1537,7 @@ elif page == "Schools":
     tooltip = {
         "html": """
         <b>{Name}</b><br/>
-        Sector: {Sector}<br/>
+        Provider Type: {Sector}<br/>
         Category: {Category}<br/>
         District: {District}<br/>
         Address: {Address}<br/>
@@ -1729,10 +1569,10 @@ elif page == "Schools":
     st.pydeck_chart(
         deck,
         height=700,
-        width='stretch'
+        use_container_width=True
     )
 
-elif page == "Health Centers Map":
+elif page == "Health Centers":
 
     st.markdown(
         """
@@ -1906,11 +1746,11 @@ elif page == "Health Centers Map":
         data=hc,
         get_position="[longitude, latitude]",
         get_fill_color="[r, g, b]",
-        get_line_color="[r, g, b]",
+        get_line_color=[0, 0, 0],
         stroked=True,
         filled=True,
         opacity=0.9,
-        line_width_min_pixels=2,
+        line_width_min_pixels=1,
         get_radius=40,
         radius_min_pixels=4,
         radius_max_pixels=4,
@@ -1925,6 +1765,7 @@ elif page == "Health Centers Map":
         "html": """
         <b>{Name}</b><br/>
         Category: {Category}<br/>
+        Provider Type: {Sector}<br/>
         District: {District}<br/>
         Barangay: {barangay_display}<br/>
         Address: {Address}<br/>
@@ -1955,10 +1796,10 @@ elif page == "Health Centers Map":
     st.pydeck_chart(
         deck,
         height=700,
-        width='stretch'
+        use_container_width=True
     )
     
-elif page == "Older Persons Center Map":
+elif page == "Older Persons Care Facilities":
 
     st.markdown(
         """
@@ -2148,11 +1989,11 @@ elif page == "Older Persons Center Map":
         data=opc,
         get_position="[longitude, latitude]",
         get_fill_color="[r, g, b]",
-        get_line_color="[r, g, b]",
+        get_line_color=[0, 0, 0],
         stroked=True,
         filled=True,
         opacity=0.9,
-        line_width_min_pixels=2,
+        line_width_min_pixels=1,
         get_radius=40,
         radius_min_pixels=4,
         radius_max_pixels=4,
@@ -2197,7 +2038,7 @@ elif page == "Older Persons Center Map":
     st.pydeck_chart(
         deck,
         height=700,
-        width='stretch'
+        use_container_width=True
     )
 
 elif page == "Long-Term Care & Rehabilitation":
@@ -2211,7 +2052,7 @@ elif page == "Long-Term Care & Rehabilitation":
             margin-bottom:10px;
             padding-top:0px;
         ">
-            Long-Term Care & Rehabilitation Services
+            Long-Term Care and Rehabilitation Centers
         </h2>
         """,
         unsafe_allow_html=True
@@ -2386,11 +2227,11 @@ elif page == "Long-Term Care & Rehabilitation":
         data=ltc,
         get_position="[longitude, latitude]",
         get_fill_color="[r, g, b]",
-        get_line_color="[r, g, b]",
+        get_line_color=[0, 0, 0],
         stroked=True,
         filled=True,
         opacity=0.9,
-        line_width_min_pixels=2,
+        line_width_min_pixels=1,
         get_radius=40,
         radius_min_pixels=4,
         radius_max_pixels=4,
@@ -2405,6 +2246,7 @@ elif page == "Long-Term Care & Rehabilitation":
         "html": """
         <b>{Name}</b><br/>
         Category: {Category}<br/>
+        Provider Type: {Sector}<br/>
         District: {District}<br/>
         Barangay: {barangay_display}<br/>
         Address: {Address}<br/>
@@ -2435,7 +2277,7 @@ elif page == "Long-Term Care & Rehabilitation":
     st.pydeck_chart(
         deck,
         height=700,
-        width='stretch' 
+        use_container_width=True
     )
 
 elif page == "Action Offices":
@@ -2615,11 +2457,11 @@ elif page == "Action Offices":
         data=sat,
         get_position="[longitude, latitude]",
         get_fill_color="[r, g, b]",
-        get_line_color="[r, g, b]",
+        get_line_color=[0, 0, 0],
         stroked=True,
         filled=True,
         opacity=0.9,
-        line_width_min_pixels=2,
+        line_width_min_pixels=1,
         get_radius=40,
         radius_min_pixels=4,
         radius_max_pixels=4,
@@ -2633,11 +2475,16 @@ elif page == "Action Offices":
     tooltip = {
         "html": """
         <b>{Category}</b><br/>
-        District: {District}<br/>
         Barangay: {barangay_display}<br/>
         Address: {Address}<br/>
         Open: {open_display}<br/>
-        Close: {close_display}
+        Close: {close_display}<br/>
+        <br/>
+        <b>Services:</b><br/>
+        PDAO Satellite Office: PWD ID services; purchase &amp; free movie booklets<br/>
+        OSCA Satellite Office: Senior Citizen ID; medicine, grocery &amp; movie booklets; centenarian recognition; death benefits; social pension<br/>
+        PESO Satellite Office: Job referral; employer accreditation; workers' association registration; OFW &amp; Kasambahay assistance<br/>
+        SSDD Satellite Office: Social case studies; medical &amp; burial assistance, PWD case studies, women's case management, elderly/PWD intake, training, and livelihood &amp; capital assistance
         """,
         "style": {
             "backgroundColor": "white",
@@ -2663,10 +2510,10 @@ elif page == "Action Offices":
     st.pydeck_chart(
         deck,
         height=700,
-        width='stretch'
+        use_container_width=True
     )
 
-elif page == "Migration Resource Center":
+elif page == "QC Migrants Resource Center":
 
     st.markdown(
         """
@@ -2677,7 +2524,7 @@ elif page == "Migration Resource Center":
             margin-bottom:10px;
             padding-top:0px;
         ">
-            Migration Resource Center
+            QC Migrants Resource Center
         </h2>
         """,
         unsafe_allow_html=True
@@ -2833,11 +2680,11 @@ elif page == "Migration Resource Center":
         data=mig,
         get_position="[longitude, latitude]",
         get_fill_color="[r, g, b]",
-        get_line_color="[r, g, b]",
+        get_line_color=[0, 0, 0],
         stroked=True,
         filled=True,
         opacity=0.9,
-        line_width_min_pixels=2,
+        line_width_min_pixels=1,
         get_radius=40,
         radius_min_pixels=4,
         radius_max_pixels=4,
@@ -2851,7 +2698,7 @@ elif page == "Migration Resource Center":
     tooltip = {
         "html": """
         <b>{Name}</b><br/>
-        Category: {Category}<br/>
+        Provider Type: Public<br/>
         District: {District}<br/>
         Barangay: {barangay_display}<br/>
         Address: {Address}<br/>
@@ -2888,7 +2735,7 @@ elif page == "Migration Resource Center":
     st.pydeck_chart(
         deck,
         height=700,
-        width='stretch'
+        use_container_width=True
     )
 
 elif page == "Care Services Explorer":
@@ -2923,7 +2770,7 @@ elif page == "Care Services Explorer":
 
     service_layers = {
 
-        "Childcare Centers": {
+        "Childcare Facilities": {
             "df": childcare_centers,
             "color": "#4C1D95",
             "symbol": "●",
@@ -2959,7 +2806,7 @@ elif page == "Care Services Explorer":
             "lon_col": "longitude"
         },
 
-        "Older Persons Facilities": {
+        "Older Persons Care Facilities": {
             "df": older_person_care,
             "color": "#055B52",
             "symbol": "◆",
@@ -2995,11 +2842,11 @@ elif page == "Care Services Explorer":
             "lon_col": "longitude"
         },
 
-        "Migration Resource Centers": {
+        "QC Migrants Resource Centers": {
             "df": migration_centers,
             "color": "#C4B5FD",
             "symbol": "✦",
-            "source": "Migration Resource Center",
+            "source": "QC Migrants Resource Center",
             "name_col": "Name",
             "district_col": "District",
             "address_col": "Address",
@@ -3107,8 +2954,8 @@ elif page == "Care Services Explorer":
         selected_district
     )
 
-    st.iframe(
+    components.html(
         map_html,
         height=850,
-        width="stretch"
+        scrolling=True
     )
