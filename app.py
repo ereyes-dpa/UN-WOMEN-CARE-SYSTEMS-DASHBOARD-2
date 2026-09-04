@@ -1156,8 +1156,7 @@ def build_explorer_map(
             "style": {
                 "backgroundColor": "white",
                 "color": "black",
-                "fontSize": "12px",
-                "whiteSpace": "pre-line"
+                "fontSize": "12px"
             }
         },
         map_style="light"
@@ -3870,8 +3869,7 @@ elif page == "Schools":
         "style": {
             "backgroundColor": "white",
             "color": "black",
-            "fontSize": "12px",
-            "whiteSpace": "pre-line"
+            "fontSize": "12px"
         }
     }
 
@@ -4447,8 +4445,7 @@ elif page == "Health Centers Map":
         "style": {
             "backgroundColor": "white",
             "color": "black",
-            "fontSize": "12px",
-            "whiteSpace": "pre-line"
+            "fontSize": "12px"
         }
     }
 
@@ -4999,8 +4996,7 @@ elif page == "Older Persons Center Map":
         "style": {
             "backgroundColor": "white",
             "color": "black",
-            "fontSize": "12px",
-            "whiteSpace": "pre-line"
+            "fontSize": "12px"
         }
     }
 
@@ -5707,8 +5703,7 @@ elif page == "Long-Term Care & Rehabilitation":
         "style": {
             "backgroundColor": "white",
             "color": "black",
-            "fontSize": "12px",
-            "whiteSpace": "pre-line"
+            "fontSize": "12px"
         }
     }
 
@@ -6554,18 +6549,19 @@ elif page == "Action Offices":
     # --------------------------------------------------
 
     tooltip = {
-        "html": """{tooltip_html}
-
-SERVICES:
-• PDAO Satellite Office: ID services for persons with disabilities; purchase & free movie booklets
-• OSCA Satellite Office: Senior Citizen ID; medicine, grocery & movie booklets; centenarian recognition; death benefits; social pension
-• PESO Satellite Office: Job referral; employer accreditation; workers' association registration; OFW & Kasambahay assistance
-• SSDD Satellite Office: Social case studies; medical & burial assistance, persons with disabilities case studies, women's case management, elderly/persons with disabilities intake, training, and livelihood & capital assistance""",
+        "html": """
+        {tooltip_html}
+        <br/><br/>
+        <b>Services:</b><br/>
+        • PDAO Satellite Office: ID services for persons with disabilities; purchase &amp; free movie booklets<br/>
+        • OSCA Satellite Office: Senior Citizen ID; medicine, grocery &amp; movie booklets; centenarian recognition; death benefits; social pension<br/>
+        • PESO Satellite Office: Job referral; employer accreditation; workers' association registration; OFW &amp; Kasambahay assistance<br/>
+        • SSDD Satellite Office: Social case studies; medical &amp; burial assistance, persons with disabilities case studies, women's case management, elderly/persons with disabilities intake, training, and livelihood &amp; capital assistance
+        """,
         "style": {
             "backgroundColor": "white",
             "color": "black",
-            "fontSize": "12px",
-            "whiteSpace": "pre-line"
+            "fontSize": "12px"
         }
     }
 
@@ -6589,6 +6585,7 @@ SERVICES:
             deck,
             height=700
         )
+
     # ----------------------------------
     # TABLE
     # ----------------------------------
@@ -6801,18 +6798,19 @@ elif page == "Migration Resource Center":
     # --------------------------------------------------
 
     tooltip = {
-        "html": """{tooltip_html}
-
-SERVICES:
-1. Pre-Migration and Pre-Employment Trainings
-2. Pre-Departure Trainings
-3. On-Site Support and Learning Sessions
-4. Reintegration Trainings for OFW Returnees""",
+        "html": """
+        {tooltip_html}
+        <br/><br/>
+        <b>Services:</b><br/>
+        1. Pre-Migration and Pre-Employment Trainings<br/>
+        2. Pre-Departure Trainings<br/>
+        3. On-Site Support and Learning Sessions<br/>
+        4. Reintegration Trainings for OFW Returnees
+        """,
         "style": {
             "backgroundColor": "white",
             "color": "black",
-            "fontSize": "12px",
-            "whiteSpace": "pre-line"
+            "fontSize": "12px"
         }
     }
 
@@ -8420,13 +8418,19 @@ elif page == "Care Planning & Investment Priorities":
     # (This is the key fix: don't sum all facilities together)
     # ==================================================
 
-    childcare_facility_cols = ["Childcare", "Schools"]
     # Eldercare facilities: Use ONLY "Older persons care" (elderly-specific)
     # Exclude "Health centers" and "Long-term care" which serve multiple populations
     eldercare_facility_cols = ["Older persons care"]
 
+    # Childcare facilities (see compute_childcare_facility_counts_by_
+    # barangay in functions.py): the "Childcare" major_division plus
+    # Schools' "Preschool" category specifically -- not every Schools
+    # row, which would pull in Elementary/Junior High/Senior High/
+    # Special Education Program facilities that don't serve the 0-5
+    # population Childcare_Demand is measuring.
     barangay_access["Childcare_Facilities"] = (
-        barangay_access[childcare_facility_cols].sum(axis=1)
+        barangay_access["Childcare-Relevant Facilities"]
+        if "Childcare-Relevant Facilities" in barangay_access.columns else 0
     )
 
     barangay_access["Eldercare_Facilities"] = (
@@ -8463,14 +8467,16 @@ elif page == "Care Planning & Investment Priorities":
     else:
         barangay_access["Disability_Demand"] = 0
 
-    # Combined metrics (for backward compatibility)
+    # Combined metric across all three domains -- children, older
+    # persons, AND persons with disabilities. Every table/chart/tooltip
+    # below that shows "Care Demand" is built from this single
+    # definition, so what's displayed always matches what the Priority
+    # Score itself is actually driven by (previously this summed only
+    # Childcare_Demand + Eldercare_Demand, so a barangay could rank
+    # near the top of "Top 25 Priority Barangays" purely on a
+    # disability-facility gap while its displayed "Care Demand" number
+    # silently excluded the PWD population responsible for that rank).
     barangay_access["Care Demand"] = (
-        barangay_access["Childcare_Demand"]
-        +
-        barangay_access["Eldercare_Demand"]
-    )
-
-    barangay_access["Care Demand (Children, Older Persons, Persons with Disabilities)"] = (
         barangay_access["Childcare_Demand"]
         +
         barangay_access["Eldercare_Demand"]
@@ -8487,12 +8493,6 @@ elif page == "Care Planning & Investment Priorities":
 
     barangay_access["Care Demand per Facility"] = (
         barangay_access["Care Demand"]
-        /
-        barangay_access["Facilities"]
-    )
-
-    barangay_access["Care Demand per Facility (with Persons with Disabilities)"] = (
-        barangay_access["Care Demand (Children, Older Persons, Persons with Disabilities)"]
         /
         barangay_access["Facilities"]
     )
@@ -8518,8 +8518,21 @@ elif page == "Care Planning & Investment Priorities":
         barangay_access["Childcare_Demand"].rank(ascending=False)
     )
 
+    # Facility gap is ranked on facilities PER 1,000 RESIDENTS, not
+    # the raw facility count. Ranking on the raw count let a tiny,
+    # low-population barangay with literally 0 facilities (e.g.
+    # Valencia, pop. ~11k) tie for the best/scarcest rank alongside
+    # -- or ahead of -- a massive barangay with dozens of facilities
+    # that are nonetheless nowhere near enough for its population
+    # (e.g. Holy Spirit, pop. ~112k, 46 facilities). A raw count
+    # can't distinguish "scarce because tiny" from "scarce relative
+    # to six figures of residents"; a per-capita rate can.
+    barangay_access["Childcare_Facility_Rate"] = (
+        barangay_access["Childcare_Facilities"] / barangay_access["Total"] * 1000
+    )
+
     barangay_access["Childcare_Facility_Rank"] = (
-        barangay_access["Childcare_Facilities"].rank(ascending=True)
+        barangay_access["Childcare_Facility_Rate"].rank(ascending=True)
     )
 
     barangay_access["Childcare_Priority_Score"] = (
@@ -8542,8 +8555,14 @@ elif page == "Care Planning & Investment Priorities":
         barangay_access["Eldercare_Demand"].rank(ascending=False)
     )
 
+    # Per-capita rate, not raw count -- see the Childcare block above
+    # for why (same fix, same reasoning, applied per domain).
+    barangay_access["Eldercare_Facility_Rate"] = (
+        barangay_access["Eldercare_Facilities"] / barangay_access["Total"] * 1000
+    )
+
     barangay_access["Eldercare_Facility_Rank"] = (
-        barangay_access["Eldercare_Facilities"].rank(ascending=True)
+        barangay_access["Eldercare_Facility_Rate"].rank(ascending=True)
     )
 
     barangay_access["Eldercare_Priority_Score"] = (
@@ -8566,8 +8585,14 @@ elif page == "Care Planning & Investment Priorities":
         barangay_access["Disability_Demand"].rank(ascending=False)
     )
 
+    # Per-capita rate, not raw count -- see the Childcare block above
+    # for why (same fix, same reasoning, applied per domain).
+    barangay_access["Disability_Facility_Rate"] = (
+        barangay_access["Disability_Facilities"] / barangay_access["Total"] * 1000
+    )
+
     barangay_access["Disability_Facility_Rank"] = (
-        barangay_access["Disability_Facilities"].rank(ascending=True)
+        barangay_access["Disability_Facility_Rate"].rank(ascending=True)
     )
 
     barangay_access["Disability_Priority_Score"] = (
@@ -8585,15 +8610,21 @@ elif page == "Care Planning & Investment Priorities":
 
     # ============================================
     # OVERALL PRIORITY SCORE
-    # (Shows where ANY domain is severely underserved)
+    # (Reflects need across all three domains, not just whichever one
+    # is worst -- a barangay that's moderately underserved in all
+    # three should rank ahead of one that's fine in two and bad in
+    # only one, which a max() can't distinguish from a barangay that's
+    # bad in one and fine in the other two.)
     # ============================================
     barangay_access["Priority Score"] = barangay_access[[
         "Childcare_Priority_Score",
         "Eldercare_Priority_Score",
         "Disability_Priority_Score"
-    ]].max(axis=1)
+    ]].mean(axis=1)
 
-    # Track which domain is highest priority for each barangay
+    # Still track which single domain is the biggest driver for each
+    # barangay -- useful context even though it no longer determines
+    # the overall score by itself.
     priority_domains = ["Childcare_Priority_Score", "Eldercare_Priority_Score", "Disability_Priority_Score"]
     barangay_access["Primary_Priority_Domain"] = barangay_access[priority_domains].idxmax(axis=1)
     barangay_access["Primary_Priority_Domain"] = (
@@ -8657,45 +8688,31 @@ elif page == "Care Planning & Investment Priorities":
         this analysis calculates priority separately for each care domain:
 
         **Childcare Priority Score** = 50% × (Children Rank) + 50% × (Facility Gap Rank)
-        - Identifies barangays with many children but few childcare/school facilities
+        - Identifies barangays with many children (age 0–5) but few childcare/school facilities
+        - **What counts as a childcare facility:** the "Childcare" division (Child Development
+          Centers/Supervised Play, Child Learning Centers, Day Care Centers) plus Schools rows
+          categorized "Preschool" specifically — not every Schools row, which would pull in
+          Elementary/Junior High/Senior High/Special Education Program facilities that don't
+          serve the 0–5 population this score is measuring against
 
         **Older Persons Priority Score** = 40% × (Older Persons Rank) + 60% × (Facility Gap Rank)
-        - Identifies barangays with many seniors but few eldercare/health center facilities
+        - Identifies barangays with many seniors (age 60+) but few eldercare facilities
         - Higher weight on facility gap because older persons care is severely underprovided
+        - **What counts as an eldercare facility:** only the "Older persons care" division —
+          Health centers and Long-term care/rehabilitation facilities are deliberately excluded,
+          since those serve multiple populations rather than seniors specifically
 
         **Disability Priority Score** = 40% × (Persons with Disabilities Rank) + 60% × (Facility Gap Rank)
         - Identifies barangays with many registered persons with disabilities but few disability services
         - Higher weight on facility gap because disability services are nearly absent city-wide
-        - **What counts as a disability facility:** counts only persons-with-disabilities facilities
-          with "center" in the name, excluding "clinics" as these are more health-related. It
-          additionally includes two categories — "Special Education Program" and "Therapy Center."
+        - **What counts as a disability facility:** counts only health facilities with "center" in
+          the name, excluding clinics as they are more medical-related. It additionally includes
+          two categories — "Special Education Program" and "Therapy Center."
 
-        **Overall Priority Score** = Maximum of the three domains
-        - A barangay gets high priority if ANY domain is severely underserved
-        - Reveals that Commonwealth + Payatas are highest priority for older persons AND disability care
+        **Facility Gap Rank is per 1,000 residents, not a raw facility count.**
+
+        **Overall Priority Score** = Average of the three domains
         """)
-
-    with st.expander("Recommended Policy Actions: Barangay Peer Replication Models", expanded=False):
-
-        st.markdown("""
-        **Scaling Successful Care Ecosystems Across Barangays:**
-        1. **Study "Well-Established" Barangays** → These barangays host multiple facility types
-           (schools, health centers, childcare, etc.).
-           Identify one or two flagship barangays in each district and document their care ecosystem model.
-
-        2. **Replicate in Peer Clusters** → Use the Barangay Clusters page to find 3–4 peer barangays
-           (similar demographics, geography, size) that lack diverse care services. Design a facility
-           expansion plan that brings those barangays closer to the "established ecosystem" model.
-
-        3. **Cost-Efficient Multi-Service Centers** → Instead of replicating every facility type individually,
-           combine services. A multi-service hub (kindergarten + health clinic + older persons support) in one
-           location can serve a cluster of 3–4 barangays and lower operational costs.
-
-        4. **Partnership & Advocacy** → Share successful models with LGU partners, private providers, and NGOs
-           to accelerate adoption. The Care Planning page shows which partnerships/interventions have the
-           highest impact-per-facility.
-        """)
-
 
     # ==================================================
     # MAP
@@ -8746,12 +8763,11 @@ elif page == "Care Planning & Investment Priorities":
         "barangay (see note above if shown)."
     )
 
-    def purd_color(value, vmin, vmax):
+    def purd_color(t):
 
-        if pd.isna(value) or vmax == vmin:
+        if pd.isna(t):
             return [204, 204, 204, 100]
 
-        t = (value - vmin) / (vmax - vmin)
         t = min(max(t, 0), 1)
 
         # Light lavender -> deep magenta/purple, approximating
@@ -8784,15 +8800,23 @@ elif page == "Care Planning & Investment Priorities":
 
         return [103, 0, 31, 205]
 
+    # Colored by PERCENTILE RANK, not the raw Priority Score value.
+    # Overall Priority Score is a max of three already-normalized-to-100
+    # domain scores, so its distribution skews high (median ~75 across
+    # the 142 barangays) -- a straight min-max color scale would then
+    # put most of the city in the darker half of the gradient, making
+    # the map read as "everywhere is high priority" even though the
+    # barangays still differ meaningfully in relative rank. Percentile
+    # rank spreads the same 142 barangays evenly across the gradient
+    # regardless of how bunched the underlying scores are, so the
+    # map's color differences track relative priority again.
+    #
     # Colors must be computed from the numeric "Priority Score"
     # BEFORE that column gets overwritten with the "No data"
     # placeholder string below.
-    score_min = priority_map["Priority Score"].min()
-    score_max = priority_map["Priority Score"].max()
+    score_percentile = priority_map["Priority Score"].rank(pct=True)
 
-    priority_map["fill_color"] = priority_map["Priority Score"].apply(
-        lambda v: purd_color(v, score_min, score_max)
-    )
+    priority_map["fill_color"] = score_percentile.apply(purd_color)
 
     tooltip_fields = [
         "Barangay",
@@ -8859,7 +8883,7 @@ elif page == "Care Planning & Investment Priorities":
         "html": """
         <b>{Barangay}</b><br/>
         Facilities: {Facilities}<br/>
-        Care Demand: {Care Demand}<br/>
+        Care Demand (children, seniors & persons with disabilities): {Care Demand}<br/>
         Priority Score: {Priority Score}
         """,
         "style": {
@@ -8934,7 +8958,7 @@ elif page == "Care Planning & Investment Priorities":
         "District": "District",
         "Total": "Population",
         "Facilities": "Total Facilities",
-        "Care Demand": "Care Demand (0-5 & 60+)",
+        "Care Demand": "Care Demand (0-5, 60+ & Persons with Disabilities)",
         "Priority Score": "Priority Score (0-100)",
         "Care Demand per Facility": "Avg. Population per Facility"
     })
@@ -8946,7 +8970,7 @@ elif page == "Care Planning & Investment Priorities":
                     "District",
                     "Population",
                     "Total Facilities",
-                    "Care Demand (0-5 & 60+)",
+                    "Care Demand (0-5, 60+ & Persons with Disabilities)",
                     "Priority Score (0-100)",
                     "Avg. Population per Facility"
                 ]
@@ -8955,7 +8979,7 @@ elif page == "Care Planning & Investment Priorities":
                 "District": st.column_config.TextColumn("District", width="small"),
                 "Population": st.column_config.NumberColumn("Population", width="medium", format="localized"),
                 "Total Facilities": st.column_config.NumberColumn("Total Facilities", width="small", format="%d"),
-                "Care Demand (0-5 & 60+)": st.column_config.NumberColumn("Care Demand (0-5 & 60+)", width="medium", format="localized"),
+                "Care Demand (0-5, 60+ & Persons with Disabilities)": st.column_config.NumberColumn("Care Demand (0-5, 60+ & Persons with Disabilities)", width="medium", format="localized"),
                 "Priority Score (0-100)": st.column_config.NumberColumn("Priority Score (0-100)", width="medium", format="%.1f"),
                 "Avg. Population per Facility": st.column_config.NumberColumn("Avg. Population per Facility", width="medium", format="%.0f")
             },
@@ -9019,7 +9043,7 @@ elif page == "Care Planning & Investment Priorities":
         y="Barangay",
         orientation="h",
         color="Priority Score",
-        title="Top 25 Critical Intervention Zones (Children & Older Persons Underserved)",
+        title="Top 25 Critical Intervention Zones (Children, Older Persons & Persons with Disabilities Underserved)",
         color_continuous_scale=QCD_SEQUENTIAL
     )
 

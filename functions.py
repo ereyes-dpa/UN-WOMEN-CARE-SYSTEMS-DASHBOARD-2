@@ -18,14 +18,6 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from pyproj import Transformer
 
-
-@st.cache_data
-def get_base64(img_path):
-    """Read an image file and return its base64-encoded contents."""
-    with open(img_path, "rb") as f:
-        return base64.b64encode(f.read()).decode()
-
-
 # --------------------------------------------------
 # TRANSPARENT PLOTLY TEMPLATE
 # (Plotly Express draws an opaque white plot/paper
@@ -1662,6 +1654,60 @@ def compute_pwd_facility_counts_by_barangay(care):
 
 
 @st.cache_data(show_spinner=False)
+def compute_childcare_facility_counts_by_barangay(care):
+    """
+    Facilities considered childcare-relevant, per barangay -- i.e.
+    facilities that actually serve the 0-5 population the Childcare
+    Priority Score's demand side (age_0_5) is measuring against. Two
+    rules, the same shape as compute_pwd_facility_counts_by_barangay
+    above:
+
+    1. Every row in the "Childcare" major_division (Child Development
+       Centers/Supervised Play, Child Learning Centers, Day Care
+       Centers) -- all of it is 0-5-relevant by definition.
+
+    2. Schools rows categorized "Preschool" specifically -- the
+       school-based equivalent serving the same age range.
+
+    This replaces the old childcare_facility_cols = ["Childcare",
+    "Schools"] in app.py's Care Planning page, which summed the
+    ENTIRE Schools major_division -- Elementary, Junior High, Senior
+    High, Special Education Program included -- into a count meant to
+    represent capacity for 0-5-year-olds. A barangay with several
+    large high schools but no preschools looked well-supplied for
+    childcare under that count even though none of those schools
+    enroll a single child in the actual demand bracket.
+
+    No dedup-by-name needed here the way compute_facility_counts_by_
+    barangay dedups Schools rows before counting them as "Total"
+    facilities: that dedup exists because one physical school can
+    have a Preschool row, an Elementary row, a Junior High row, etc.,
+    and counting all of a school's rows would count that one school
+    several times. Filtering to category == "Preschool" already keeps
+    at most one row per school per address, so no further dedup is
+    needed.
+    """
+
+    care = care.copy()
+    care["barangay"] = normalize_barangay_names(care["barangay"])
+
+    is_childcare_division = care["major_division"] == "Childcare"
+    is_preschool = (
+        (care["major_division"] == "Schools")
+        & (care["category"] == "Preschool")
+    )
+
+    childcare_rows = care[is_childcare_division | is_preschool]
+
+    return (
+        childcare_rows
+        .groupby("barangay")
+        .size()
+        .reset_index(name="Childcare-Relevant Facilities")
+    )
+
+
+@st.cache_data(show_spinner=False)
 def compute_facility_ratios(demographics, facility_counts):
     """
     Merges live facility counts into a demographics_by_barangay
@@ -1738,6 +1784,12 @@ def load_demographics():
     pwd_facility_counts = compute_pwd_facility_counts_by_barangay(care)
     demographics = demographics.merge(pwd_facility_counts, on="barangay", how="left")
     demographics["PWD Facilities"] = demographics["PWD Facilities"].fillna(0)
+
+    childcare_facility_counts = compute_childcare_facility_counts_by_barangay(care)
+    demographics = demographics.merge(childcare_facility_counts, on="barangay", how="left")
+    demographics["Childcare-Relevant Facilities"] = (
+        demographics["Childcare-Relevant Facilities"].fillna(0)
+    )
 
     return demographics
 
@@ -2392,7 +2444,7 @@ _MISSING_TOOLTIP_VALUES = {"", "not available", "nan", "none", "<na>"}
 
 def build_tooltip_html(df, name_col, fields):
     """
-    Builds a per-row map tooltip text string with only the fields
+    Builds a per-row map tooltip HTML string with only the fields
     that have a real value for that row — a field that's missing,
     blank, or "Not available" is left out of the tooltip entirely
     rather than shown with an empty-looking line, since pydeck has
@@ -2404,20 +2456,20 @@ def build_tooltip_html(df, name_col, fields):
 
     df: the facility dataframe (used only to read values from —
         returns a new Series, doesn't mutate df).
-    name_col: column holding the first/header line (always shown).
+    name_col: column holding the bold header line (always shown).
     fields: list of (label, column) pairs, rendered in order as
-        "Label: value" on a new line — skipped whenever that row's value in
+        "<br/>Label: value" — skipped whenever that row's value in
         `column` is null or one of the recognized missing-value
         placeholders ("Not available", "", "nan", etc.).
 
-    Returns a pandas Series of plain-text strings, aligned to df's index
+    Returns a pandas Series of HTML strings, aligned to df's index
     — assign it as a column and reference {that_column} as the
     entire tooltip "html" template.
     """
 
     def _row_html(row):
 
-        lines = [str(row[name_col])]
+        html = f"<b>{row[name_col]}</b>"
 
         for label, col in fields:
 
@@ -2432,13 +2484,9 @@ def build_tooltip_html(df, name_col, fields):
             if str(val).strip().lower() in _MISSING_TOOLTIP_VALUES:
                 continue
 
-            lines.append(f"{label}: {val}")
+            html += f"<br/>{label}: {val}"
 
-        # pydeck substitutes data-field values as text inside its tooltip
-        # template. Embedding tags in this value therefore prints literal
-        # strings such as "<b>" and "<br/>" on the map. Newlines combined
-        # with the tooltip's white-space style render cleanly and safely.
-        return "\n".join(lines)
+        return html
 
     return df.apply(_row_html, axis=1)
 
