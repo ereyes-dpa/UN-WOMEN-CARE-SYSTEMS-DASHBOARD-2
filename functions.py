@@ -2444,32 +2444,54 @@ _MISSING_TOOLTIP_VALUES = {"", "not available", "nan", "none", "<na>"}
 
 def build_tooltip_html(df, name_col, fields):
     """
-    Builds a per-row map tooltip HTML string with only the fields
+    Builds a per-row map tooltip content string with only the fields
     that have a real value for that row — a field that's missing,
     blank, or "Not available" is left out of the tooltip entirely
     rather than shown with an empty-looking line, since pydeck has
     no per-row conditional logic of its own: the same static HTML
     template is substituted for every point, so hiding one point's
     "Open:" line without hiding every point's requires building the
-    whole HTML string here in Python first, then pointing the
-    pydeck tooltip at this single precomputed column.
+    whole content here in Python first, then pointing the pydeck
+    tooltip at this single precomputed column.
+
+    IMPORTANT: this returns PLAIN TEXT with real newline ("\\n")
+    line breaks, not an HTML string with <b>/<br/> tags. pydeck's
+    (deck.gl's) tooltip templating substitutes {field} placeholders
+    with the field's value and HTML-escapes that value before
+    inserting it (so a stray "<" or ">" in facility data can't break
+    the tooltip's own markup) — it does NOT re-parse the substituted
+    value as HTML. A previous version of this function returned a
+    string containing literal "<b>"/"<br/>" tags, which meant every
+    map using it showed those tags as visible text in the tooltip
+    (e.g. "<b>Zeti'S Pink Angels...</b><br/>Category: ...") instead
+    of an actual line break. Real "\\n" characters survive HTML-
+    escaping unchanged, so as long as the tooltip's "style" dict sets
+    "whiteSpace": "pre-line" (or "pre-wrap"), the browser renders
+    them as line breaks with no HTML needed. The bold name/header
+    line is NOT included here — add it directly in the static
+    template instead (e.g. "html": "<b>{Name}</b><br/>{tooltip_html}"),
+    since that outer template string IS treated as real HTML, and a
+    plain field value like a facility name never contains "<"/">"
+    characters for escaping to affect.
 
     df: the facility dataframe (used only to read values from —
         returns a new Series, doesn't mutate df).
-    name_col: column holding the bold header line (always shown).
+    name_col: unused by this function now (kept for call-site
+        compatibility) — put the bold header directly in the
+        caller's static "html" template instead, see above.
     fields: list of (label, column) pairs, rendered in order as
-        "<br/>Label: value" — skipped whenever that row's value in
+        "\\nLabel: value" — skipped whenever that row's value in
         `column` is null or one of the recognized missing-value
         placeholders ("Not available", "", "nan", etc.).
 
-    Returns a pandas Series of HTML strings, aligned to df's index
-    — assign it as a column and reference {that_column} as the
-    entire tooltip "html" template.
+    Returns a pandas Series of plain-text strings, aligned to df's
+    index — assign it as a column and reference {that_column} inside
+    a tooltip "html" template whose style sets whiteSpace: pre-line.
     """
 
-    def _row_html(row):
+    def _row_text(row):
 
-        html = f"<b>{row[name_col]}</b>"
+        lines = []
 
         for label, col in fields:
 
@@ -2484,11 +2506,11 @@ def build_tooltip_html(df, name_col, fields):
             if str(val).strip().lower() in _MISSING_TOOLTIP_VALUES:
                 continue
 
-            html += f"<br/>{label}: {val}"
+            lines.append(f"{label}: {val}")
 
-        return html
+        return "\n".join(lines)
 
-    return df.apply(_row_html, axis=1)
+    return df.apply(_row_text, axis=1)
 
 
 # --------------------------------------------------
