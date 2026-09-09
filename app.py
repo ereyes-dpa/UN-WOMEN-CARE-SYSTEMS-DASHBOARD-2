@@ -1,4 +1,5 @@
 import streamlit as st
+import base64
 import pandas as pd
 import plotly.express as px
 import numpy as np
@@ -622,6 +623,40 @@ def build_explorer_map(
         df["b"] = colors.apply(lambda color: color[2])
         df["symbol"] = layer["symbol"]
 
+        def icon_data(row):
+            # Render the original Folium Unicode symbol into an SVG
+            # image. IconLayer displays the image directly, avoiding
+            # missing-glyph issues in deck.gl's TextLayer font atlas.
+            color = f"rgb({row['r']},{row['g']},{row['b']})"
+            svg = f"""
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     width="64" height="64" viewBox="0 0 64 64">
+                    <text x="32" y="33"
+                          text-anchor="middle"
+                          dominant-baseline="middle"
+                          font-family="Arial, sans-serif"
+                          font-size="42"
+                          font-weight="700"
+                          fill="{color}"
+                          stroke="white"
+                          stroke-width="4"
+                          stroke-linejoin="round"
+                          paint-order="stroke fill">
+                        {row['symbol']}
+                    </text>
+                </svg>
+            """
+            encoded_svg = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+            return {
+                "url": f"data:image/svg+xml;base64,{encoded_svg}",
+                "width": 64,
+                "height": 64,
+                "anchorX": 32,
+                "anchorY": 32,
+            }
+
+        df["icon_data"] = df.apply(icon_data, axis=1)
+
         all_points.append(
             df[
                 [
@@ -632,6 +667,7 @@ def build_explorer_map(
                     "g",
                     "b",
                     "symbol",
+                    "icon_data",
                     "tooltip_text",
                 ]
             ]
@@ -639,46 +675,16 @@ def build_explorer_map(
 
     if all_points:
         combined = pd.concat(all_points, ignore_index=True)
-        symbols = "".join(
-            layer["symbol"] for layer in service_layers.values()
-        )
-
-        # Draw the same symbol once in white at a slightly larger
-        # size, then again in its category color. This recreates the
-        # white outline from the original Folium DivIcons so markers
-        # remain easy to distinguish over roads and boundaries.
-        layers.append(
-            pdk.Layer(
-                "TextLayer",
-                data=combined,
-                get_position="[longitude, latitude]",
-                get_text="symbol",
-                get_color=[255, 255, 255, 255],
-                get_size=19,
-                size_min_pixels=19,
-                size_max_pixels=19,
-                get_text_anchor='"middle"',
-                get_alignment_baseline='"center"',
-                character_set='"' + symbols + '"',
-                font_weight=700,
-                pickable=False
-            )
-        )
 
         layers.append(
             pdk.Layer(
-                "TextLayer",
+                "IconLayer",
                 data=combined,
                 get_position="[longitude, latitude]",
-                get_text="symbol",
-                get_color="[r, g, b]",
-                get_size=16,
-                size_min_pixels=16,
-                size_max_pixels=16,
-                get_text_anchor='"middle"',
-                get_alignment_baseline='"center"',
-                character_set='"' + symbols + '"',
-                font_weight=700,
+                get_icon="icon_data",
+                get_size=24,
+                size_min_pixels=20,
+                size_max_pixels=28,
                 pickable=True
             )
         )
