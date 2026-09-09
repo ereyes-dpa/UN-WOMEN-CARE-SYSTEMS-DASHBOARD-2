@@ -1,3 +1,67 @@
+
+User attachment
+
+UN-WOMEN-CARE-SYSTEMS-DASHBOARD-2-private
+the latestst version fo my dashboard is not showing correctly the names in Care Services Explorer
+
+11:13 AM
+
+Worked for 2m 9s
+Fixed the Care Services Explorer popup names in app.py (line 1071).
+
+The combined map data had omitted the Name field, causing the literal {Name} placeholder to appear. The field is now included for every service layer. Syntax validation passed.
+
+Restart or refresh the Streamlit dashboard to load the change.
+
+11:15 AM
+User attachment
+
+UN-WOMEN-CARE-SYSTEMS-DASHBOARD-2-public
+now with this public version, in the care explorer, a legend in the map apears "API KEY REQUIRED"
+
+11:26 AM
+
+Worked for 55s
+Fixed the public dashboard’s Care Explorer in app.py (line 541).
+
+The CARTO basemap was replaced with the key-free OpenStreetMap basemap, removing the “API KEY REQUIRED” watermark. Syntax validation passed.
+
+Refresh or restart the Streamlit app to clear the cached map.
+
+11:27 AM
+no! I like the simplest map version, check the other pages
+
+11:28 AM
+
+Worked for 3m 39s
+Corrected. The Care Explorer now uses the same clean CARTO Positron PyDeck map as the other public dashboard pages—without the “API KEY REQUIRED” watermark.
+
+Updated app.py (line 410), preserving symbols, colors, tooltips, filters, and zoom. Syntax validation passed. Refresh or restart the dashboard to see it.
+
+11:32 AM
+
+ 
+
+
+Outputs
+
+Create a file or site
+
+Sources
+
+UN-WOMEN-CARE-SYSTEMS-DASHBOARD-2-public
+
+
+Screenshot 2026-09-09 at 11.20.01 AM.png
+
+UN-WOMEN-CARE-SYSTEMS-DASHBOARD-2-public
+
+View all
+Users
+estebanrs
+Downloads
+UN-WOMEN-CARE-SYSTEMS-DASHBOARD-2-public
+app.py
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -416,6 +480,7 @@ def build_explorer_map(
     """
     Builds the full Care Services Explorer folium map and
     returns its rendered HTML string.
+    Builds the full Care Services Explorer pydeck map.
 
     Cached on (selected_layers, selected_district) only — the
     only two things that actually change what's drawn. Streamlit
@@ -425,6 +490,7 @@ def build_explorer_map(
     finished map means a rerun that doesn't change either
     argument returns the previously-built HTML immediately
     instead of reconstructing and re-serializing the whole map.
+    each time even when nothing relevant changed.
 
     Returns HTML (via m._repr_html_()) rather than the live
     folium.Map object so the cached value is a plain, easily
@@ -432,6 +498,10 @@ def build_explorer_map(
     st_folium (st_folium's return value isn't used on this page,
     so the iframe-based render avoids that component's extra
     per-rerun overhead).
+    Uses the same clean CARTO Positron vector basemap as the
+    dashboard's other service maps. This avoids the legacy CARTO
+    raster tiles that displayed an "API KEY REQUIRED" watermark in
+    the public deployment.
     """
 
     service_layers = {
@@ -565,10 +635,24 @@ def build_explorer_map(
             "fillOpacity": 0.10,
         }
     ).add_to(m)
+    layers = [
+        pdk.Layer(
+            "GeoJsonLayer",
+            data=geo_json,
+            stroked=True,
+            filled=True,
+            get_fill_color=[127, 191, 127, 38],
+            get_line_color=[102, 102, 102],
+            line_width_min_pixels=1,
+            pickable=False
+        )
+    ]
 
     # ------------------------------------------
     # ADD MARKERS
     # ------------------------------------------
+
+    all_points = []
 
     for layer_name in selected_layers:
 
@@ -598,8 +682,18 @@ def build_explorer_map(
         has_close = "close_hours" in df.columns
         has_district = layer["district_col"] in df.columns
         has_address = layer["address_col"] in df.columns
+        def tooltip_text(row):
+            lines = [f"Type: {layer['source']}"]
 
         records = df.to_dict("records")
+            optional_fields = [
+                ("Provider Type", "Sector"),
+                ("Category", "Category"),
+                ("Barangay", "barangay"),
+                ("Address", layer["address_col"]),
+                ("Open", "open_hours"),
+                ("Close", "close_hours"),
+            ]
 
         for row_dict in records:
             popup_html = f"""
@@ -617,10 +711,14 @@ def build_explorer_map(
                 has_district
                 and layer_name != "Action Offices"
                 and pd.notna(row_dict[layer["district_col"]])
+                layer_name != "Action Offices"
+                and pd.notna(row.get(layer["district_col"]))
             ):
                 popup_html += (
                     f"<br>District: "
                     f"{int(row_dict[layer['district_col']])}"
+                lines.append(
+                    f"District: {int(row[layer['district_col']])}"
                 )
 
             if (
@@ -629,39 +727,126 @@ def build_explorer_map(
                 and str(row_dict["barangay"]).strip() != ""
             ):
                 popup_html += f"<br>Barangay: {row_dict['barangay']}"
+            for label, column in optional_fields:
+                value = row.get(column)
+                if pd.notna(value) and str(value).strip() not in ("", "Not available"):
+                    lines.append(f"{label}: {value}")
 
             if has_address and pd.notna(row_dict[layer["address_col"]]):
                 popup_html += (
                     f"<br>Address: "
                     f"{row_dict[layer['address_col']]}"
                 )
+            return "\n".join(lines)
 
             if has_open and pd.notna(row_dict["open_hours"]):
                 popup_html += f"<br>Open: {row_dict['open_hours']}"
+        df["tooltip_text"] = df.apply(tooltip_text, axis=1)
 
             if has_close and pd.notna(row_dict["close_hours"]):
                 popup_html += f"<br>Close: {row_dict['close_hours']}"
+        def row_color(row):
+            category = row.get("Category")
+            district = row.get("District")
 
             category = row_dict.get("Category")
             district = row_dict.get("District")
 
             if layer_name == "Childcare Facilities":
                 marker_color_value = childcare_color(category)
+                return childcare_color(category)
+            if layer_name == "Schools":
+                return school_color(category)
+            if layer_name == "Health Centers":
+                return marker_color(category)
+            if layer_name == "Older Persons Care Facilities":
+                return opc_color(category)
+            if layer_name == "Long-Term Care & Rehabilitation":
+                return ltc_color(category)
+            if layer_name == "Action Offices":
+                return district_color(district)
+            if layer_name == "QC Migrants Resource Centers":
+                return "#C4B5FD"
+            return "#7F47ED"
 
             elif layer_name == "Schools":
                 marker_color_value = school_color(category)
+        colors = df.apply(row_color, axis=1).apply(hex_to_rgb)
+        df["r"] = colors.apply(lambda color: color[0])
+        df["g"] = colors.apply(lambda color: color[1])
+        df["b"] = colors.apply(lambda color: color[2])
+        df["symbol"] = layer["symbol"]
 
             elif layer_name == "Health Centers":
                 marker_color_value = marker_color(category)
+        all_points.append(
+            df[
+                [
+                    "Name",
+                    "latitude",
+                    "longitude",
+                    "r",
+                    "g",
+                    "b",
+                    "symbol",
+                    "tooltip_text",
+                ]
+            ]
+        )
 
             elif layer_name == "Older Persons Care Facilities":
                 marker_color_value = opc_color(category)
+    if all_points:
+        combined = pd.concat(all_points, ignore_index=True)
+        symbols = "".join(
+            layer["symbol"] for layer in service_layers.values()
+        )
 
             elif layer_name == "Long-Term Care & Rehabilitation":
                 marker_color_value = ltc_color(category)
+        layers.append(
+            pdk.Layer(
+                "TextLayer",
+                data=combined,
+                get_position="[longitude, latitude]",
+                get_text="symbol",
+                get_color="[r, g, b]",
+                get_size=18,
+                size_min_pixels=14,
+                size_max_pixels=22,
+                get_text_anchor='"middle"',
+                get_alignment_baseline='"center"',
+                character_set='"' + symbols + '"',
+                font_weight=700,
+                pickable=True
+            )
+        )
 
             elif layer_name == "Action Offices":
                 marker_color_value = district_color(district)
+    return pdk.Deck(
+        layers=layers,
+        initial_view_state=pdk.ViewState(
+            latitude=center_lat,
+            longitude=center_lon,
+            zoom=12,
+            pitch=0,
+            min_zoom=11,
+            max_zoom=18,
+        ),
+        tooltip={
+            "html": "<b>{Name}</b><br/>{tooltip_text}",
+            "style": {
+                "backgroundColor": "white",
+                "color": "black",
+                "fontSize": "12px",
+                "whiteSpace": "pre-line",
+            },
+        },
+        map_style=(
+            "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+        ),
+    )
 
             elif layer_name == "QC Migrants Resource Centers":
                 marker_color_value = "#C4B5FD"
@@ -2953,12 +3138,16 @@ elif page == "Care Services Explorer":
     # --------------------------------------------------
 
     map_html = build_explorer_map(
+    explorer_deck = build_explorer_map(
         tuple(selected_layers),
         selected_district
     )
 
     components.html(
         map_html,
+    st.pydeck_chart(
+        explorer_deck,
         height=850,
         scrolling=True
+        use_container_width=True
     )
