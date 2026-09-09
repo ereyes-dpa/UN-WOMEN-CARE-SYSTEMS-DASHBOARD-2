@@ -543,7 +543,10 @@ def build_explorer_map(
         zoom_start=12,
         min_zoom=12,
         max_zoom=18,
-        tiles="CartoDB positron",
+        # Use Folium's key-free OpenStreetMap basemap. The public
+        # deployment cannot provide a CARTO API key, which caused
+        # CARTO's tiles to render an "API KEY REQUIRED" watermark.
+        tiles="OpenStreetMap",
         max_bounds=True,
         min_lat=miny - bounds_padding,
         max_lat=maxy + bounds_padding,
