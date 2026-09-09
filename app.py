@@ -1069,7 +1069,18 @@ def build_explorer_map(
         df["symbol"] = layer["symbol"]
 
         all_points.append(
-            df[["latitude", "longitude", "r", "g", "b", "symbol", "tooltip_html"]]
+            df[
+                [
+                    "Name",
+                    "latitude",
+                    "longitude",
+                    "r",
+                    "g",
+                    "b",
+                    "symbol",
+                    "tooltip_html",
+                ]
+            ]
         )
 
         if show_risk_rings:
