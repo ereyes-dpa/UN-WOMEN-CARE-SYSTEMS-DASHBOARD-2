@@ -643,6 +643,28 @@ def build_explorer_map(
             layer["symbol"] for layer in service_layers.values()
         )
 
+        # Draw the same symbol once in white at a slightly larger
+        # size, then again in its category color. This recreates the
+        # white outline from the original Folium DivIcons so markers
+        # remain easy to distinguish over roads and boundaries.
+        layers.append(
+            pdk.Layer(
+                "TextLayer",
+                data=combined,
+                get_position="[longitude, latitude]",
+                get_text="symbol",
+                get_color=[255, 255, 255, 255],
+                get_size=19,
+                size_min_pixels=19,
+                size_max_pixels=19,
+                get_text_anchor='"middle"',
+                get_alignment_baseline='"center"',
+                character_set='"' + symbols + '"',
+                font_weight=700,
+                pickable=False
+            )
+        )
+
         layers.append(
             pdk.Layer(
                 "TextLayer",
@@ -650,9 +672,9 @@ def build_explorer_map(
                 get_position="[longitude, latitude]",
                 get_text="symbol",
                 get_color="[r, g, b]",
-                get_size=18,
-                size_min_pixels=14,
-                size_max_pixels=22,
+                get_size=16,
+                size_min_pixels=16,
+                size_max_pixels=16,
                 get_text_anchor='"middle"',
                 get_alignment_baseline='"center"',
                 character_set='"' + symbols + '"',
