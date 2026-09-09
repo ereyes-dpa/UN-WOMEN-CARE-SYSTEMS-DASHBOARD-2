@@ -1,72 +1,6 @@
-
-User attachment
-
-UN-WOMEN-CARE-SYSTEMS-DASHBOARD-2-private
-the latestst version fo my dashboard is not showing correctly the names in Care Services Explorer
-
-11:13 AM
-
-Worked for 2m 9s
-Fixed the Care Services Explorer popup names in app.py (line 1071).
-
-The combined map data had omitted the Name field, causing the literal {Name} placeholder to appear. The field is now included for every service layer. Syntax validation passed.
-
-Restart or refresh the Streamlit dashboard to load the change.
-
-11:15 AM
-User attachment
-
-UN-WOMEN-CARE-SYSTEMS-DASHBOARD-2-public
-now with this public version, in the care explorer, a legend in the map apears "API KEY REQUIRED"
-
-11:26 AM
-
-Worked for 55s
-Fixed the public dashboard’s Care Explorer in app.py (line 541).
-
-The CARTO basemap was replaced with the key-free OpenStreetMap basemap, removing the “API KEY REQUIRED” watermark. Syntax validation passed.
-
-Refresh or restart the Streamlit app to clear the cached map.
-
-11:27 AM
-no! I like the simplest map version, check the other pages
-
-11:28 AM
-
-Worked for 3m 39s
-Corrected. The Care Explorer now uses the same clean CARTO Positron PyDeck map as the other public dashboard pages—without the “API KEY REQUIRED” watermark.
-
-Updated app.py (line 410), preserving symbols, colors, tooltips, filters, and zoom. Syntax validation passed. Refresh or restart the dashboard to see it.
-
-11:32 AM
-
- 
-
-
-Outputs
-
-Create a file or site
-
-Sources
-
-UN-WOMEN-CARE-SYSTEMS-DASHBOARD-2-public
-
-
-Screenshot 2026-09-09 at 11.20.01 AM.png
-
-UN-WOMEN-CARE-SYSTEMS-DASHBOARD-2-public
-
-View all
-Users
-estebanrs
-Downloads
-UN-WOMEN-CARE-SYSTEMS-DASHBOARD-2-public
-app.py
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
-import folium
 import numpy as np
 from functions import *
 import pydeck as pdk
@@ -478,26 +412,14 @@ def build_explorer_map(
     selected_district
 ):
     """
-    Builds the full Care Services Explorer folium map and
-    returns its rendered HTML string.
     Builds the full Care Services Explorer pydeck map.
 
     Cached on (selected_layers, selected_district) only — the
     only two things that actually change what's drawn. Streamlit
     reruns this whole script on every widget interaction, which
     would otherwise rebuild every marker on the map from scratch
-    each time even when nothing relevant changed. Caching the
-    finished map means a rerun that doesn't change either
-    argument returns the previously-built HTML immediately
-    instead of reconstructing and re-serializing the whole map.
     each time even when nothing relevant changed.
 
-    Returns HTML (via m._repr_html_()) rather than the live
-    folium.Map object so the cached value is a plain, easily
-    hashable/picklable string. Render with st.iframe(...), not
-    st_folium (st_folium's return value isn't used on this page,
-    so the iframe-based render avoids that component's extra
-    per-rerun overhead).
     Uses the same clean CARTO Positron vector basemap as the
     dashboard's other service maps. This avoids the legacy CARTO
     raster tiles that displayed an "API KEY REQUIRED" watermark in
@@ -603,38 +525,8 @@ def build_explorer_map(
         },
     }
 
-    # A small padding around the QC extent (in degrees) so the
-    # city boundary doesn't sit flush against the edge of the
-    # area the user can pan/zoom into.
-    bounds_padding = 0.03
-
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        min_zoom=12,
-        max_zoom=18,
-        # Use Folium's key-free OpenStreetMap basemap. The public
-        # deployment cannot provide a CARTO API key, which caused
-        # CARTO's tiles to render an "API KEY REQUIRED" watermark.
-        tiles="OpenStreetMap",
-        max_bounds=True,
-        min_lat=miny - bounds_padding,
-        max_lat=maxy + bounds_padding,
-        min_lon=minx - bounds_padding,
-        max_lon=maxx + bounds_padding
-    )
-
     geo_json, _ = load_geo_explorer()
 
-    folium.GeoJson(
-        geo_json,
-        style_function=lambda x: {
-            "fillColor": "#A6CFC1",
-            "color": "#666666",
-            "weight": 1,
-            "fillOpacity": 0.10,
-        }
-    ).add_to(m)
     layers = [
         pdk.Layer(
             "GeoJsonLayer",
@@ -675,17 +567,9 @@ def build_explorer_map(
             ]
         )
 
-        has_sector = "Sector" in df.columns
-        has_category = "Category" in df.columns
-        has_barangay = "barangay" in df.columns
-        has_open = "open_hours" in df.columns
-        has_close = "close_hours" in df.columns
-        has_district = layer["district_col"] in df.columns
-        has_address = layer["address_col"] in df.columns
         def tooltip_text(row):
             lines = [f"Type: {layer['source']}"]
 
-        records = df.to_dict("records")
             optional_fields = [
                 ("Provider Type", "Sector"),
                 ("Category", "Category"),
@@ -695,65 +579,28 @@ def build_explorer_map(
                 ("Close", "close_hours"),
             ]
 
-        for row_dict in records:
-            popup_html = f"""
-            <b>{row_dict[layer['name_col']]}</b><br>
-            Type: {layer['source']}
-            """
-
-            if has_sector and pd.notna(row_dict["Sector"]):
-                popup_html += f"<br>Provider Type: {row_dict['Sector']}"
-
-            if has_category and pd.notna(row_dict["Category"]):
-                popup_html += f"<br>Category: {row_dict['Category']}"
-
             if (
-                has_district
-                and layer_name != "Action Offices"
-                and pd.notna(row_dict[layer["district_col"]])
                 layer_name != "Action Offices"
                 and pd.notna(row.get(layer["district_col"]))
             ):
-                popup_html += (
-                    f"<br>District: "
-                    f"{int(row_dict[layer['district_col']])}"
                 lines.append(
                     f"District: {int(row[layer['district_col']])}"
                 )
 
-            if (
-                has_barangay
-                and pd.notna(row_dict["barangay"])
-                and str(row_dict["barangay"]).strip() != ""
-            ):
-                popup_html += f"<br>Barangay: {row_dict['barangay']}"
             for label, column in optional_fields:
                 value = row.get(column)
                 if pd.notna(value) and str(value).strip() not in ("", "Not available"):
                     lines.append(f"{label}: {value}")
 
-            if has_address and pd.notna(row_dict[layer["address_col"]]):
-                popup_html += (
-                    f"<br>Address: "
-                    f"{row_dict[layer['address_col']]}"
-                )
             return "\n".join(lines)
 
-            if has_open and pd.notna(row_dict["open_hours"]):
-                popup_html += f"<br>Open: {row_dict['open_hours']}"
         df["tooltip_text"] = df.apply(tooltip_text, axis=1)
 
-            if has_close and pd.notna(row_dict["close_hours"]):
-                popup_html += f"<br>Close: {row_dict['close_hours']}"
         def row_color(row):
             category = row.get("Category")
             district = row.get("District")
 
-            category = row_dict.get("Category")
-            district = row_dict.get("District")
-
             if layer_name == "Childcare Facilities":
-                marker_color_value = childcare_color(category)
                 return childcare_color(category)
             if layer_name == "Schools":
                 return school_color(category)
@@ -769,16 +616,12 @@ def build_explorer_map(
                 return "#C4B5FD"
             return "#7F47ED"
 
-            elif layer_name == "Schools":
-                marker_color_value = school_color(category)
         colors = df.apply(row_color, axis=1).apply(hex_to_rgb)
         df["r"] = colors.apply(lambda color: color[0])
         df["g"] = colors.apply(lambda color: color[1])
         df["b"] = colors.apply(lambda color: color[2])
         df["symbol"] = layer["symbol"]
 
-            elif layer_name == "Health Centers":
-                marker_color_value = marker_color(category)
         all_points.append(
             df[
                 [
@@ -794,16 +637,12 @@ def build_explorer_map(
             ]
         )
 
-            elif layer_name == "Older Persons Care Facilities":
-                marker_color_value = opc_color(category)
     if all_points:
         combined = pd.concat(all_points, ignore_index=True)
         symbols = "".join(
             layer["symbol"] for layer in service_layers.values()
         )
 
-            elif layer_name == "Long-Term Care & Rehabilitation":
-                marker_color_value = ltc_color(category)
         layers.append(
             pdk.Layer(
                 "TextLayer",
@@ -822,8 +661,6 @@ def build_explorer_map(
             )
         )
 
-            elif layer_name == "Action Offices":
-                marker_color_value = district_color(district)
     return pdk.Deck(
         layers=layers,
         initial_view_state=pdk.ViewState(
@@ -847,46 +684,6 @@ def build_explorer_map(
             "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
         ),
     )
-
-            elif layer_name == "QC Migrants Resource Centers":
-                marker_color_value = "#C4B5FD"
-
-            else:
-                marker_color_value = "#7F47ED"
-
-            folium.Marker(
-                location=[
-                    row_dict[layer["lat_col"]],
-                    row_dict[layer["lon_col"]]
-                ],
-                icon=folium.DivIcon(
-                    html=f"""
-                    <div style="
-                        color:{marker_color_value};
-                        font-size:16px;
-                        font-weight:bold;
-                        text-align:center;
-                        text-shadow:
-                            -1px -1px 0 white,
-                            1px -1px 0 white,
-                            -1px  1px 0 white,
-                            1px  1px 0 white;
-                    ">
-                        {layer['symbol']}
-                    </div>
-                    """
-                ),
-                tooltip=str(
-                    row_dict[layer["name_col"]]
-                ),
-                popup=folium.Popup(
-                    popup_html,
-                    max_width=350,
-                    lazy=True
-                )
-            ).add_to(m)
-
-    return m._repr_html_()
 
 # Default values so variables always exist
 selected_category = "All"
@@ -3137,17 +2934,13 @@ elif page == "Care Services Explorer":
     # MAP DISPLAY
     # --------------------------------------------------
 
-    map_html = build_explorer_map(
     explorer_deck = build_explorer_map(
         tuple(selected_layers),
         selected_district
     )
 
-    components.html(
-        map_html,
     st.pydeck_chart(
         explorer_deck,
         height=850,
-        scrolling=True
         use_container_width=True
     )
